@@ -1,0 +1,22 @@
+{
+  "name": "trace-work-report-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Front-end/back-end separated work report system with SQLite persistence and Office exports.",
+  "packageManager": "pnpm@11.7.0",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c gold,cyan \"pnpm --filter @trace-report/backend dev\" \"pnpm --filter @trace-report/frontend dev\"",
+    "build": "pnpm --filter @trace-report/backend build && pnpm --filter @trace-report/frontend build",
+    "typecheck": "pnpm --filter @trace-report/backend typecheck && pnpm --filter @trace-report/frontend typecheck",
+    "test": "node --test --experimental-strip-types frontend/test/configOptionDrafts.test.ts frontend/test/styles.test.ts",
+    "start": "pnpm --filter @trace-report/backend start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "pnpm": "11.7.0"
+  }
+}
