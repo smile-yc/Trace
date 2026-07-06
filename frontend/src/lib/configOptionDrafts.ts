@@ -22,6 +22,20 @@ export function normalizeConfigOptionLabel(value: string | undefined): string {
   return String(value || "").trim();
 }
 
+function splitConfigOptionLabels(value: string | undefined): string[] {
+  const seen = new Set<string>();
+
+  return String(value || "")
+    .split(/[,，、;；\s]+/)
+    .map((item) => normalizeConfigOptionLabel(item))
+    .filter(Boolean)
+    .filter((item) => {
+      if (seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
 export function getConfigOptionDraftKey(type: ConfigOptionType, label: string): string | null {
   const normalizedLabel = normalizeConfigOptionLabel(label);
   return normalizedLabel ? `${type}:${normalizedLabel}` : null;
@@ -113,9 +127,13 @@ export function collectPersistedConfigOptionInputs(
   selections: ConfigOptionPersistenceSelections
 ): ConfigOptionInput[] {
   return configurableOptionTypes.flatMap((type) => {
-    const state = getConfigOptionDraftState(options, type, values[type]);
-    if (!isSelectedForPersistence(state, selections)) return [];
+    const labels = type === "abilityDimension" ? splitConfigOptionLabels(values[type]) : [values[type]];
 
-    return [{ type, label: state.label }];
+    return labels.flatMap((label) => {
+      const state = getConfigOptionDraftState(options, type, label);
+      if (!isSelectedForPersistence(state, selections)) return [];
+
+      return [{ type, label: state.label }];
+    });
   });
 }

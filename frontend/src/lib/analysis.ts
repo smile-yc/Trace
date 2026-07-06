@@ -85,6 +85,20 @@ function roundShare(value: number): number {
   return Number(value.toFixed(4));
 }
 
+function parseAbilityDimensions(value: string | null | undefined): string[] {
+  const seen = new Set<string>();
+
+  return String(value || "")
+    .split(/[,，、;；\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => {
+      if (seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
 function normalizeFocusScoreWeights(weights?: Partial<FocusScoreWeights>): FocusScoreWeights {
   const merged = {
     workload: Number.isFinite(Number(weights?.workload)) ? Math.max(0, Number(weights?.workload)) : DEFAULT_FOCUS_SCORE_WEIGHTS.workload,
@@ -136,16 +150,28 @@ export function buildDistribution(
   getLabel: (record: WorkRecord) => string,
   fallback: string
 ): DistributionItem[] {
+  return buildMultiDistribution(records, (record) => [getLabel(record)], fallback);
+}
+
+export function buildMultiDistribution(
+  records: WorkRecord[],
+  getLabels: (record: WorkRecord) => string[],
+  fallback: string
+): DistributionItem[] {
   const groups = new Map<string, { count: number; workload: number; timeHours: number }>();
   const total = records.length || 1;
 
   records.forEach((record) => {
-    const label = getLabel(record) || fallback;
-    const current = groups.get(label) ?? { count: 0, workload: 0, timeHours: 0 };
-    current.count += 1;
-    current.workload += workloadOf(record);
-    current.timeHours += timeOf(record);
-    groups.set(label, current);
+    const labels = getLabels(record).map((label) => label.trim()).filter(Boolean);
+    const finalLabels = labels.length ? labels : [fallback];
+
+    finalLabels.forEach((label) => {
+      const current = groups.get(label) ?? { count: 0, workload: 0, timeHours: 0 };
+      current.count += 1;
+      current.workload += workloadOf(record);
+      current.timeHours += timeOf(record);
+      groups.set(label, current);
+    });
   });
 
   return Array.from(groups.entries())
@@ -178,7 +204,7 @@ export function buildProjectSummaries(records: WorkRecord[]): ProjectSummary[] {
         latestDate: sortedItems[0]?.date ?? "",
         businessCategories: uniqueValues(items.map((item) => item.businessCategory || item.category)),
         workTypes: uniqueValues(items.map((item) => item.workType || "其他项")),
-        abilityDimensions: uniqueValues(items.map((item) => item.abilityDimension)),
+        abilityDimensions: uniqueValues(items.flatMap((item) => parseAbilityDimensions(item.abilityDimension))),
         productSystems: uniqueValues(items.map((item) => item.productSystem)),
         records: sortedItems
       };
@@ -225,7 +251,7 @@ export function analyzeRecords(records: WorkRecord[], options?: AnalysisOptions 
     "其他"
   );
   const workTypeDistribution = buildDistribution(records, (record) => record.workType, "其他项");
-  const abilityDistribution = buildDistribution(records, (record) => record.abilityDimension, "未填写能力");
+  const abilityDistribution = buildMultiDistribution(records, (record) => parseAbilityDimensions(record.abilityDimension), "未填写能力");
   const productDistribution = buildDistribution(records, (record) => record.productSystem, "未填写产品");
 
   return {

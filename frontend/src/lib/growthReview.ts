@@ -45,6 +45,20 @@ function formatMetric(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+function parseAbilityDimensions(value: string | null | undefined): string[] {
+  const seen = new Set<string>();
+
+  return String(value || "")
+    .split(/[,，、;；\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => {
+      if (seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
 function firstTag(tags: string): string {
   return String(tags || "")
     .split(/[,，、\s]+/)
@@ -115,9 +129,10 @@ function workloadShareByAbility(records: WorkRecord[]): Record<string, number> {
   const values = new Map<string, number>();
 
   records.forEach((record) => {
-    const label = record.abilityDimension || "未填写能力";
+    const labels = parseAbilityDimensions(record.abilityDimension);
+    const finalLabels = labels.length ? labels : ["未填写能力"];
     const value = totalWorkload > 0 ? numberValue(record.workload) : 1;
-    values.set(label, (values.get(label) ?? 0) + value);
+    finalLabels.forEach((label) => values.set(label, (values.get(label) ?? 0) + value));
   });
 
   return Array.from(values.entries()).reduce<Record<string, number>>((shares, [label, value]) => {
@@ -138,7 +153,7 @@ export function buildGrowthWarnings(
 
   targetEntries(settings).forEach(([label, targetPercent]) => {
     const relatedRecords = records
-      .filter((record) => record.abilityDimension === label)
+      .filter((record) => parseAbilityDimensions(record.abilityDimension).includes(label))
       .slice()
       .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -219,7 +234,16 @@ export function buildMonthlyReview(
   assets: KnowledgeAsset[] = []
 ): MonthlyReview {
   const topProject = topGroup(records, getProjectName);
-  const topAbility = topGroup(records, (record) => record.abilityDimension || "未填写能力");
+  const topAbility = topGroup(
+    records.flatMap((record) => {
+      const abilities = parseAbilityDimensions(record.abilityDimension);
+      return (abilities.length ? abilities : ["未填写能力"]).map((ability) => ({
+        ...record,
+        abilityDimension: ability
+      }));
+    }),
+    (record) => record.abilityDimension || "未填写能力"
+  );
   const milestoneSummaries = summarizeMilestones(milestones);
   const assetSummary = summarizeKnowledgeAssets(assets);
   const lines = [

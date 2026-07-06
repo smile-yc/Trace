@@ -20,6 +20,7 @@ const baseOption = {
 const options: ConfigOption[] = [
   { ...baseOption, id: "business-1", type: "businessCategory", label: "传统业务" },
   { ...baseOption, id: "work-1", type: "workType", label: "工程调试" },
+  { ...baseOption, id: "ability-1", type: "abilityDimension", label: "工程技术" },
   { ...baseOption, id: "product-1", type: "productSystem", label: "GM1000" },
   { ...baseOption, id: "subtask-1", type: "subtask", label: "开闭所" },
   { ...baseOption, id: "product-disabled", type: "productSystem", label: "GM6000", enabled: false }
@@ -86,5 +87,19 @@ test("ability dimension custom values default to persisted", () => {
   assert.equal(state.defaultPersist, true);
   assert.deepEqual(collectPersistedConfigOptionInputs(options, values, {}), [
     { type: "abilityDimension", label: "solution-design" }
+  ]);
+});
+
+test("ability dimension multi custom values are persisted separately", () => {
+  const values = {
+    businessCategory: "传统业务",
+    workType: "工程调试",
+    productSystem: "GM1000",
+    subtask: "开闭所",
+    abilityDimension: "工程技术,现场沟通"
+  };
+
+  assert.deepEqual(collectPersistedConfigOptionInputs(options, values, {}), [
+    { type: "abilityDimension", label: "现场沟通" }
   ]);
 });

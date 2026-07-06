@@ -9,6 +9,7 @@ import {
   Save,
   SlidersHorizontal,
   Star,
+  Trash2,
   ToggleLeft,
   ToggleRight
 } from "lucide-react";
@@ -17,12 +18,14 @@ import { PageHeader } from "../components/PageHeader";
 import { StatCards } from "../components/StatCards";
 import {
   createConfigOption,
+  deleteConfigOptionApi,
   fetchConfigOptions,
   reorderConfigOptionsApi,
   updateConfigOptionApi
 } from "../lib/configApi";
 import {
   createWorkloadStandard,
+  deleteWorkloadStandardApi,
   fetchWorkloadStandards,
   updateWorkloadStandardApi
 } from "../lib/workloadApi";
@@ -324,6 +327,25 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
     }
   }
 
+  async function handleDeleteOption(option: ConfigOption): Promise<void> {
+    if (!window.confirm(`确认删除配置项「${option.label}」吗？已有日报记录中的文本不会被删除。`)) return;
+
+    try {
+      setSavingId(option.id);
+      await deleteConfigOptionApi(option.id);
+      setOptions((current) => sortOptions(current.filter((item) => item.id !== option.id)));
+      setDraftLabels((current) => {
+        const { [option.id]: _removed, ...rest } = current;
+        return rest;
+      });
+      onNotify("配置项已删除");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "删除配置失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function handleToggleStandard(standard: WorkloadStandard): Promise<void> {
     try {
       setSavingId(standard.id);
@@ -333,6 +355,28 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
       onNotify(nextStandard.enabled ? "当量标准已启用" : "当量标准已禁用");
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "更新当量标准失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleDeleteStandard(standard: WorkloadStandard): Promise<void> {
+    const label = [standard.businessCategory, standard.workType, standard.productSystem, standard.subtask]
+      .filter(Boolean)
+      .join(" / ");
+    if (!window.confirm(`确认删除当量标准「${label}」吗？已有日报记录中的当量不会被改写。`)) return;
+
+    try {
+      setSavingId(standard.id);
+      await deleteWorkloadStandardApi(standard.id);
+      setStandards((current) => sortStandards(current.filter((item) => item.id !== standard.id)));
+      setStandardDrafts((current) => {
+        const { [standard.id]: _removed, ...rest } = current;
+        return rest;
+      });
+      onNotify("当量标准已删除");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "删除当量标准失败");
     } finally {
       setSavingId(null);
     }
@@ -574,6 +618,16 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
                       {option.enabled ? <ToggleRight size={17} /> : <ToggleLeft size={17} />}
                       <span>{option.enabled ? "启用" : "禁用"}</span>
                     </button>
+                    <button
+                      className="danger-action"
+                      aria-label="删除配置项"
+                      title="删除配置项"
+                      disabled={isBusy}
+                      onClick={() => handleDeleteOption(option)}
+                      type="button"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                 </article>
               );
@@ -770,6 +824,16 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
                     >
                       {standard.enabled ? <ToggleRight size={17} /> : <ToggleLeft size={17} />}
                       <span>{standard.enabled ? "启用" : "禁用"}</span>
+                    </button>
+                    <button
+                      className="danger-action"
+                      aria-label="删除当量标准"
+                      disabled={isBusy}
+                      onClick={() => handleDeleteStandard(standard)}
+                      type="button"
+                    >
+                      <Trash2 size={15} />
+                      删除
                     </button>
                   </div>
                 </article>

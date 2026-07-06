@@ -16,6 +16,19 @@ async function readJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function readEmpty(response: Response): Promise<void> {
+  if (!response.ok) {
+    let message = "请求失败";
+    try {
+      const body = await response.json();
+      message = body.message || message;
+    } catch {
+      message = await response.text();
+    }
+    throw new Error(message);
+  }
+}
+
 export async function fetchConfigOptions(type?: ConfigOptionType): Promise<ConfigOption[]> {
   const query = type ? `?type=${encodeURIComponent(type)}` : "";
   const response = await fetch(`${API_BASE}/api/config-options${query}`);
@@ -44,6 +57,13 @@ export async function updateConfigOptionApi(
   });
   const data = await readJson<{ option: ConfigOption }>(response);
   return data.option;
+}
+
+export async function deleteConfigOptionApi(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/config-options/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+  await readEmpty(response);
 }
 
 export async function reorderConfigOptionsApi(

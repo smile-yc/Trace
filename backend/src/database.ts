@@ -620,6 +620,11 @@ export function updateConfigOption(id: string, input: ConfigOptionUpdateInput): 
   return getConfigOption(id);
 }
 
+export function deleteConfigOption(id: string): boolean {
+  const result = db.prepare("DELETE FROM config_options WHERE id = ?").run(id);
+  return result.changes > 0;
+}
+
 export function reorderConfigOptions(type: ConfigOptionType, orderedIds: string[]): ConfigOption[] {
   const availableIds = new Set(listConfigOptions(type).map((option) => option.id));
   const ids = orderedIds.filter((id) => availableIds.has(id));
@@ -772,6 +777,11 @@ export function updateWorkloadStandard(id: string, input: WorkloadStandardUpdate
   );
 
   return getWorkloadStandard(id);
+}
+
+export function deleteWorkloadStandard(id: string): boolean {
+  const result = db.prepare("DELETE FROM workload_standards WHERE id = ?").run(id);
+  return result.changes > 0;
 }
 
 export function matchWorkloadStandard(input: {

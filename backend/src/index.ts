@@ -3,7 +3,9 @@ import express from "express";
 import { z } from "zod";
 import {
   clearRecords,
+  deleteConfigOption,
   deleteRecord,
+  deleteWorkloadStandard,
   getAppSettings,
   getDatabasePath,
   insertKnowledgeAsset,
@@ -85,7 +87,7 @@ const recordInputSchema = z.object({
   category: z.enum(["三新业务", "技术支持", "工程调试", "售前支持", "其他"]).default("其他"),
   businessCategory: z.string().trim().max(80).optional(),
   workType: z.string().trim().max(80).optional(),
-  abilityDimension: z.string().trim().max(80).optional(),
+  abilityDimension: z.string().trim().max(300).optional(),
   projectName: z.string().trim().max(120).optional(),
   productSystem: z.string().trim().max(80).optional(),
   subtask: z.string().trim().max(120).optional(),
@@ -290,6 +292,15 @@ app.put("/api/config-options/:id", (req, res, next) => {
   }
 });
 
+app.delete("/api/config-options/:id", (req, res) => {
+  if (!deleteConfigOption(req.params.id)) {
+    res.status(404).json({ message: "Config option not found." });
+    return;
+  }
+
+  res.status(204).send();
+});
+
 app.post("/api/config-options/reorder", (req, res, next) => {
   try {
     const input = configReorderSchema.parse(req.body);
@@ -328,6 +339,15 @@ app.put("/api/workload-standards/:id", (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.delete("/api/workload-standards/:id", (req, res) => {
+  if (!deleteWorkloadStandard(req.params.id)) {
+    res.status(404).json({ message: "Workload standard not found." });
+    return;
+  }
+
+  res.status(204).send();
 });
 
 app.get("/api/workload-standards/match", (req, res, next) => {

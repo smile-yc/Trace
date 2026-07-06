@@ -64,6 +64,33 @@ test("buildGrowthWarnings detects missing ability input and target share gaps", 
   assert.ok(warnings.some((warning) => warning.type === "target-gap" && warning.label === "工程技术"));
 });
 
+test("buildGrowthWarnings matches targets inside multi ability records", () => {
+  const warnings = buildGrowthWarnings(
+    [
+      {
+        ...baseRecord,
+        id: "a",
+        date: "2026-07-01",
+        abilityDimension: "工程技术,知识沉淀",
+        workload: 10
+      }
+    ] as any,
+    {
+      warningRules: {
+        abilityNoRecordDays: 20,
+        targetShareDeviationPercent: 10
+      },
+      abilityTargets: {
+        知识沉淀: 30
+      }
+    },
+    "2026-07-06"
+  );
+
+  assert.equal(warnings.some((warning) => warning.type === "missing-ability" && warning.label === "知识沉淀"), false);
+  assert.equal(warnings.some((warning) => warning.type === "stale-ability" && warning.label === "知识沉淀"), false);
+});
+
 test("buildMonthlyReview enriches monthly narrative with milestones and knowledge assets", () => {
   const review = buildMonthlyReview(
     [

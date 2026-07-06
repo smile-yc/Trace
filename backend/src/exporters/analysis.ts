@@ -42,6 +42,20 @@ function safeLabel(value: string | null | undefined, fallback: string): string {
   return label || fallback;
 }
 
+function splitLabels(value: string | null | undefined): string[] {
+  const seen = new Set<string>();
+
+  return String(value || "")
+    .split(/[,，、;；\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => {
+      if (seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
 function getProjectName(record: WorkRecord): string {
   const firstTag = String(record.tags || "")
     .split(/[,，、\s]+/)
@@ -72,18 +86,30 @@ export function buildSummary(
   getLabel: (record: WorkRecord) => string,
   fallback: string
 ): ExportSummaryItem[] {
+  return buildMultiSummary(records, (record) => [getLabel(record)], fallback);
+}
+
+export function buildMultiSummary(
+  records: WorkRecord[],
+  getLabels: (record: WorkRecord) => string[],
+  fallback: string
+): ExportSummaryItem[] {
   const groups = new Map<string, { count: number; quantity: number; workload: number; timeHours: number }>();
   const totalWorkload = sumWorkload(records);
   const totalCount = records.length || 1;
 
   records.forEach((record) => {
-    const label = safeLabel(getLabel(record), fallback);
-    const current = groups.get(label) ?? { count: 0, quantity: 0, workload: 0, timeHours: 0 };
-    current.count += 1;
-    current.quantity += numberValue(record.quantity);
-    current.workload += numberValue(record.workload);
-    current.timeHours += numberValue(record.timeHours);
-    groups.set(label, current);
+    const labels = getLabels(record).map((label) => safeLabel(label, "")).filter(Boolean);
+    const finalLabels = labels.length ? labels : [fallback];
+
+    finalLabels.forEach((label) => {
+      const current = groups.get(label) ?? { count: 0, quantity: 0, workload: 0, timeHours: 0 };
+      current.count += 1;
+      current.quantity += numberValue(record.quantity);
+      current.workload += numberValue(record.workload);
+      current.timeHours += numberValue(record.timeHours);
+      groups.set(label, current);
+    });
   });
 
   return Array.from(groups.entries())
@@ -103,7 +129,7 @@ export function analyzeExport(records: WorkRecord[]): ExportAnalysis {
   const dates = Array.from(new Set(sortedRecords.map((record) => record.date))).sort();
   const businessSummary = buildSummary(records, (record) => record.businessCategory || record.category, "其他");
   const workTypeSummary = buildSummary(records, (record) => record.workType, "其他项");
-  const abilitySummary = buildSummary(records, (record) => record.abilityDimension, "未填写能力");
+  const abilitySummary = buildMultiSummary(records, (record) => splitLabels(record.abilityDimension), "未填写能力");
   const projectSummary = buildSummary(records, getProjectName, "未归属项目");
   const productSummary = buildSummary(records, (record) => record.productSystem, "未填写产品");
   const dateSummary = buildSummary(records, (record) => record.date, "未填写日期").sort((a, b) =>

@@ -1,6 +1,11 @@
 import { FocusEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { Calculator, ChevronDown, Plus, Save } from "lucide-react";
+import { Calculator, ChevronDown, Plus, Save, X } from "lucide-react";
 import { ABILITY_DIMENSIONS, BUSINESS_CATEGORIES, PRODUCT_SYSTEMS, SUBTASK_TEMPLATES, WORK_TYPES } from "../constants";
+import {
+  formatAbilityDimensions,
+  formatAbilitySelectionSummary,
+  parseAbilityDimensions
+} from "../lib/abilityDimensions";
 import { createConfigOption, fetchConfigOptions } from "../lib/configApi";
 import {
   collectPersistedConfigOptionInputs,
@@ -169,6 +174,127 @@ function ConfigurableOptionField({
   );
 }
 
+interface AbilityMultiSelectFieldProps {
+  value: string;
+  options: ConfigOption[];
+  fallback: string[];
+  onValueChange: (value: string) => void;
+}
+
+function AbilityMultiSelectField({
+  value,
+  options,
+  fallback,
+  onValueChange
+}: AbilityMultiSelectFieldProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [customAbility, setCustomAbility] = useState("");
+  const selectedAbilities = parseAbilityDimensions(value);
+  const selectedSet = new Set(selectedAbilities);
+  const choiceLabels = Array.from(
+    new Set([
+      ...getConfigOptionMenuChoices(options, "abilityDimension", "", fallback, false),
+      ...selectedAbilities
+    ])
+  ).filter(Boolean);
+
+  function toggleAbility(label: string): void {
+    const nextAbilities = selectedSet.has(label)
+      ? selectedAbilities.filter((item) => item !== label)
+      : [...selectedAbilities, label];
+
+    onValueChange(formatAbilityDimensions(nextAbilities));
+  }
+
+  function handleAddCustom(): void {
+    const label = customAbility.trim();
+    if (!label) return;
+
+    onValueChange(formatAbilityDimensions([...selectedAbilities, label]));
+    setCustomAbility("");
+  }
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>): void {
+    const nextTarget = event.relatedTarget as Node | null;
+    if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+      setIsMenuOpen(false);
+    }
+  }
+
+  function removeAbility(label: string): void {
+    onValueChange(formatAbilityDimensions(selectedAbilities.filter((item) => item !== label)));
+  }
+
+  return (
+    <div className="ability-multi-field" onBlur={handleBlur}>
+      <span>能力维度</span>
+      <div className="ability-picker-wrap">
+        <button
+          className="ability-picker-trigger"
+          type="button"
+          aria-expanded={isMenuOpen}
+          aria-haspopup="listbox"
+          onClick={() => setIsMenuOpen((current) => !current)}
+        >
+          <span>{formatAbilitySelectionSummary(value)}</span>
+          <ChevronDown size={16} />
+        </button>
+
+        {isMenuOpen && (
+          <div className="ability-picker-menu" role="listbox" aria-label="能力维度" aria-multiselectable="true">
+            <div className="ability-option-list">
+              {choiceLabels.map((label) => (
+                <label className="ability-option-row" key={label}>
+                  <input
+                    checked={selectedSet.has(label)}
+                    type="checkbox"
+                    onChange={() => toggleAbility(label)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="ability-custom-row">
+              <input
+                placeholder="输入自定义能力"
+                value={customAbility}
+                onChange={(event) => setCustomAbility(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAddCustom();
+                  }
+                }}
+              />
+              <button type="button" onClick={handleAddCustom}>
+                <Plus size={15} />
+                添加
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selectedAbilities.length > 0 && (
+        <div className="ability-selected-list" aria-label="已选能力维度">
+          {selectedAbilities.map((ability) => (
+            <button
+              className="ability-selected-tag"
+              key={ability}
+              type="button"
+              aria-label={`移除能力维度：${ability}`}
+              onClick={() => removeAbility(ability)}
+            >
+              <span>{ability}</span>
+              <X size={13} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RecordForm({ initialDate, record, compact = false, onSubmit }: RecordFormProps) {
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>([]);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -297,7 +423,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
     const normalizedValues: ConfigOptionValues = {
       businessCategory: normalizeConfigOptionLabel(businessCategory),
       workType: normalizeConfigOptionLabel(workType),
-      abilityDimension: normalizeConfigOptionLabel(abilityDimension),
+      abilityDimension: formatAbilityDimensions(parseAbilityDimensions(abilityDimension)),
       productSystem: normalizeConfigOptionLabel(productSystem),
       subtask: normalizeConfigOptionLabel(subtask)
     };
@@ -395,17 +521,10 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
             onPersistenceChange={handleConfigPersistenceChange}
             onValueChange={(value) => handleCriteriaChange(() => setWorkType(value))}
           />
-          <ConfigurableOptionField
-            allowEmpty
+          <AbilityMultiSelectField
             fallback={fallbackOptions.abilityDimension}
-            label="能力维度"
-            listId="ability-dimension-options"
             options={configOptions}
-            persistenceSelections={configPersistenceSelections}
-            placeholder="未选择"
-            type="abilityDimension"
             value={abilityDimension}
-            onPersistenceChange={handleConfigPersistenceChange}
             onValueChange={setAbilityDimension}
           />
         </div>

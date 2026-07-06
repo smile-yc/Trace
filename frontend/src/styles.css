@@ -532,6 +532,149 @@ textarea:focus-visible {
   align-content: start;
 }
 
+.ability-multi-field {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 730;
+}
+
+.ability-picker-wrap {
+  position: relative;
+}
+
+.ability-picker-trigger {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px 9px 12px;
+  text-align: left;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.ability-picker-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ability-picker-trigger svg {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.ability-picker-trigger:hover,
+.ability-picker-trigger[aria-expanded="true"] {
+  border-color: rgba(176, 138, 84, 0.42);
+  background: var(--paper-strong);
+  box-shadow: 0 0 0 4px rgba(176, 138, 84, 0.08);
+}
+
+.ability-picker-menu {
+  position: absolute;
+  z-index: 9;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow-soft);
+  padding: 10px;
+}
+
+.ability-option-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 186px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.ability-option-row {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  padding: 6px 8px;
+}
+
+.ability-option-row:hover {
+  border-color: rgba(176, 138, 84, 0.22);
+  background: var(--brass-soft);
+}
+
+.ability-option-row input {
+  width: 15px !important;
+  height: 15px;
+  accent-color: var(--sage);
+  flex: 0 0 auto;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.ability-custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.ability-custom-row button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 11px;
+  white-space: nowrap;
+}
+
+.ability-selected-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ability-selected-tag {
+  min-height: 26px;
+  border: 1px solid rgba(97, 114, 101, 0.24);
+  border-radius: 999px;
+  background: var(--sage-soft);
+  color: var(--sage);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.ability-selected-tag svg {
+  color: currentColor;
+}
+
 .combo-input-wrap {
   position: relative;
   display: flex;
@@ -642,7 +785,8 @@ textarea:focus-visible {
 
 .record-form input,
 .record-form select,
-.record-form textarea {
+.record-form textarea,
+.ability-custom-row input {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -654,13 +798,15 @@ textarea:focus-visible {
 
 .record-form input:hover,
 .record-form select:hover,
-.record-form textarea:hover {
+.record-form textarea:hover,
+.ability-custom-row input:hover {
   border-color: var(--line-strong);
 }
 
 .record-form input:focus,
 .record-form select:focus,
-.record-form textarea:focus {
+.record-form textarea:focus,
+.ability-custom-row input:focus {
   border-color: rgba(176, 138, 84, 0.56);
   background: var(--paper-strong);
   box-shadow: 0 0 0 4px rgba(176, 138, 84, 0.1);
@@ -669,7 +815,8 @@ textarea:focus-visible {
 @media (prefers-color-scheme: dark) {
   .record-form input,
   .record-form select,
-  .record-form textarea {
+  .record-form textarea,
+  .ability-custom-row input {
     background: rgba(255, 255, 255, 0.05);
   }
 }
@@ -2076,7 +2223,7 @@ textarea:focus-visible {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
-  max-width: 322px;
+  max-width: 370px;
 }
 
 .config-option-actions button {
@@ -2108,6 +2255,13 @@ textarea:focus-visible {
   border-color: rgba(97, 114, 101, 0.28);
   background: var(--sage-soft);
   color: var(--sage);
+}
+
+.config-option-actions .danger-action,
+.standard-actions .danger-action {
+  border-color: rgba(168, 79, 71, 0.26);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .standards-panel {
@@ -2872,6 +3026,7 @@ textarea:focus-visible {
   .standard-add-form,
   .standard-rule,
   .standard-meta,
+  .ability-custom-row,
   .settings-field-grid,
   .settings-field-grid.two,
   .ability-target-grid,

@@ -55,6 +55,33 @@ test("analyzeRecords includes time totals and ability distribution", () => {
   assert.equal(analysis.abilityDistribution[0].timeHours, 2);
 });
 
+test("analyzeRecords splits comma separated ability dimensions", () => {
+  const analysis = analyzeRecords([
+    {
+      ...baseRecord,
+      id: "a",
+      abilityDimension: "工程技术,知识沉淀",
+      workload: 6,
+      timeHours: 2
+    },
+    {
+      ...baseRecord,
+      id: "b",
+      abilityDimension: "知识沉淀",
+      workload: 2,
+      timeHours: 1
+    }
+  ] as any);
+
+  assert.deepEqual(
+    analysis.abilityDistribution.map((item) => [item.label, item.count, item.workload, item.timeHours]),
+    [
+      ["知识沉淀", 2, 8, 3],
+      ["工程技术", 1, 6, 2]
+    ]
+  );
+});
+
 test("analyzeRecords ranks focus by weighted workload time and count shares", () => {
   const analysis = analyzeRecords([
     {

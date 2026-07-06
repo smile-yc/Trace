@@ -16,6 +16,19 @@ async function readJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function readEmpty(response: Response): Promise<void> {
+  if (!response.ok) {
+    let message = "请求失败";
+    try {
+      const body = await response.json();
+      message = body.message || message;
+    } catch {
+      message = await response.text();
+    }
+    throw new Error(message);
+  }
+}
+
 export async function fetchWorkloadStandards(): Promise<WorkloadStandard[]> {
   const response = await fetch(`${API_BASE}/api/workload-standards`);
   const data = await readJson<{ standards: WorkloadStandard[] }>(response);
@@ -43,6 +56,13 @@ export async function updateWorkloadStandardApi(
   });
   const data = await readJson<{ standard: WorkloadStandard }>(response);
   return data.standard;
+}
+
+export async function deleteWorkloadStandardApi(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/workload-standards/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+  await readEmpty(response);
 }
 
 export async function matchWorkloadStandard(input: {
