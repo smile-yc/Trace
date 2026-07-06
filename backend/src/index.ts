@@ -4,16 +4,24 @@ import { z } from "zod";
 import {
   clearRecords,
   deleteRecord,
+  getAppSettings,
   getDatabasePath,
+  insertKnowledgeAsset,
   insertRecord,
   insertConfigOption,
+  insertMilestone,
   insertWorkloadStandard,
   listConfigOptions,
+  listKnowledgeAssets,
+  listMilestones,
   listRecords,
   listWorkloadStandards,
   matchWorkloadStandard,
   reorderConfigOptions,
+  updateAppSettings,
   updateConfigOption,
+  updateKnowledgeAsset,
+  updateMilestone,
   updateWorkloadStandard,
   updateRecord
 } from "./database.js";
@@ -22,10 +30,15 @@ import { buildPdf } from "./exporters/pdf.js";
 import { buildWord } from "./exporters/word.js";
 import { sanitizeFileName } from "./report.js";
 import type {
+  AppSettingsInput,
   ConfigOptionInput,
   ConfigOptionType,
   ConfigOptionUpdateInput,
   ExportPayload,
+  KnowledgeAssetInput,
+  KnowledgeAssetUpdateInput,
+  MilestoneInput,
+  MilestoneUpdateInput,
   RecordInput,
   WorkloadStandardInput,
   WorkloadStandardUpdateInput
@@ -128,6 +141,75 @@ const workloadMatchSchema = z.object({
   workType: z.string().trim().min(1).max(80),
   productSystem: z.string().trim().max(80).optional().default(""),
   subtask: z.string().trim().max(120).optional().default("")
+});
+
+const focusScoreWeightsSchema = z.object({
+  workload: z.coerce.number().finite().min(0).optional(),
+  timeHours: z.coerce.number().finite().min(0).optional(),
+  recordCount: z.coerce.number().finite().min(0).optional()
+});
+
+const warningRulesSchema = z.object({
+  abilityNoRecordDays: z.coerce.number().finite().min(1).optional(),
+  targetShareDeviationPercent: z.coerce.number().finite().min(0).optional()
+});
+
+const appSettingsSchema = z.object({
+  focusScoreWeights: focusScoreWeightsSchema.optional(),
+  warningRules: warningRulesSchema.optional(),
+  abilityTargets: z.record(z.string().trim().min(1).max(80), z.coerce.number().finite().min(0)).optional()
+});
+
+const milestoneInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(600).optional().default(""),
+  category: z.string().trim().max(80).optional().default("成长目标"),
+  targetType: z.string().trim().max(80).optional().default("工作当量"),
+  targetValue: z.coerce.number().finite().min(0).optional().default(0),
+  currentValue: z.coerce.number().finite().min(0).optional().default(0),
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).default(""),
+  enabled: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(100000).optional()
+});
+
+const milestoneUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(600).optional(),
+  category: z.string().trim().max(80).optional(),
+  targetType: z.string().trim().max(80).optional(),
+  targetValue: z.coerce.number().finite().min(0).optional(),
+  currentValue: z.coerce.number().finite().min(0).optional(),
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
+  enabled: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(100000).optional()
+});
+
+const knowledgeAssetStatuses = ["draft", "published", "archived"] as const;
+
+const knowledgeAssetInputSchema = z.object({
+  type: z.string().trim().max(80).optional().default("复盘"),
+  title: z.string().trim().min(1).max(160),
+  summary: z.string().trim().max(1200).optional().default(""),
+  sourceRecordId: z.string().trim().max(120).optional().default(""),
+  projectName: z.string().trim().max(120).optional().default(""),
+  productSystem: z.string().trim().max(80).optional().default(""),
+  tags: z.string().trim().max(300).optional().default(""),
+  status: z.enum(knowledgeAssetStatuses).optional().default("draft"),
+  link: z.string().trim().max(500).optional().default(""),
+  remark: z.string().trim().max(600).optional().default("")
+});
+
+const knowledgeAssetUpdateSchema = z.object({
+  type: z.string().trim().max(80).optional(),
+  title: z.string().trim().min(1).max(160).optional(),
+  summary: z.string().trim().max(1200).optional(),
+  sourceRecordId: z.string().trim().max(120).optional(),
+  projectName: z.string().trim().max(120).optional(),
+  productSystem: z.string().trim().max(80).optional(),
+  tags: z.string().trim().max(300).optional(),
+  status: z.enum(knowledgeAssetStatuses).optional(),
+  link: z.string().trim().max(500).optional(),
+  remark: z.string().trim().max(600).optional()
 });
 
 const exportScopeSchema = z
@@ -257,6 +339,79 @@ app.get("/api/workload-standards/match", (req, res, next) => {
   }
 });
 
+app.get("/api/settings", (_req, res) => {
+  res.json({ settings: getAppSettings() });
+});
+
+app.put("/api/settings", (req, res, next) => {
+  try {
+    const input: AppSettingsInput = appSettingsSchema.parse(req.body);
+    res.json({ settings: updateAppSettings(input) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/milestones", (_req, res) => {
+  res.json({ milestones: listMilestones() });
+});
+
+app.post("/api/milestones", (req, res, next) => {
+  try {
+    const input: MilestoneInput = milestoneInputSchema.parse(req.body);
+    const milestone = insertMilestone(input);
+    res.status(201).json({ milestone });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/milestones/:id", (req, res, next) => {
+  try {
+    const input: MilestoneUpdateInput = milestoneUpdateSchema.parse(req.body);
+    const milestone = updateMilestone(req.params.id, input);
+
+    if (!milestone) {
+      res.status(404).json({ message: "Milestone not found." });
+      return;
+    }
+
+    res.json({ milestone });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/knowledge-assets", (_req, res) => {
+  res.json({ assets: listKnowledgeAssets() });
+});
+
+app.post("/api/knowledge-assets", (req, res, next) => {
+  try {
+    const input: KnowledgeAssetInput = knowledgeAssetInputSchema.parse(req.body);
+    const asset = insertKnowledgeAsset(input);
+    res.status(201).json({ asset });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/knowledge-assets/:id", (req, res, next) => {
+  try {
+    const input: KnowledgeAssetUpdateInput = knowledgeAssetUpdateSchema.parse(req.body);
+    const asset = updateKnowledgeAsset(req.params.id, input);
+
+    if (!asset) {
+      res.status(404).json({ message: "Knowledge asset not found." });
+      return;
+    }
+
+    res.json({ asset });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/records", (req, res, next) => {
   try {
     const input: RecordInput = recordInputSchema.parse(req.body);
@@ -309,7 +464,10 @@ app.post("/api/export/:format", async (req, res, next) => {
     const payload: ExportPayload = {
       ...input,
       configOptions: listConfigOptions(),
-      workloadStandards: listWorkloadStandards()
+      workloadStandards: listWorkloadStandards(),
+      appSettings: getAppSettings(),
+      milestones: listMilestones(),
+      knowledgeAssets: listKnowledgeAssets()
     };
     const buffer = await buildExport(format, payload);
     const safeName = sanitizeFileName(payload.title);
@@ -344,6 +502,16 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 
   if (error instanceof Error && error.message === "WORKLOAD_STANDARD_INVALID") {
     res.status(400).json({ message: "当量标准缺少必填项或折算系数无效。" });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "MILESTONE_INVALID") {
+    res.status(400).json({ message: "里程碑缺少名称或数值无效。" });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "KNOWLEDGE_ASSET_INVALID") {
+    res.status(400).json({ message: "知识资产缺少标题。" });
     return;
   }
 

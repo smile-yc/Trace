@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { analyzeExport, sortRecordsForExport, type ExportSummaryItem } from "./analysis.js";
-import type { ConfigOption, ExportPayload, WorkloadStandard } from "../types.js";
+import type { AppSettings, ConfigOption, ExportPayload, KnowledgeAsset, Milestone, WorkloadStandard } from "../types.js";
 
 type Worksheet = ExcelJS.Worksheet;
 
@@ -223,6 +223,104 @@ function createWorkloadStandardsSheet(workbook: ExcelJS.Workbook, standards: Wor
   styleSheet(sheet);
 }
 
+function createAppSettingsSheet(workbook: ExcelJS.Workbook, settings?: AppSettings): void {
+  const sheet = workbook.addWorksheet("分析规则备份", {
+    views: [{ state: "frozen", ySplit: 1 }]
+  });
+
+  sheet.columns = [
+    { header: "规则", key: "rule", width: 28 },
+    { header: "数值", key: "value", width: 18 },
+    { header: "说明", key: "remark", width: 42 }
+  ];
+
+  if (settings) {
+    sheet.addRow({ rule: "工作当量权重", value: settings.focusScoreWeights.workload, remark: "工作重心评分使用" });
+    sheet.addRow({ rule: "投入时间权重", value: settings.focusScoreWeights.timeHours, remark: "工作重心评分使用" });
+    sheet.addRow({ rule: "记录数量权重", value: settings.focusScoreWeights.recordCount, remark: "工作重心评分使用" });
+    sheet.addRow({ rule: "能力未记录天数", value: settings.warningRules.abilityNoRecordDays, remark: "查漏补缺预警阈值" });
+    sheet.addRow({ rule: "目标占比偏差%", value: settings.warningRules.targetShareDeviationPercent, remark: "查漏补缺预警阈值" });
+    Object.entries(settings.abilityTargets).forEach(([label, target]) => {
+      sheet.addRow({ rule: `能力目标：${label}`, value: target, remark: "能力目标占比%" });
+    });
+  }
+
+  styleSheet(sheet);
+}
+
+function createMilestonesSheet(workbook: ExcelJS.Workbook, milestones: Milestone[] = []): void {
+  const sheet = workbook.addWorksheet("成长里程碑", {
+    views: [{ state: "frozen", ySplit: 1 }]
+  });
+
+  sheet.columns = [
+    { header: "名称", key: "name", width: 28 },
+    { header: "分类", key: "category", width: 16 },
+    { header: "目标类型", key: "targetType", width: 16 },
+    { header: "目标值", key: "targetValue", width: 12 },
+    { header: "当前值", key: "currentValue", width: 12 },
+    { header: "进度", key: "progress", width: 12 },
+    { header: "截止日期", key: "deadline", width: 14 },
+    { header: "启用", key: "enabled", width: 10 },
+    { header: "说明", key: "description", width: 42 },
+    { header: "更新时间", key: "updateTime", width: 22 }
+  ];
+
+  milestones.forEach((milestone) => {
+    const progress = milestone.targetValue > 0 ? Math.min(100, (milestone.currentValue / milestone.targetValue) * 100) : 0;
+    sheet.addRow({
+      name: milestone.name,
+      category: milestone.category,
+      targetType: milestone.targetType,
+      targetValue: milestone.targetValue,
+      currentValue: milestone.currentValue,
+      progress: `${Number(progress.toFixed(1))}%`,
+      deadline: milestone.deadline,
+      enabled: milestone.enabled ? "是" : "否",
+      description: milestone.description,
+      updateTime: formatDateTime(milestone.updateTime)
+    });
+  });
+
+  styleSheet(sheet);
+}
+
+function createKnowledgeAssetsSheet(workbook: ExcelJS.Workbook, assets: KnowledgeAsset[] = []): void {
+  const sheet = workbook.addWorksheet("知识资产库", {
+    views: [{ state: "frozen", ySplit: 1 }]
+  });
+
+  sheet.columns = [
+    { header: "类型", key: "type", width: 16 },
+    { header: "标题", key: "title", width: 30 },
+    { header: "状态", key: "status", width: 12 },
+    { header: "项目", key: "projectName", width: 24 },
+    { header: "产品系统", key: "productSystem", width: 16 },
+    { header: "标签", key: "tags", width: 24 },
+    { header: "链接", key: "link", width: 34 },
+    { header: "摘要", key: "summary", width: 48 },
+    { header: "备注", key: "remark", width: 32 },
+    { header: "更新时间", key: "updateTime", width: 22 }
+  ];
+
+  assets.forEach((asset) => {
+    sheet.addRow({
+      type: asset.type,
+      title: asset.title,
+      status: asset.status,
+      projectName: asset.projectName,
+      productSystem: asset.productSystem,
+      tags: asset.tags,
+      link: asset.link,
+      summary: asset.summary,
+      remark: asset.remark,
+      updateTime: formatDateTime(asset.updateTime)
+    });
+  });
+
+  styleSheet(sheet);
+}
+
 export async function buildExcel(payload: ExportPayload): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const analysis = analyzeExport(payload.records);
@@ -240,6 +338,9 @@ export async function buildExcel(payload: ExportPayload): Promise<Buffer> {
   createWorkloadSheet(workbook, analysis.dateSummary);
   createConfigBackupSheet(workbook, payload.configOptions);
   createWorkloadStandardsSheet(workbook, payload.workloadStandards);
+  createAppSettingsSheet(workbook, payload.appSettings);
+  createMilestonesSheet(workbook, payload.milestones);
+  createKnowledgeAssetsSheet(workbook, payload.knowledgeAssets);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);

@@ -3,6 +3,7 @@ import {
   ArrowUp,
   CheckCircle2,
   ClipboardList,
+  Gauge,
   Plus,
   RefreshCw,
   Save,
@@ -25,7 +26,8 @@ import {
   fetchWorkloadStandards,
   updateWorkloadStandardApi
 } from "../lib/workloadApi";
-import type { ConfigOption, ConfigOptionType, WorkloadStandard } from "../types";
+import { DEFAULT_APP_SETTINGS, fetchSettings, updateSettings } from "../lib/settingsApi";
+import type { AppSettings, ConfigOption, ConfigOptionType, FocusScoreWeights, WarningRules, WorkloadStandard } from "../types";
 
 interface SettingsPageProps {
   onNotify: (message: string) => void;
@@ -38,7 +40,7 @@ interface ConfigGroupMeta {
   eyebrow: string;
 }
 
-type SettingsPanel = "options" | "standards";
+type SettingsPanel = "options" | "standards" | "analysis";
 
 interface WorkloadStandardDraft {
   businessCategory: string;
@@ -144,6 +146,7 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>("options");
   const [options, setOptions] = useState<ConfigOption[]>([]);
   const [standards, setStandards] = useState<WorkloadStandard[]>([]);
+  const [settingsDraft, setSettingsDraft] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [draftLabels, setDraftLabels] = useState<Record<string, string>>({});
   const [standardDrafts, setStandardDrafts] = useState<Record<string, WorkloadStandardDraft>>({});
   const [newLabels, setNewLabels] = useState<Record<ConfigOptionType, string>>({
@@ -161,15 +164,17 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
   async function loadOptions(): Promise<void> {
     try {
       setLoading(true);
-      const [nextOptions, nextStandards] = await Promise.all([
+      const [nextOptions, nextStandards, nextSettings] = await Promise.all([
         fetchConfigOptions(),
-        fetchWorkloadStandards()
+        fetchWorkloadStandards(),
+        fetchSettings()
       ]);
       const sortedOptions = sortOptions(nextOptions);
       const sortedStandards = sortStandards(nextStandards);
 
       setOptions(sortedOptions);
       setStandards(sortedStandards);
+      setSettingsDraft(nextSettings);
       setDraftLabels(
         sortedOptions.reduce<Record<string, string>>((drafts, option) => {
           drafts[option.id] = option.label;
@@ -219,6 +224,7 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
   const workTypeOptions = getEnabledLabels(options, "workType", newStandard.workType);
   const productSystemOptions = getEnabledLabels(options, "productSystem", newStandard.productSystem, true);
   const subtaskOptions = getEnabledLabels(options, "subtask", newStandard.subtask, true);
+  const abilityTargetOptions = getEnabledLabels(options, "abilityDimension");
 
   async function handleCreate(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -391,6 +397,49 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
       ...current,
       [id]: { ...(current[id] ?? emptyStandardDraft), ...patch }
     }));
+  }
+
+  function updateFocusWeight(key: keyof FocusScoreWeights, value: string): void {
+    setSettingsDraft((current) => ({
+      ...current,
+      focusScoreWeights: {
+        ...current.focusScoreWeights,
+        [key]: Number(value)
+      }
+    }));
+  }
+
+  function updateWarningRule(key: keyof WarningRules, value: string): void {
+    setSettingsDraft((current) => ({
+      ...current,
+      warningRules: {
+        ...current.warningRules,
+        [key]: Number(value)
+      }
+    }));
+  }
+
+  function updateAbilityTarget(label: string, value: string): void {
+    setSettingsDraft((current) => ({
+      ...current,
+      abilityTargets: {
+        ...current.abilityTargets,
+        [label]: Number(value)
+      }
+    }));
+  }
+
+  async function handleSaveAnalysisSettings(): Promise<void> {
+    try {
+      setSavingId("analysis-settings");
+      const nextSettings = await updateSettings(settingsDraft);
+      setSettingsDraft(nextSettings);
+      onNotify("分析规则已保存");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "保存分析规则失败");
+    } finally {
+      setSavingId(null);
+    }
   }
 
   function renderBasicOptions() {
@@ -734,6 +783,131 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
     );
   }
 
+  function renderAnalysisRules() {
+    const weightTotal =
+      Number(settingsDraft.focusScoreWeights.workload || 0) +
+      Number(settingsDraft.focusScoreWeights.timeHours || 0) +
+      Number(settingsDraft.focusScoreWeights.recordCount || 0);
+
+    return (
+      <section className="panel analysis-rules-panel">
+        <div className="config-workbench-header">
+          <div>
+            <span className="eyebrow">Analysis Rules</span>
+            <h2>分析规则</h2>
+          </div>
+          <button
+            className="primary-button"
+            disabled={savingId === "analysis-settings"}
+            onClick={handleSaveAnalysisSettings}
+            type="button"
+          >
+            <Save size={16} />
+            保存规则
+          </button>
+        </div>
+
+        <div className="analysis-settings-grid">
+          <article className="analysis-setting-card">
+            <div className="dashboard-card-heading">
+              <h3>工作重心评分权重</h3>
+              <span>合计 {weightTotal}</span>
+            </div>
+            <div className="settings-field-grid">
+              <label>
+                <span>工作当量权重</span>
+                <input
+                  min="0"
+                  step="1"
+                  type="number"
+                  value={settingsDraft.focusScoreWeights.workload}
+                  onChange={(event) => updateFocusWeight("workload", event.target.value)}
+                />
+              </label>
+              <label>
+                <span>投入时间权重</span>
+                <input
+                  min="0"
+                  step="1"
+                  type="number"
+                  value={settingsDraft.focusScoreWeights.timeHours}
+                  onChange={(event) => updateFocusWeight("timeHours", event.target.value)}
+                />
+              </label>
+              <label>
+                <span>记录数量权重</span>
+                <input
+                  min="0"
+                  step="1"
+                  type="number"
+                  value={settingsDraft.focusScoreWeights.recordCount}
+                  onChange={(event) => updateFocusWeight("recordCount", event.target.value)}
+                />
+              </label>
+            </div>
+          </article>
+
+          <article className="analysis-setting-card">
+            <div className="dashboard-card-heading">
+              <h3>查漏补缺预警</h3>
+              <span>目标偏差</span>
+            </div>
+            <div className="settings-field-grid two">
+              <label>
+                <span>能力未记录天数</span>
+                <input
+                  min="1"
+                  step="1"
+                  type="number"
+                  value={settingsDraft.warningRules.abilityNoRecordDays}
+                  onChange={(event) => updateWarningRule("abilityNoRecordDays", event.target.value)}
+                />
+              </label>
+              <label>
+                <span>目标占比偏差%</span>
+                <input
+                  min="0"
+                  step="1"
+                  type="number"
+                  value={settingsDraft.warningRules.targetShareDeviationPercent}
+                  onChange={(event) => updateWarningRule("targetShareDeviationPercent", event.target.value)}
+                />
+              </label>
+            </div>
+          </article>
+
+          <article className="analysis-setting-card wide">
+            <div className="dashboard-card-heading">
+              <h3>能力目标占比</h3>
+              <span>{abilityTargetOptions.length} 个能力维度</span>
+            </div>
+            <div className="ability-target-grid">
+              {abilityTargetOptions.map((label) => (
+                <label key={label}>
+                  <span>{label}</span>
+                  <input
+                    min="0"
+                    step="1"
+                    type="number"
+                    value={settingsDraft.abilityTargets[label] ?? 0}
+                    onChange={(event) => updateAbilityTarget(label, event.target.value)}
+                  />
+                </label>
+              ))}
+              {!abilityTargetOptions.length && <div className="empty-state">请先在基础配置中启用能力维度。</div>}
+            </div>
+          </article>
+        </div>
+      </section>
+    );
+  }
+
+  function renderActivePanel() {
+    if (activePanel === "standards") return renderWorkloadStandards();
+    if (activePanel === "analysis") return renderAnalysisRules();
+    return renderBasicOptions();
+  }
+
   return (
     <>
       <PageHeader
@@ -774,11 +948,19 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
           <ClipboardList size={16} />
           当量标准
         </button>
+        <button
+          className={activePanel === "analysis" ? "active" : ""}
+          onClick={() => setActivePanel("analysis")}
+          type="button"
+        >
+          <Gauge size={16} />
+          分析规则
+        </button>
         <span>{disabledCount + disabledStandardCount} 项停用</span>
         <span>{defaultCount} 个默认项</span>
       </div>
 
-      {activePanel === "options" ? renderBasicOptions() : renderWorkloadStandards()}
+      {renderActivePanel()}
     </>
   );
 }

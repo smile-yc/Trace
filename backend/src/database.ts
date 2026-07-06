@@ -3,10 +3,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import type {
+  AppSettings,
+  AppSettingsInput,
   ConfigOption,
   ConfigOptionInput,
   ConfigOptionType,
   ConfigOptionUpdateInput,
+  KnowledgeAsset,
+  KnowledgeAssetInput,
+  KnowledgeAssetStatus,
+  KnowledgeAssetUpdateInput,
+  Milestone,
+  MilestoneInput,
+  MilestoneUpdateInput,
   RecordInput,
   WorkloadStandard,
   WorkloadStandardInput,
@@ -79,6 +88,47 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_workload_standards_lookup
   ON workload_standards(businessCategory, workType, productSystem, subtask, enabled);
+
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updateTime INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS milestones (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    targetType TEXT NOT NULL DEFAULT '',
+    targetValue REAL NOT NULL DEFAULT 0,
+    currentValue REAL NOT NULL DEFAULT 0,
+    deadline TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    createTime INTEGER NOT NULL,
+    updateTime INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_milestones_enabled_sort ON milestones(enabled, sortOrder, createTime);
+
+  CREATE TABLE IF NOT EXISTS knowledge_assets (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL DEFAULT '',
+    sourceRecordId TEXT NOT NULL DEFAULT '',
+    projectName TEXT NOT NULL DEFAULT '',
+    productSystem TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'draft',
+    link TEXT NOT NULL DEFAULT '',
+    remark TEXT NOT NULL DEFAULT '',
+    createTime INTEGER NOT NULL,
+    updateTime INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_knowledge_assets_status ON knowledge_assets(status, updateTime);
 `);
 
 const recordColumnDefinitions = [
@@ -217,6 +267,19 @@ const defaultLabels: Record<ConfigOptionType, string> = {
   subtask: "其他"
 };
 
+const defaultAppSettings: AppSettings = {
+  focusScoreWeights: {
+    workload: 50,
+    timeHours: 30,
+    recordCount: 20
+  },
+  warningRules: {
+    abilityNoRecordDays: 30,
+    targetShareDeviationPercent: 10
+  },
+  abilityTargets: {}
+};
+
 function seedConfigOptions(): void {
   (Object.keys(defaultConfigOptions) as ConfigOptionType[]).forEach((type) => {
     const count = Number(
@@ -256,6 +319,64 @@ function normalizeNumber(input: unknown): number | null {
   const value = Number(input);
   return Number.isFinite(value) ? value : null;
 }
+
+function normalizeRequiredNumber(input: unknown, fallback = 0): number {
+  const value = normalizeNumber(input);
+  return value === null ? fallback : value;
+}
+
+function normalizeNonNegativeNumber(input: unknown, fallback = 0): number {
+  return Math.max(0, normalizeRequiredNumber(input, fallback));
+}
+
+function normalizeAppSettings(input?: AppSettingsInput, base: AppSettings = defaultAppSettings): AppSettings {
+  const focusScoreWeights = {
+    workload: normalizeNonNegativeNumber(input?.focusScoreWeights?.workload, base.focusScoreWeights.workload),
+    timeHours: normalizeNonNegativeNumber(input?.focusScoreWeights?.timeHours, base.focusScoreWeights.timeHours),
+    recordCount: normalizeNonNegativeNumber(input?.focusScoreWeights?.recordCount, base.focusScoreWeights.recordCount)
+  };
+  const warningRules = {
+    abilityNoRecordDays: Math.max(
+      1,
+      normalizeRequiredNumber(input?.warningRules?.abilityNoRecordDays, base.warningRules.abilityNoRecordDays)
+    ),
+    targetShareDeviationPercent: Math.max(
+      0,
+      normalizeRequiredNumber(
+        input?.warningRules?.targetShareDeviationPercent,
+        base.warningRules.targetShareDeviationPercent
+      )
+    )
+  };
+  const abilityTargets = Object.entries(input?.abilityTargets ?? base.abilityTargets).reduce<Record<string, number>>(
+    (targets, [label, value]) => {
+      const normalizedLabel = normalizeText(label);
+      const target = normalizeNumber(value);
+      if (normalizedLabel && target !== null && target > 0) targets[normalizedLabel] = target;
+      return targets;
+    },
+    {}
+  );
+
+  return {
+    focusScoreWeights,
+    warningRules,
+    abilityTargets
+  };
+}
+
+function seedAppSettings(): void {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("appSettings");
+  if (row) return;
+
+  db.prepare("INSERT INTO app_settings (key, value, updateTime) VALUES (?, ?, ?)").run(
+    "appSettings",
+    JSON.stringify(defaultAppSettings),
+    Date.now()
+  );
+}
+
+seedAppSettings();
 
 function normalizeWorkload(quantity: number | null, coefficient: number | null, explicit: unknown): number | null {
   const workload = normalizeNumber(explicit);
@@ -329,6 +450,78 @@ function toWorkloadStandard(row: unknown): WorkloadStandard {
     enabled: Boolean(standard.enabled),
     createTime: Number(standard.createTime),
     updateTime: Number(standard.updateTime)
+  };
+}
+
+function normalizeKnowledgeStatus(input: unknown): KnowledgeAssetStatus {
+  const status = String(input || "draft");
+  if (status === "published" || status === "archived") return status;
+  return "draft";
+}
+
+function toMilestone(row: unknown): Milestone {
+  const milestone = row as {
+    id: unknown;
+    name: unknown;
+    description: unknown;
+    category: unknown;
+    targetType: unknown;
+    targetValue: unknown;
+    currentValue: unknown;
+    deadline: unknown;
+    enabled: unknown;
+    sortOrder: unknown;
+    createTime: unknown;
+    updateTime: unknown;
+  };
+
+  return {
+    id: String(milestone.id),
+    name: String(milestone.name || ""),
+    description: String(milestone.description || ""),
+    category: String(milestone.category || ""),
+    targetType: String(milestone.targetType || ""),
+    targetValue: normalizeNonNegativeNumber(milestone.targetValue),
+    currentValue: normalizeNonNegativeNumber(milestone.currentValue),
+    deadline: String(milestone.deadline || ""),
+    enabled: Boolean(milestone.enabled),
+    sortOrder: Number(milestone.sortOrder || 0),
+    createTime: Number(milestone.createTime),
+    updateTime: Number(milestone.updateTime)
+  };
+}
+
+function toKnowledgeAsset(row: unknown): KnowledgeAsset {
+  const asset = row as {
+    id: unknown;
+    type: unknown;
+    title: unknown;
+    summary: unknown;
+    sourceRecordId: unknown;
+    projectName: unknown;
+    productSystem: unknown;
+    tags: unknown;
+    status: unknown;
+    link: unknown;
+    remark: unknown;
+    createTime: unknown;
+    updateTime: unknown;
+  };
+
+  return {
+    id: String(asset.id),
+    type: String(asset.type || ""),
+    title: String(asset.title || ""),
+    summary: String(asset.summary || ""),
+    sourceRecordId: String(asset.sourceRecordId || ""),
+    projectName: String(asset.projectName || ""),
+    productSystem: String(asset.productSystem || ""),
+    tags: String(asset.tags || ""),
+    status: normalizeKnowledgeStatus(asset.status),
+    link: String(asset.link || ""),
+    remark: String(asset.remark || ""),
+    createTime: Number(asset.createTime),
+    updateTime: Number(asset.updateTime)
   };
 }
 
@@ -613,6 +806,226 @@ export function matchWorkloadStandard(input: {
     .all(businessCategory, workType, productSystem, subtask, productSystem, subtask);
 
   return rows[0] ? toWorkloadStandard(rows[0]) : null;
+}
+
+export function getAppSettings(): AppSettings {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("appSettings") as
+    | { value: string }
+    | undefined;
+
+  if (!row) return defaultAppSettings;
+
+  try {
+    const parsed = JSON.parse(row.value) as AppSettingsInput;
+    return normalizeAppSettings(parsed, defaultAppSettings);
+  } catch {
+    return defaultAppSettings;
+  }
+}
+
+export function updateAppSettings(input: AppSettingsInput): AppSettings {
+  const current = getAppSettings();
+  const next = normalizeAppSettings(input, current);
+
+  db.prepare(
+    `INSERT INTO app_settings (key, value, updateTime)
+     VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updateTime = excluded.updateTime`
+  ).run("appSettings", JSON.stringify(next), Date.now());
+
+  return getAppSettings();
+}
+
+function getNextMilestoneSortOrder(): number {
+  const result = db.prepare("SELECT MAX(sortOrder) AS maxSortOrder FROM milestones").get() as {
+    maxSortOrder: number | null;
+  };
+
+  return Number(result.maxSortOrder || 0) + 10;
+}
+
+export function listMilestones(): Milestone[] {
+  return db
+    .prepare("SELECT * FROM milestones ORDER BY enabled DESC, sortOrder ASC, createTime ASC")
+    .all()
+    .map(toMilestone);
+}
+
+export function getMilestone(id: string): Milestone | null {
+  const row = db.prepare("SELECT * FROM milestones WHERE id = ?").get(id);
+  return row ? toMilestone(row) : null;
+}
+
+export function insertMilestone(input: MilestoneInput): Milestone {
+  const name = normalizeText(input.name);
+  if (!name) throw new Error("MILESTONE_INVALID");
+
+  const now = Date.now();
+  const id = createId();
+
+  db.prepare(
+    `INSERT INTO milestones (
+       id,
+       name,
+       description,
+       category,
+       targetType,
+       targetValue,
+       currentValue,
+       deadline,
+       enabled,
+       sortOrder,
+       createTime,
+       updateTime
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    name,
+    normalizeText(input.description),
+    normalizeText(input.category) || "成长目标",
+    normalizeText(input.targetType) || "工作当量",
+    normalizeNonNegativeNumber(input.targetValue),
+    normalizeNonNegativeNumber(input.currentValue),
+    normalizeText(input.deadline),
+    input.enabled === false ? 0 : 1,
+    input.sortOrder ?? getNextMilestoneSortOrder(),
+    now,
+    now
+  );
+
+  return getMilestone(id) as Milestone;
+}
+
+export function updateMilestone(id: string, input: MilestoneUpdateInput): Milestone | null {
+  const existing = getMilestone(id);
+  if (!existing) return null;
+
+  const name = input.name === undefined ? existing.name : normalizeText(input.name);
+  if (!name) throw new Error("MILESTONE_INVALID");
+
+  db.prepare(
+    `UPDATE milestones
+     SET name = ?,
+         description = ?,
+         category = ?,
+         targetType = ?,
+         targetValue = ?,
+         currentValue = ?,
+         deadline = ?,
+         enabled = ?,
+         sortOrder = ?,
+         updateTime = ?
+     WHERE id = ?`
+  ).run(
+    name,
+    input.description === undefined ? existing.description : normalizeText(input.description),
+    input.category === undefined ? existing.category : normalizeText(input.category),
+    input.targetType === undefined ? existing.targetType : normalizeText(input.targetType),
+    input.targetValue === undefined ? existing.targetValue : normalizeNonNegativeNumber(input.targetValue),
+    input.currentValue === undefined ? existing.currentValue : normalizeNonNegativeNumber(input.currentValue),
+    input.deadline === undefined ? existing.deadline : normalizeText(input.deadline),
+    (input.enabled ?? existing.enabled) ? 1 : 0,
+    input.sortOrder ?? existing.sortOrder,
+    Date.now(),
+    id
+  );
+
+  return getMilestone(id);
+}
+
+export function listKnowledgeAssets(): KnowledgeAsset[] {
+  return db
+    .prepare("SELECT * FROM knowledge_assets ORDER BY updateTime DESC, createTime DESC")
+    .all()
+    .map(toKnowledgeAsset);
+}
+
+export function getKnowledgeAsset(id: string): KnowledgeAsset | null {
+  const row = db.prepare("SELECT * FROM knowledge_assets WHERE id = ?").get(id);
+  return row ? toKnowledgeAsset(row) : null;
+}
+
+export function insertKnowledgeAsset(input: KnowledgeAssetInput): KnowledgeAsset {
+  const title = normalizeText(input.title);
+  if (!title) throw new Error("KNOWLEDGE_ASSET_INVALID");
+
+  const now = Date.now();
+  const id = createId();
+
+  db.prepare(
+    `INSERT INTO knowledge_assets (
+       id,
+       type,
+       title,
+       summary,
+       sourceRecordId,
+       projectName,
+       productSystem,
+       tags,
+       status,
+       link,
+       remark,
+       createTime,
+       updateTime
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    normalizeText(input.type) || "复盘",
+    title,
+    normalizeText(input.summary),
+    normalizeText(input.sourceRecordId),
+    normalizeText(input.projectName),
+    normalizeText(input.productSystem),
+    normalizeTags(input.tags || ""),
+    normalizeKnowledgeStatus(input.status),
+    normalizeText(input.link),
+    normalizeText(input.remark),
+    now,
+    now
+  );
+
+  return getKnowledgeAsset(id) as KnowledgeAsset;
+}
+
+export function updateKnowledgeAsset(id: string, input: KnowledgeAssetUpdateInput): KnowledgeAsset | null {
+  const existing = getKnowledgeAsset(id);
+  if (!existing) return null;
+
+  const title = input.title === undefined ? existing.title : normalizeText(input.title);
+  if (!title) throw new Error("KNOWLEDGE_ASSET_INVALID");
+
+  db.prepare(
+    `UPDATE knowledge_assets
+     SET type = ?,
+         title = ?,
+         summary = ?,
+         sourceRecordId = ?,
+         projectName = ?,
+         productSystem = ?,
+         tags = ?,
+         status = ?,
+         link = ?,
+         remark = ?,
+         updateTime = ?
+     WHERE id = ?`
+  ).run(
+    input.type === undefined ? existing.type : normalizeText(input.type),
+    title,
+    input.summary === undefined ? existing.summary : normalizeText(input.summary),
+    input.sourceRecordId === undefined ? existing.sourceRecordId : normalizeText(input.sourceRecordId),
+    input.projectName === undefined ? existing.projectName : normalizeText(input.projectName),
+    input.productSystem === undefined ? existing.productSystem : normalizeText(input.productSystem),
+    input.tags === undefined ? existing.tags : normalizeTags(input.tags || ""),
+    input.status === undefined ? existing.status : normalizeKnowledgeStatus(input.status),
+    input.link === undefined ? existing.link : normalizeText(input.link),
+    input.remark === undefined ? existing.remark : normalizeText(input.remark),
+    Date.now(),
+    id
+  );
+
+  return getKnowledgeAsset(id);
 }
 
 function toRecord(row: unknown): WorkRecord {

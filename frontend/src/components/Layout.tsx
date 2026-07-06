@@ -1,5 +1,6 @@
 import {
   Archive,
+  BookOpen,
   Calendar,
   CalendarClock,
   CalendarDays,
@@ -8,6 +9,7 @@ import {
   Download,
   SlidersHorizontal,
   Tags,
+  TrendingUp,
   Trash2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -30,6 +32,8 @@ const viewIcons: Record<ViewMode, LucideIcon> = {
   weekly: CalendarRange,
   monthly: Calendar,
   yearly: CalendarClock,
+  growth: TrendingUp,
+  knowledge: BookOpen,
   all: Archive,
   settings: SlidersHorizontal
 };

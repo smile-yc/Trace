@@ -137,7 +137,33 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
     drawSummaryRows(doc, "项目汇总", analysis.projectSummary, width);
     drawSummaryRows(doc, "产品系统汇总", analysis.productSummary, width);
 
-    drawSectionTitle(doc, "三、记录明细", width);
+    drawSectionTitle(doc, "三、成长复盘与知识资产", width);
+    const milestones = payload.milestones ?? [];
+    const knowledgeAssets = payload.knowledgeAssets ?? [];
+    const doneMilestones = milestones.filter((milestone) => milestone.enabled && milestone.targetValue > 0 && milestone.currentValue >= milestone.targetValue);
+    doc.fillColor("#4f4a43").fontSize(10).text(`里程碑：${milestones.length} 项，其中已完成 ${doneMilestones.length} 项。`, { width });
+    milestones.slice(0, 6).forEach((milestone, index) => {
+      const progress = milestone.targetValue > 0 ? Math.min(100, (milestone.currentValue / milestone.targetValue) * 100) : 0;
+      ensureSpace(doc, 28);
+      doc
+        .fillColor("#4f4a43")
+        .fontSize(9.5)
+        .text(
+          `${index + 1}. ${milestone.name}：${formatMetric(progress)}%，${formatMetric(milestone.currentValue)}/${formatMetric(milestone.targetValue)} ${milestone.targetType || ""}`,
+          { width, indent: 12 }
+        );
+    });
+    doc.moveDown(0.4);
+    doc.fillColor("#4f4a43").fontSize(10).text(`知识资产：${knowledgeAssets.length} 项。`, { width });
+    knowledgeAssets.slice(0, 6).forEach((asset, index) => {
+      ensureSpace(doc, 28);
+      doc
+        .fillColor("#4f4a43")
+        .fontSize(9.5)
+        .text(`${index + 1}. ${asset.title}：${asset.type || "未分类"} / ${asset.status}`, { width, indent: 12 });
+    });
+
+    drawSectionTitle(doc, "四、记录明细", width);
     if (!sortedRecords.length) {
       doc.fillColor("#786d62").fontSize(10).text("当前范围暂无记录。", { width });
     }

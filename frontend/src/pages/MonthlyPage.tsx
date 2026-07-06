@@ -1,14 +1,18 @@
 import { ChevronLeft, ChevronRight, RotateCcw, Tags } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExportPanel } from "../components/ExportPanel";
 import { PageHeader } from "../components/PageHeader";
 import { ReportDashboard } from "../components/ReportDashboard";
 import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
-import type { WorkRecord } from "../types";
+import type { AppSettings, KnowledgeAsset, Milestone, WorkRecord } from "../types";
 import { formatMonthLabel, getMonthRange, shiftMonth, todayKey } from "../lib/date";
 import { buildMonthWeekTrend, sumWorkload } from "../lib/dashboard";
+import { buildGrowthWarnings, buildMonthlyReview } from "../lib/growthReview";
+import { fetchKnowledgeAssets } from "../lib/knowledgeApi";
+import { fetchMilestones } from "../lib/milestoneApi";
 import { countActiveDays, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
+import { DEFAULT_APP_SETTINGS, fetchSettings } from "../lib/settingsApi";
 
 interface MonthlyPageProps {
   records: WorkRecord[];
@@ -18,6 +22,9 @@ interface MonthlyPageProps {
 
 export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPageProps) {
   const [date, setDate] = useState(todayKey());
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [assets, setAssets] = useState<KnowledgeAsset[]>([]);
   const range = useMemo(() => getMonthRange(date), [date]);
   const monthlyRecords = useMemo(
     () => filterByRange(records, range.start, range.end),
@@ -27,6 +34,27 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
   const trend = useMemo(() => buildMonthWeekTrend(monthlyRecords, range.monthKey), [monthlyRecords, range.monthKey]);
   const title = `${formatMonthLabel(range.monthKey)}月报`;
   const activeDays = countActiveDays(monthlyRecords);
+  const review = useMemo(() => buildMonthlyReview(monthlyRecords, milestones, assets), [monthlyRecords, milestones, assets]);
+  const warnings = useMemo(() => buildGrowthWarnings(monthlyRecords, settings, range.end), [monthlyRecords, settings, range.end]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    Promise.all([fetchSettings(), fetchMilestones(), fetchKnowledgeAssets()])
+      .then(([nextSettings, nextMilestones, nextAssets]) => {
+        if (ignore) return;
+        setSettings(nextSettings);
+        setMilestones(nextMilestones);
+        setAssets(nextAssets);
+      })
+      .catch((error) => {
+        if (!ignore) onNotify(error instanceof Error ? error.message : "月报复盘数据读取失败");
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [onNotify]);
 
   return (
     <>
@@ -66,6 +94,25 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
       />
 
       <ReportDashboard records={monthlyRecords} trend={trend} activeLabel={`${activeDays} 天`} />
+
+      <section className="panel review-panel">
+        <div className="panel-heading">
+          <h2>月报复盘增强</h2>
+          <span>{warnings.length} 条预警</span>
+        </div>
+        <div className="review-text">{review.text}</div>
+        {warnings.length ? (
+          <div className="warning-inline-list">
+            {warnings.slice(0, 5).map((warning) => (
+              <span className={`warning-chip ${warning.severity}`} key={`${warning.type}-${warning.label}`}>
+                {warning.message}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="field-hint">当前月份暂无能力目标预警。</div>
+        )}
+      </section>
 
       <ExportPanel
         records={monthlyRecords}

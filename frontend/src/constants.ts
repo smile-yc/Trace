@@ -53,6 +53,8 @@ export const VIEWS: Array<{ key: ViewMode; label: string }> = [
   { key: "weekly", label: "周报" },
   { key: "monthly", label: "月报" },
   { key: "yearly", label: "年报" },
+  { key: "growth", label: "成长地图" },
+  { key: "knowledge", label: "知识资产" },
   { key: "all", label: "全部记录" },
   { key: "settings", label: "配置中心" }
 ];

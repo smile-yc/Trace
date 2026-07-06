@@ -2244,9 +2244,276 @@ textarea:focus-visible {
   color: var(--sage);
 }
 
+.analysis-settings-grid,
+.growth-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.analysis-setting-card,
+.milestone-card,
+.knowledge-card,
+.warning-item,
+.year-review-grid article {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.44);
+  padding: 14px;
+}
+
+.analysis-setting-card.wide {
+  grid-column: 1 / -1;
+}
+
+.settings-field-grid,
+.ability-target-grid,
+.milestone-form,
+.knowledge-form {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-field-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-field-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ability-target-grid,
+.milestone-form,
+.knowledge-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-field-grid label,
+.ability-target-grid label,
+.milestone-form label,
+.knowledge-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 730;
+}
+
+.settings-field-grid input,
+.ability-target-grid input,
+.milestone-form input,
+.milestone-form textarea,
+.knowledge-form input,
+.knowledge-form select,
+.knowledge-form textarea,
+.milestone-actions input,
+.milestone-actions button,
+.knowledge-actions input,
+.knowledge-actions select,
+.knowledge-actions button {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
+  padding: 9px 10px;
+}
+
+.milestone-form textarea,
+.knowledge-form textarea {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.milestone-form .wide,
+.knowledge-form .wide {
+  grid-column: span 2;
+}
+
+.warning-panel,
+.milestone-form-panel,
+.knowledge-form-panel,
+.review-panel {
+  overflow: hidden;
+}
+
+.warning-list,
+.milestone-list,
+.knowledge-list {
+  display: grid;
+  gap: 10px;
+}
+
+.warning-item {
+  border-left: 4px solid var(--blue);
+}
+
+.warning-item.warning {
+  border-left-color: var(--brass);
+  background: var(--brass-soft);
+}
+
+.warning-item.danger {
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.warning-item strong,
+.milestone-card strong,
+.knowledge-card strong {
+  color: var(--ink);
+  display: block;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.warning-item p,
+.milestone-card p,
+.knowledge-card p {
+  margin: 6px 0 0;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.warning-item span,
+.milestone-card span,
+.knowledge-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.milestone-card-main,
+.knowledge-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.milestone-card-main svg,
+.knowledge-card-top svg {
+  color: var(--sage);
+  flex: 0 0 auto;
+}
+
+.milestone-progress {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  margin: 12px 0;
+}
+
+.milestone-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brass), var(--sage));
+}
+
+.milestone-actions,
+.knowledge-actions {
+  display: grid;
+  grid-template-columns: auto 120px auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.knowledge-actions {
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  margin-top: 12px;
+}
+
+.milestone-actions button,
+.knowledge-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.milestone-actions .toggle-on {
+  border-color: rgba(97, 114, 101, 0.28);
+  background: var(--sage-soft);
+  color: var(--sage);
+}
+
+.knowledge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+}
+
+.review-text {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.36);
+  color: var(--ink);
+  padding: 14px;
+  white-space: pre-wrap;
+  line-height: 1.8;
+}
+
+.warning-inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.warning-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-strong);
+  color: var(--muted);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 730;
+}
+
+.warning-chip.warning {
+  border-color: rgba(176, 138, 84, 0.28);
+  background: var(--brass-soft);
+  color: var(--brass-dark);
+}
+
+.warning-chip.danger {
+  border-color: rgba(168, 79, 71, 0.26);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.year-review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.year-review-grid strong {
+  color: var(--ink);
+  display: block;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.year-review-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 730;
+}
+
 @media (prefers-color-scheme: dark) {
   .standard-add-form,
-  .standard-row {
+  .standard-row,
+  .analysis-setting-card,
+  .milestone-card,
+  .knowledge-card,
+  .warning-item,
+  .year-review-grid article {
     background:
       linear-gradient(90deg, rgba(208, 173, 120, 0.1), transparent 44%),
       rgba(255, 255, 255, 0.04);
@@ -2255,7 +2522,20 @@ textarea:focus-visible {
   .standard-add-form input,
   .standard-add-form select,
   .standard-row input,
-  .standard-row select {
+  .standard-row select,
+  .settings-field-grid input,
+  .ability-target-grid input,
+  .milestone-form input,
+  .milestone-form textarea,
+  .knowledge-form input,
+  .knowledge-form select,
+  .knowledge-form textarea,
+  .milestone-actions input,
+  .milestone-actions button,
+  .knowledge-actions input,
+  .knowledge-actions select,
+  .knowledge-actions button,
+  .review-text {
     background: rgba(255, 255, 255, 0.05);
   }
 }
@@ -2470,6 +2750,17 @@ textarea:focus-visible {
   .standard-rule {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .analysis-settings-grid,
+  .growth-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ability-target-grid,
+  .milestone-form,
+  .knowledge-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -2580,15 +2871,26 @@ textarea:focus-visible {
 
   .standard-add-form,
   .standard-rule,
-  .standard-meta {
+  .standard-meta,
+  .settings-field-grid,
+  .settings-field-grid.two,
+  .ability-target-grid,
+  .milestone-form,
+  .knowledge-form,
+  .milestone-actions,
+  .knowledge-actions,
+  .year-review-grid {
     grid-template-columns: 1fr;
   }
 
-  .standard-remark-field {
+  .standard-remark-field,
+  .milestone-form .wide,
+  .knowledge-form .wide {
     grid-column: auto;
   }
 
-  .standard-actions {
+  .standard-actions,
+  .milestone-actions {
     justify-content: flex-start;
   }
 }

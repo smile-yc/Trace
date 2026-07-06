@@ -1,7 +1,8 @@
 import { Activity, BriefcaseBusiness, CalendarCheck, Clock3, Layers3, PieChart, Workflow } from "lucide-react";
-import { useMemo, type CSSProperties } from "react";
-import type { WorkRecord } from "../types";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import type { AppSettings, WorkRecord } from "../types";
 import { analyzeRecords, type DistributionItem, type ProjectSummary, type TrendPoint } from "../lib/dashboard";
+import { DEFAULT_APP_SETTINGS, fetchSettings } from "../lib/settingsApi";
 import { formatDate } from "../lib/date";
 
 interface ReportDashboardProps {
@@ -286,14 +287,21 @@ function ProjectRank({ projects }: { projects: ProjectSummary[] }) {
   );
 }
 
-function FocusRank({ items }: { items: ReturnType<typeof analyzeRecords>["focusRankings"] }) {
+function FocusRank({
+  items,
+  settings
+}: {
+  items: ReturnType<typeof analyzeRecords>["focusRankings"];
+  settings: AppSettings;
+}) {
   const maxScore = Math.max(1, ...items.map((item) => item.score));
+  const weightLabel = `${settings.focusScoreWeights.workload}/${settings.focusScoreWeights.timeHours}/${settings.focusScoreWeights.recordCount}`;
 
   return (
     <section className="dashboard-card">
       <div className="dashboard-card-heading">
         <h3>工作重心排行</h3>
-        <span>50/30/20</span>
+        <span>{weightLabel}</span>
       </div>
       <div className="project-rank-list">
         {items.slice(0, 6).map((item, index) => {
@@ -392,7 +400,24 @@ function ProjectCards({ projects }: { projects: ProjectSummary[] }) {
 }
 
 export function ReportDashboard({ records, trend, activeLabel }: ReportDashboardProps) {
-  const analysis = useMemo(() => analyzeRecords(records), [records]);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const analysis = useMemo(() => analyzeRecords(records, settings), [records, settings]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    fetchSettings()
+      .then((nextSettings) => {
+        if (!ignore) setSettings(nextSettings);
+      })
+      .catch(() => {
+        if (!ignore) setSettings(DEFAULT_APP_SETTINGS);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   return (
     <>
@@ -434,7 +459,7 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
         <ProjectRank projects={analysis.projectSummaries} />
         <DonutChart title="业务分类占比" items={analysis.businessDistribution} />
         <DonutChart title="能力维度占比" items={analysis.abilityDistribution} />
-        <FocusRank items={analysis.focusRankings} />
+        <FocusRank items={analysis.focusRankings} settings={settings} />
         <RadarChart items={analysis.workTypeDistribution} />
         <ProductMatrix items={analysis.productDistribution} />
         <section className="dashboard-card insight-card">

@@ -4,6 +4,8 @@ import { ReportModal } from "./components/ReportModal";
 import { Sidebar } from "./components/Sidebar";
 import { AllRecordsPage } from "./pages/AllRecordsPage";
 import { DailyPage } from "./pages/DailyPage";
+import { GrowthPage } from "./pages/GrowthPage";
+import { KnowledgePage } from "./pages/KnowledgePage";
 import { MonthlyPage } from "./pages/MonthlyPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { WeeklyPage } from "./pages/WeeklyPage";
@@ -120,6 +122,14 @@ export function App() {
 
     if (activeView === "yearly") {
       return <YearlyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} />;
+    }
+
+    if (activeView === "growth") {
+      return <GrowthPage records={records} onNotify={showToast} />;
+    }
+
+    if (activeView === "knowledge") {
+      return <KnowledgePage records={records} onNotify={showToast} />;
     }
 
     if (activeView === "all") {

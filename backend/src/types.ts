@@ -81,6 +81,112 @@ export interface WorkloadStandardUpdateInput {
   enabled?: boolean;
 }
 
+export interface FocusScoreWeights {
+  workload: number;
+  timeHours: number;
+  recordCount: number;
+}
+
+export interface WarningRules {
+  abilityNoRecordDays: number;
+  targetShareDeviationPercent: number;
+}
+
+export interface AppSettings {
+  focusScoreWeights: FocusScoreWeights;
+  warningRules: WarningRules;
+  abilityTargets: Record<string, number>;
+}
+
+export interface AppSettingsInput {
+  focusScoreWeights?: Partial<FocusScoreWeights>;
+  warningRules?: Partial<WarningRules>;
+  abilityTargets?: Record<string, number>;
+}
+
+export interface Milestone {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  targetType: string;
+  targetValue: number;
+  currentValue: number;
+  deadline: string;
+  enabled: boolean;
+  sortOrder: number;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface MilestoneInput {
+  name: string;
+  description?: string;
+  category?: string;
+  targetType?: string;
+  targetValue?: number;
+  currentValue?: number;
+  deadline?: string;
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+export interface MilestoneUpdateInput {
+  name?: string;
+  description?: string;
+  category?: string;
+  targetType?: string;
+  targetValue?: number;
+  currentValue?: number;
+  deadline?: string;
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+export type KnowledgeAssetStatus = "draft" | "published" | "archived";
+
+export interface KnowledgeAsset {
+  id: string;
+  type: string;
+  title: string;
+  summary: string;
+  sourceRecordId: string;
+  projectName: string;
+  productSystem: string;
+  tags: string;
+  status: KnowledgeAssetStatus;
+  link: string;
+  remark: string;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface KnowledgeAssetInput {
+  type?: string;
+  title: string;
+  summary?: string;
+  sourceRecordId?: string;
+  projectName?: string;
+  productSystem?: string;
+  tags?: string;
+  status?: KnowledgeAssetStatus;
+  link?: string;
+  remark?: string;
+}
+
+export interface KnowledgeAssetUpdateInput {
+  type?: string;
+  title?: string;
+  summary?: string;
+  sourceRecordId?: string;
+  projectName?: string;
+  productSystem?: string;
+  tags?: string;
+  status?: KnowledgeAssetStatus;
+  link?: string;
+  remark?: string;
+}
+
 export interface RecordInput {
   date: string;
   title: string;
@@ -105,6 +211,9 @@ export interface ExportPayload {
   scope?: ExportScope;
   configOptions?: ConfigOption[];
   workloadStandards?: WorkloadStandard[];
+  appSettings?: AppSettings;
+  milestones?: Milestone[];
+  knowledgeAssets?: KnowledgeAsset[];
 }
 
 export interface ExportScope {

@@ -102,7 +102,47 @@ export async function buildWord(payload: ExportPayload): Promise<Buffer> {
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
       spacing: { before: 300, after: 100 },
-      children: [new TextRun({ text: "三、记录明细", bold: true })]
+      children: [new TextRun({ text: "三、成长复盘与知识资产", bold: true })]
+    })
+  );
+
+  const milestones = payload.milestones ?? [];
+  const knowledgeAssets = payload.knowledgeAssets ?? [];
+  const doneMilestones = milestones.filter((milestone) => milestone.enabled && milestone.targetValue > 0 && milestone.currentValue >= milestone.targetValue);
+  children.push(new Paragraph({ children: [new TextRun(`里程碑：${milestones.length} 项，其中已完成 ${doneMilestones.length} 项。`)] }));
+  if (milestones.length) {
+    milestones.slice(0, 6).forEach((milestone, index) => {
+      const progress = milestone.targetValue > 0 ? Math.min(100, (milestone.currentValue / milestone.targetValue) * 100) : 0;
+      children.push(
+        new Paragraph({
+          spacing: { after: 60 },
+          children: [
+            new TextRun(
+              `${index + 1}. ${milestone.name}：${formatMetric(progress)}%，${formatMetric(milestone.currentValue)}/${formatMetric(milestone.targetValue)} ${milestone.targetType || ""}`
+            )
+          ]
+        })
+      );
+    });
+  }
+
+  children.push(new Paragraph({ children: [new TextRun(`知识资产：${knowledgeAssets.length} 项。`)] }));
+  if (knowledgeAssets.length) {
+    knowledgeAssets.slice(0, 6).forEach((asset, index) => {
+      children.push(
+        new Paragraph({
+          spacing: { after: 60 },
+          children: [new TextRun(`${index + 1}. ${asset.title}：${asset.type || "未分类"} / ${asset.status}`)]
+        })
+      );
+    });
+  }
+
+  children.push(
+    new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 300, after: 100 },
+      children: [new TextRun({ text: "四、记录明细", bold: true })]
     })
   );
 

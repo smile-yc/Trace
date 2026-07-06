@@ -60,11 +60,16 @@ Windows 下如果 PowerShell 没有全局 Node/pnpm，也可以使用：
 - 周报、月报、年报按周期汇总
 - 支持能力维度和投入时间记录，用于分析个人成长方向和真实精力投入
 - 基础数据展板支持能力维度分布、投入时间趋势和工作重心排行
+- 工作重心评分权重可在配置中心调整，默认按当量/时间/记录数 50/30/20 综合计算
+- 查漏补缺预警：按能力目标占比和未记录天数发现能力投入缺口
+- 月报复盘文本增强：自动提炼本月项目投入、能力投入、里程碑和知识资产沉淀
+- 成长地图：维护成长里程碑、目标值、当前进度和截止日期
+- 知识资产库：沉淀复盘、方案模板、交付物等资产，支持草稿、发布、归档状态
 - 全部记录按日期倒序展示
 - 二级标签筛选
 - 按标签分组生成文本报告
 - 报告弹窗预览和复制
-- 导出 Word、PDF、Excel：Word/PDF 先显示统计摘要再显示明细；Excel 包含原始明细、业务分类、工作类型、项目、产品系统、当量统计、配置项备份和当量标准备份
+- 导出 Word、PDF、Excel：Word/PDF 先显示统计摘要和成长复盘再显示明细；Excel 包含原始明细、业务分类、工作类型、项目、产品系统、当量统计、配置项备份、当量标准备份、分析规则、成长里程碑和知识资产库
 - 周报、月报、年报支持当前周期导出，并支持按项目、按业务分类导出
 - 导出 JSON 备份
 - 一键清空全部记录，带二次确认
@@ -79,6 +84,14 @@ POST   /api/records
 PUT    /api/records/:id
 DELETE /api/records/:id
 DELETE /api/records
+GET    /api/settings
+PUT    /api/settings
+GET    /api/milestones
+POST   /api/milestones
+PUT    /api/milestones/:id
+GET    /api/knowledge-assets
+POST   /api/knowledge-assets
+PUT    /api/knowledge-assets/:id
 POST   /api/export/docx
 POST   /api/export/pdf
 POST   /api/export/xlsx

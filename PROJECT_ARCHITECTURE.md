@@ -8,14 +8,14 @@
 React + Vite 前端
   ↓ /api
 Express 后端
-  ├─ SQLite：保存工作记录
+  ├─ SQLite：保存工作记录、配置、里程碑、知识资产
   └─ 导出服务：生成 Word / PDF / Excel
 ```
 
 这是一个前后端分离系统：
 
 - 前端负责页面、交互、报表展示、报告预览
-- 后端负责记录持久化、导出文件生成
+- 后端负责记录、配置、里程碑、知识资产持久化，以及导出文件生成
 - 数据库使用 SQLite，默认是一个文件：`backend/data/report.sqlite`
 
 ## 目录结构
@@ -31,7 +31,7 @@ trace-work-report-system/
 │  ├─ tsconfig.json
 │  └─ src/
 │     ├─ index.ts                # Express 入口、CRUD、导出路由
-│     ├─ database.ts             # SQLite 初始化与记录读写
+│     ├─ database.ts             # SQLite 初始化与记录、配置、成长数据读写
 │     ├─ report.ts               # 标签分组、日期格式化、文件名处理
 │     ├─ types.ts                # 后端共享类型
 │     └─ exporters/
@@ -51,6 +51,10 @@ trace-work-report-system/
       ├─ components/
       ├─ lib/
       │  ├─ recordsApi.ts        # 前端调用后端记录 API
+      │  ├─ settingsApi.ts       # 分析权重、预警规则 API
+      │  ├─ milestoneApi.ts      # 成长里程碑 API
+      │  ├─ knowledgeApi.ts      # 知识资产 API
+      │  ├─ growthReview.ts      # 复盘文本、预警和成长统计
       │  ├─ exportApi.ts         # 前端调用后端导出 API
       │  ├─ useRecords.ts        # 记录状态与服务端同步
       │  ├─ report.ts            # 标签报告生成
@@ -62,6 +66,8 @@ trace-work-report-system/
          ├─ WeeklyPage.tsx
          ├─ MonthlyPage.tsx
          ├─ YearlyPage.tsx
+         ├─ GrowthPage.tsx
+         ├─ KnowledgePage.tsx
          └─ AllRecordsPage.tsx
 ```
 
@@ -79,6 +85,7 @@ flowchart LR
 
   User --> UI
   UI -->|GET/POST/PUT/DELETE /api/records| API
+  UI -->|settings / milestones / knowledge-assets| API
   API <--> DB
   UI --> Report
   Report --> UI
@@ -90,22 +97,24 @@ flowchart LR
 
 ## 前端职责
 
-- 渲染日报、周报、月报、年报、全部记录页面
+- 渲染日报、周报、月报、年报、成长地图、知识资产库、全部记录页面
 - 提供新增、编辑、删除、清空记录交互
 - 通过 `/api/records` 与后端同步数据
 - 按日期、周、月、年派生统计
+- 按配置权重计算工作重心排行，按能力目标生成查漏补缺预警
+- 维护成长里程碑和知识资产库
 - 按二级标签生成报告预览
 - 调用后端导出 Word、PDF、Excel
 - 导出 JSON 备份文件
 
 ## 后端职责
 
-- 提供记录 CRUD API
-- 使用 SQLite 保存记录
+- 提供记录、配置、里程碑、知识资产 CRUD API
+- 使用 SQLite 保存记录和成长复盘相关数据
 - 标准化二级标签
 - 生成记录 ID、创建时间、更新时间
 - 校验请求数据
-- 生成 Word、PDF、Excel 下载文件
+- 生成 Word、PDF、Excel 下载文件，并附带分析规则、里程碑和知识资产复盘内容
 
 ## 数据存储
 

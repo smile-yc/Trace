@@ -1,11 +1,13 @@
 import {
   CalendarDays,
   CalendarRange,
+  BookOpen,
   Database,
   FileStack,
   Layers,
   ListFilter,
   SlidersHorizontal,
+  TrendingUp,
   type LucideIcon
 } from "lucide-react";
 import { VIEWS } from "../constants";
@@ -16,6 +18,8 @@ const icons: Record<ViewMode, LucideIcon> = {
   weekly: CalendarRange,
   monthly: FileStack,
   yearly: Layers,
+  growth: TrendingUp,
+  knowledge: BookOpen,
   all: ListFilter,
   settings: SlidersHorizontal
 };

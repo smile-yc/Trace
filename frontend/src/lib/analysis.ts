@@ -1,4 +1,10 @@
-import type { WorkRecord } from "../types";
+import type { AppSettings, FocusScoreWeights, WorkRecord } from "../types";
+
+export const DEFAULT_FOCUS_SCORE_WEIGHTS: FocusScoreWeights = {
+  workload: 50,
+  timeHours: 30,
+  recordCount: 20
+};
 
 export interface DistributionItem {
   label: string;
@@ -55,6 +61,10 @@ export interface DashboardAnalysis {
   topWorkTypeLabel: string;
 }
 
+export interface AnalysisOptions {
+  focusScoreWeights?: Partial<FocusScoreWeights>;
+}
+
 function numberValue(value: number | null | undefined): number {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
@@ -73,6 +83,29 @@ function roundMetric(value: number): number {
 
 function roundShare(value: number): number {
   return Number(value.toFixed(4));
+}
+
+function normalizeFocusScoreWeights(weights?: Partial<FocusScoreWeights>): FocusScoreWeights {
+  const merged = {
+    workload: Number.isFinite(Number(weights?.workload)) ? Math.max(0, Number(weights?.workload)) : DEFAULT_FOCUS_SCORE_WEIGHTS.workload,
+    timeHours: Number.isFinite(Number(weights?.timeHours)) ? Math.max(0, Number(weights?.timeHours)) : DEFAULT_FOCUS_SCORE_WEIGHTS.timeHours,
+    recordCount: Number.isFinite(Number(weights?.recordCount)) ? Math.max(0, Number(weights?.recordCount)) : DEFAULT_FOCUS_SCORE_WEIGHTS.recordCount
+  };
+  const total = merged.workload + merged.timeHours + merged.recordCount;
+
+  if (total <= 0) return DEFAULT_FOCUS_SCORE_WEIGHTS;
+
+  return {
+    workload: (merged.workload / total) * 100,
+    timeHours: (merged.timeHours / total) * 100,
+    recordCount: (merged.recordCount / total) * 100
+  };
+}
+
+function normalizeAnalysisOptions(options?: AnalysisOptions | Partial<AppSettings>): AnalysisOptions {
+  return {
+    focusScoreWeights: options?.focusScoreWeights
+  };
 }
 
 function firstTag(tags: string): string {
@@ -153,7 +186,8 @@ export function buildProjectSummaries(records: WorkRecord[]): ProjectSummary[] {
     .sort((a, b) => b.workload - a.workload || b.timeHours - a.timeHours || b.count - a.count || a.projectName.localeCompare(b.projectName, "zh-CN"));
 }
 
-export function buildFocusRankings(records: WorkRecord[]): FocusRankingItem[] {
+export function buildFocusRankings(records: WorkRecord[], weights?: Partial<FocusScoreWeights>): FocusRankingItem[] {
+  const normalizedWeights = normalizeFocusScoreWeights(weights);
   const totalWorkload = records.reduce((total, record) => total + workloadOf(record), 0);
   const totalTime = records.reduce((total, record) => total + timeOf(record), 0);
   const totalCount = records.length || 1;
@@ -163,7 +197,10 @@ export function buildFocusRankings(records: WorkRecord[]): FocusRankingItem[] {
       const workloadShare = totalWorkload > 0 ? project.workload / totalWorkload : 0;
       const timeShare = totalTime > 0 ? project.timeHours / totalTime : 0;
       const countShare = project.count / totalCount;
-      const score = workloadShare * 50 + timeShare * 30 + countShare * 20;
+      const score =
+        workloadShare * normalizedWeights.workload +
+        timeShare * normalizedWeights.timeHours +
+        countShare * normalizedWeights.recordCount;
 
       return {
         label: project.projectName,
@@ -179,7 +216,8 @@ export function buildFocusRankings(records: WorkRecord[]): FocusRankingItem[] {
     .sort((a, b) => b.score - a.score || b.workload - a.workload || a.label.localeCompare(b.label, "zh-CN"));
 }
 
-export function analyzeRecords(records: WorkRecord[]): DashboardAnalysis {
+export function analyzeRecords(records: WorkRecord[], options?: AnalysisOptions | Partial<AppSettings>): DashboardAnalysis {
+  const normalizedOptions = normalizeAnalysisOptions(options);
   const projectSummaries = buildProjectSummaries(records);
   const businessDistribution = buildDistribution(
     records,
@@ -200,7 +238,7 @@ export function analyzeRecords(records: WorkRecord[]): DashboardAnalysis {
     abilityDistribution,
     productDistribution,
     projectSummaries,
-    focusRankings: buildFocusRankings(records),
+    focusRankings: buildFocusRankings(records, normalizedOptions.focusScoreWeights),
     topBusinessLabel: businessDistribution[0]?.label ?? "暂无",
     topWorkTypeLabel: workTypeDistribution[0]?.label ?? "暂无"
   };

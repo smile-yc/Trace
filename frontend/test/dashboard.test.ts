@@ -88,3 +88,46 @@ test("analyzeRecords ranks focus by weighted workload time and count shares", ()
     ]
   );
 });
+
+test("analyzeRecords accepts configurable focus scoring weights", () => {
+  const analysis = analyzeRecords(
+    [
+      {
+        ...baseRecord,
+        id: "a1",
+        projectName: "Alpha",
+        workload: 6,
+        timeHours: 2
+      },
+      {
+        ...baseRecord,
+        id: "a2",
+        projectName: "Alpha",
+        workload: null,
+        timeHours: null
+      },
+      {
+        ...baseRecord,
+        id: "b1",
+        projectName: "Beta",
+        workload: 2,
+        timeHours: 8
+      }
+    ] as any,
+    {
+      focusScoreWeights: {
+        workload: 0,
+        timeHours: 100,
+        recordCount: 0
+      }
+    }
+  );
+
+  assert.deepEqual(
+    analysis.focusRankings.map((item) => [item.label, item.score]),
+    [
+      ["Beta", 80],
+      ["Alpha", 20]
+    ]
+  );
+});
