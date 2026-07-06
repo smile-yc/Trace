@@ -1,6 +1,6 @@
 import { FocusEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { Calculator, ChevronDown, Plus, Save } from "lucide-react";
-import { BUSINESS_CATEGORIES, PRODUCT_SYSTEMS, SUBTASK_TEMPLATES, WORK_TYPES } from "../constants";
+import { ABILITY_DIMENSIONS, BUSINESS_CATEGORIES, PRODUCT_SYSTEMS, SUBTASK_TEMPLATES, WORK_TYPES } from "../constants";
 import { createConfigOption, fetchConfigOptions } from "../lib/configApi";
 import {
   collectPersistedConfigOptionInputs,
@@ -35,6 +35,7 @@ type FallbackOptions = Record<ConfigOptionType, string[]>;
 const fallbackOptions: FallbackOptions = {
   businessCategory: BUSINESS_CATEGORIES,
   workType: WORK_TYPES,
+  abilityDimension: ABILITY_DIMENSIONS,
   productSystem: PRODUCT_SYSTEMS,
   subtask: SUBTASK_TEMPLATES
 };
@@ -179,6 +180,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
     record?.businessCategory ?? "其他"
   );
   const [workType, setWorkType] = useState(record?.workType ?? "其他项");
+  const [abilityDimension, setAbilityDimension] = useState(record?.abilityDimension ?? "");
   const [projectName, setProjectName] = useState(record?.projectName ?? "");
   const [productSystem, setProductSystem] = useState(record?.productSystem ?? "");
   const [subtask, setSubtask] = useState(record?.subtask ?? "");
@@ -186,6 +188,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
   const [coefficient, setCoefficient] = useState(formatOptionalNumber(record?.coefficient));
   const [coefficientTouched, setCoefficientTouched] = useState(Boolean(record?.coefficient));
   const [workload, setWorkload] = useState(formatOptionalNumber(record?.workload));
+  const [timeHours, setTimeHours] = useState(formatOptionalNumber(record?.timeHours));
   const [matchedStandard, setMatchedStandard] = useState<WorkloadStandard | null>(null);
   const [tags, setTags] = useState(record?.tags ?? "");
   const [content, setContent] = useState(record?.content ?? "");
@@ -216,6 +219,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
       current || getDefaultOption(configOptions, "businessCategory", "其他")
     );
     setWorkType((current) => current || getDefaultOption(configOptions, "workType", "其他项"));
+    setAbilityDimension((current) => current || getDefaultOption(configOptions, "abilityDimension", ""));
     setProductSystem((current) => current || getDefaultOption(configOptions, "productSystem", ""));
     setSubtask((current) => current || getDefaultOption(configOptions, "subtask", ""));
   }, [configOptions, record]);
@@ -293,6 +297,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
     const normalizedValues: ConfigOptionValues = {
       businessCategory: normalizeConfigOptionLabel(businessCategory),
       workType: normalizeConfigOptionLabel(workType),
+      abilityDimension: normalizeConfigOptionLabel(abilityDimension),
       productSystem: normalizeConfigOptionLabel(productSystem),
       subtask: normalizeConfigOptionLabel(subtask)
     };
@@ -313,12 +318,14 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
       content,
       businessCategory: normalizedValues.businessCategory,
       workType: normalizedValues.workType,
+      abilityDimension: normalizedValues.abilityDimension,
       projectName,
       productSystem: normalizedValues.productSystem,
       subtask: normalizedValues.subtask,
       quantity: quantityNumber,
       coefficient: coefficientNumber,
-      workload: toOptionalNumber(workload)
+      workload: toOptionalNumber(workload),
+      timeHours: toOptionalNumber(timeHours)
     });
 
     await persistCustomConfigOptions(normalizedValues);
@@ -330,6 +337,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
       setQuantity("");
       setCoefficient("");
       setWorkload("");
+      setTimeHours("");
       setDate(initialDate ?? todayKey());
     }
   };
@@ -362,7 +370,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
         <div className="form-section-title">
           <span>工作口径</span>
         </div>
-        <div className="form-row">
+        <div className="form-row three">
           <ConfigurableOptionField
             fallback={fallbackOptions.businessCategory}
             label="业务分类"
@@ -386,6 +394,19 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
             value={workType}
             onPersistenceChange={handleConfigPersistenceChange}
             onValueChange={(value) => handleCriteriaChange(() => setWorkType(value))}
+          />
+          <ConfigurableOptionField
+            allowEmpty
+            fallback={fallbackOptions.abilityDimension}
+            label="能力维度"
+            listId="ability-dimension-options"
+            options={configOptions}
+            persistenceSelections={configPersistenceSelections}
+            placeholder="未选择"
+            type="abilityDimension"
+            value={abilityDimension}
+            onPersistenceChange={handleConfigPersistenceChange}
+            onValueChange={setAbilityDimension}
           />
         </div>
       </div>
@@ -463,6 +484,18 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
               <Calculator size={16} />
               <input readOnly value={workload} />
             </div>
+          </label>
+        </div>
+        <div className="form-row">
+          <label>
+            <span>投入时间（小时）</span>
+            <input
+              min="0"
+              step="0.25"
+              type="number"
+              value={timeHours}
+              onChange={(event) => setTimeHours(event.target.value)}
+            />
           </label>
         </div>
       </div>

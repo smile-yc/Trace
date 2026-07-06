@@ -932,7 +932,7 @@ textarea:focus-visible {
 
 .dashboard-ledger {
   display: grid;
-  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
   gap: 10px;
   margin: -6px 0 18px;
 }
@@ -1060,6 +1060,10 @@ textarea:focus-visible {
   background: var(--brass);
 }
 
+.trend-bar-pair .time {
+  background: var(--sage);
+}
+
 .trend-point span {
   color: var(--muted);
   font-size: 11px;
@@ -1093,6 +1097,10 @@ textarea:focus-visible {
 
 .trend-legend .workload {
   background: var(--brass);
+}
+
+.trend-legend .time {
+  background: var(--sage);
 }
 
 .trend-legend .count {

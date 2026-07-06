@@ -13,10 +13,12 @@ function buildRecordMeta(record: ExportPayload["records"][number]): string {
     `日期：${formatDate(record.date)}`,
     `业务：${record.businessCategory || "其他"}`,
     `工作类型：${record.workType || "其他项"}`,
+    record.abilityDimension ? `能力：${record.abilityDimension}` : "",
     record.projectName ? `项目：${record.projectName}` : "",
     record.productSystem ? `产品：${record.productSystem}` : "",
     record.subtask ? `子任务：${record.subtask}` : "",
     record.workload !== null && record.workload !== undefined ? `当量：${formatMetric(record.workload)}` : "",
+    record.timeHours !== null && record.timeHours !== undefined ? `时间：${formatMetric(record.timeHours)}h` : "",
     record.tags ? `标签：${record.tags}` : ""
   ].filter(Boolean);
 
@@ -66,7 +68,7 @@ function drawSummaryRows(doc: PDFKit.PDFDocument, title: string, rows: ExportSum
     doc
       .fillColor("#4f4a43")
       .fontSize(9.5)
-      .text(`${index + 1}. ${item.label}：${item.count} 条，${formatMetric(item.workload)} 当量，占比 ${item.ratio}%`, {
+      .text(`${index + 1}. ${item.label}：${item.count} 条，${formatMetric(item.workload)} 当量，${formatMetric(item.timeHours)} 小时，占比 ${item.ratio}%`, {
         width,
         indent: 12
       });
@@ -118,6 +120,7 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
     const summaryLines = [
       `记录总数：${analysis.totalRecords} 条`,
       `工作当量：${formatMetric(analysis.totalWorkload)}`,
+      `投入时间：${formatMetric(analysis.totalTimeHours)} 小时`,
       `数量合计：${formatMetric(analysis.totalQuantity)}`,
       `活跃天数：${analysis.activeDays} 天`,
       `参与项目：${analysis.projectCount} 个`,
@@ -130,6 +133,7 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
     drawSectionTitle(doc, "二、重点分布", width);
     drawSummaryRows(doc, "业务分类汇总", analysis.businessSummary, width);
     drawSummaryRows(doc, "工作类型汇总", analysis.workTypeSummary, width);
+    drawSummaryRows(doc, "能力维度汇总", analysis.abilitySummary, width);
     drawSummaryRows(doc, "项目汇总", analysis.projectSummary, width);
     drawSummaryRows(doc, "产品系统汇总", analysis.productSummary, width);
 

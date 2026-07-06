@@ -53,6 +53,7 @@ interface WorkloadStandardDraft {
 const configGroups: ConfigGroupMeta[] = [
   { type: "businessCategory", label: "业务分类", shortLabel: "业务", eyebrow: "Business" },
   { type: "workType", label: "工作类型", shortLabel: "类型", eyebrow: "Work Type" },
+  { type: "abilityDimension", label: "能力维度", shortLabel: "能力", eyebrow: "Ability" },
   { type: "productSystem", label: "产品系统", shortLabel: "产品", eyebrow: "Product" },
   { type: "subtask", label: "工作细项", shortLabel: "细项", eyebrow: "Work Item" }
 ];
@@ -148,6 +149,7 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
   const [newLabels, setNewLabels] = useState<Record<ConfigOptionType, string>>({
     businessCategory: "",
     workType: "",
+    abilityDimension: "",
     productSystem: "",
     subtask: ""
   });
@@ -202,7 +204,7 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
         groups[group.type] = options.filter((option) => option.type === group.type);
         return groups;
       },
-      { businessCategory: [], workType: [], productSystem: [], subtask: [] }
+      { businessCategory: [], workType: [], abilityDimension: [], productSystem: [], subtask: [] }
     );
   }, [options]);
 

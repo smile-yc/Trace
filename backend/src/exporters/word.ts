@@ -11,10 +11,12 @@ function buildRecordMeta(record: ExportPayload["records"][number]): string {
     `日期：${formatDate(record.date)}`,
     `业务：${record.businessCategory || "其他"}`,
     `工作类型：${record.workType || "其他项"}`,
+    record.abilityDimension ? `能力：${record.abilityDimension}` : "",
     record.projectName ? `项目：${record.projectName}` : "",
     record.productSystem ? `产品：${record.productSystem}` : "",
     record.subtask ? `子任务：${record.subtask}` : "",
     record.workload !== null && record.workload !== undefined ? `当量：${formatMetric(record.workload)}` : "",
+    record.timeHours !== null && record.timeHours !== undefined ? `时间：${formatMetric(record.timeHours)}h` : "",
     record.tags ? `标签：${record.tags}` : ""
   ].filter(Boolean);
 
@@ -22,7 +24,7 @@ function buildRecordMeta(record: ExportPayload["records"][number]): string {
 }
 
 function summaryLine(item: ExportSummaryItem): string {
-  return `${item.label}：${item.count} 条，${formatMetric(item.workload)} 当量，占比 ${item.ratio}%`;
+  return `${item.label}：${item.count} 条，${formatMetric(item.workload)} 当量，${formatMetric(item.timeHours)} 小时，占比 ${item.ratio}%`;
 }
 
 export async function buildWord(payload: ExportPayload): Promise<Buffer> {
@@ -52,6 +54,7 @@ export async function buildWord(payload: ExportPayload): Promise<Buffer> {
     }),
     new Paragraph({ children: [new TextRun(`记录总数：${analysis.totalRecords} 条`)] }),
     new Paragraph({ children: [new TextRun(`工作当量：${formatMetric(analysis.totalWorkload)}`)] }),
+    new Paragraph({ children: [new TextRun(`投入时间：${formatMetric(analysis.totalTimeHours)} 小时`)] }),
     new Paragraph({ children: [new TextRun(`数量合计：${formatMetric(analysis.totalQuantity)}`)] }),
     new Paragraph({ children: [new TextRun(`活跃天数：${analysis.activeDays} 天`)] }),
     new Paragraph({ children: [new TextRun(`参与项目：${analysis.projectCount} 个`)] }),
@@ -66,6 +69,7 @@ export async function buildWord(payload: ExportPayload): Promise<Buffer> {
   const sections: Array<[string, ExportSummaryItem[]]> = [
     ["业务分类汇总", analysis.businessSummary],
     ["工作类型汇总", analysis.workTypeSummary],
+    ["能力维度汇总", analysis.abilitySummary],
     ["项目汇总", analysis.projectSummary],
     ["产品系统汇总", analysis.productSummary]
   ];

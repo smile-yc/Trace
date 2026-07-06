@@ -6,6 +6,7 @@ export type ConfigOptionPersistenceSelections = Record<string, boolean>;
 export const configurableOptionTypes: ConfigOptionType[] = [
   "businessCategory",
   "workType",
+  "abilityDimension",
   "productSystem",
   "subtask"
 ];
@@ -17,8 +18,8 @@ export interface ConfigOptionDraftState {
   defaultPersist: boolean;
 }
 
-export function normalizeConfigOptionLabel(value: string): string {
-  return value.trim();
+export function normalizeConfigOptionLabel(value: string | undefined): string {
+  return String(value || "").trim();
 }
 
 export function getConfigOptionDraftKey(type: ConfigOptionType, label: string): string | null {

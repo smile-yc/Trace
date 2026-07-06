@@ -5,6 +5,7 @@ export interface ExportSummaryItem {
   count: number;
   quantity: number;
   workload: number;
+  timeHours: number;
   ratio: number;
 }
 
@@ -12,6 +13,7 @@ export interface ExportAnalysis {
   totalRecords: number;
   totalQuantity: number;
   totalWorkload: number;
+  totalTimeHours: number;
   dateStart: string;
   dateEnd: string;
   activeDays: number;
@@ -21,6 +23,7 @@ export interface ExportAnalysis {
   productCount: number;
   businessSummary: ExportSummaryItem[];
   workTypeSummary: ExportSummaryItem[];
+  abilitySummary: ExportSummaryItem[];
   projectSummary: ExportSummaryItem[];
   productSummary: ExportSummaryItem[];
   dateSummary: ExportSummaryItem[];
@@ -56,6 +59,10 @@ export function sumWorkload(records: WorkRecord[]): number {
   return roundMetric(records.reduce((total, record) => total + numberValue(record.workload), 0));
 }
 
+export function sumTimeHours(records: WorkRecord[]): number {
+  return roundMetric(records.reduce((total, record) => total + numberValue(record.timeHours), 0));
+}
+
 export function sumQuantity(records: WorkRecord[]): number {
   return roundMetric(records.reduce((total, record) => total + numberValue(record.quantity), 0));
 }
@@ -65,16 +72,17 @@ export function buildSummary(
   getLabel: (record: WorkRecord) => string,
   fallback: string
 ): ExportSummaryItem[] {
-  const groups = new Map<string, { count: number; quantity: number; workload: number }>();
+  const groups = new Map<string, { count: number; quantity: number; workload: number; timeHours: number }>();
   const totalWorkload = sumWorkload(records);
   const totalCount = records.length || 1;
 
   records.forEach((record) => {
     const label = safeLabel(getLabel(record), fallback);
-    const current = groups.get(label) ?? { count: 0, quantity: 0, workload: 0 };
+    const current = groups.get(label) ?? { count: 0, quantity: 0, workload: 0, timeHours: 0 };
     current.count += 1;
     current.quantity += numberValue(record.quantity);
     current.workload += numberValue(record.workload);
+    current.timeHours += numberValue(record.timeHours);
     groups.set(label, current);
   });
 
@@ -84,9 +92,10 @@ export function buildSummary(
       count: value.count,
       quantity: roundMetric(value.quantity),
       workload: roundMetric(value.workload),
+      timeHours: roundMetric(value.timeHours),
       ratio: totalWorkload > 0 ? Math.round((value.workload / totalWorkload) * 100) : Math.round((value.count / totalCount) * 100)
     }))
-    .sort((a, b) => b.workload - a.workload || b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
+    .sort((a, b) => b.workload - a.workload || b.timeHours - a.timeHours || b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
 }
 
 export function analyzeExport(records: WorkRecord[]): ExportAnalysis {
@@ -94,6 +103,7 @@ export function analyzeExport(records: WorkRecord[]): ExportAnalysis {
   const dates = Array.from(new Set(sortedRecords.map((record) => record.date))).sort();
   const businessSummary = buildSummary(records, (record) => record.businessCategory || record.category, "其他");
   const workTypeSummary = buildSummary(records, (record) => record.workType, "其他项");
+  const abilitySummary = buildSummary(records, (record) => record.abilityDimension, "未填写能力");
   const projectSummary = buildSummary(records, getProjectName, "未归属项目");
   const productSummary = buildSummary(records, (record) => record.productSystem, "未填写产品");
   const dateSummary = buildSummary(records, (record) => record.date, "未填写日期").sort((a, b) =>
@@ -104,6 +114,7 @@ export function analyzeExport(records: WorkRecord[]): ExportAnalysis {
     totalRecords: records.length,
     totalQuantity: sumQuantity(records),
     totalWorkload: sumWorkload(records),
+    totalTimeHours: sumTimeHours(records),
     dateStart: dates[0] ?? "",
     dateEnd: dates[dates.length - 1] ?? "",
     activeDays: dates.length,
@@ -113,6 +124,7 @@ export function analyzeExport(records: WorkRecord[]): ExportAnalysis {
     productCount: productSummary.length,
     businessSummary,
     workTypeSummary,
+    abilitySummary,
     projectSummary,
     productSummary,
     dateSummary

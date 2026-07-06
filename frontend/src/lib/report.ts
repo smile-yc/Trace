@@ -32,10 +32,12 @@ function buildRecordMeta(record: WorkRecord): string {
     `日期：${formatDate(record.date)}`,
     `业务：${record.businessCategory || record.category}`,
     `工作类型：${record.workType || "其他项"}`,
+    record.abilityDimension ? `能力：${record.abilityDimension}` : "",
     record.projectName ? `项目：${record.projectName}` : "",
     record.productSystem ? `产品：${record.productSystem}` : "",
     record.subtask ? `工作细项：${record.subtask}` : "",
-    record.workload !== null && record.workload !== undefined ? `当量：${record.workload}` : ""
+    record.workload !== null && record.workload !== undefined ? `当量：${record.workload}` : "",
+    record.timeHours !== null && record.timeHours !== undefined ? `时间：${record.timeHours}h` : ""
   ].filter(Boolean);
 
   return items.join(" | ");

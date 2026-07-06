@@ -58,6 +58,8 @@ Windows 下如果 PowerShell 没有全局 Node/pnpm，也可以使用：
 - 记录增删改查，写入即保存到服务端 SQLite
 - 日报按日期切换，支持新增、编辑、删除和统计
 - 周报、月报、年报按周期汇总
+- 支持能力维度和投入时间记录，用于分析个人成长方向和真实精力投入
+- 基础数据展板支持能力维度分布、投入时间趋势和工作重心排行
 - 全部记录按日期倒序展示
 - 二级标签筛选
 - 按标签分组生成文本报告
@@ -91,6 +93,16 @@ interface WorkRecord {
   title: string;
   content: string;
   category: "三新业务" | "技术支持" | "工程调试" | "售前支持" | "其他";
+  businessCategory: string;
+  workType: string;
+  abilityDimension: string;
+  projectName: string;
+  productSystem: string;
+  subtask: string;
+  quantity: number | null;
+  coefficient: number | null;
+  workload: number | null;
+  timeHours: number | null;
   tags: string;
   createTime: number;
   updateTime: number;
@@ -98,6 +110,8 @@ interface WorkRecord {
 ```
 
 二级标签输入支持空格、英文逗号、中文逗号和顿号分隔，保存前会自动去重，并统一为英文逗号分隔。
+
+工作当量默认按 `数量 × 折算系数` 计算；折算系数可由配置中心的当量标准自动匹配，也可以在日报中手动调整。
 
 ## 部署提示
 

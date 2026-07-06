@@ -32,12 +32,14 @@ db.exec(`
     category TEXT NOT NULL DEFAULT '其他',
     businessCategory TEXT NOT NULL DEFAULT '其他',
     workType TEXT NOT NULL DEFAULT '其他项',
+    abilityDimension TEXT NOT NULL DEFAULT '',
     projectName TEXT NOT NULL DEFAULT '',
     productSystem TEXT NOT NULL DEFAULT '',
     subtask TEXT NOT NULL DEFAULT '',
     quantity REAL DEFAULT NULL,
     coefficient REAL DEFAULT NULL,
     workload REAL DEFAULT NULL,
+    timeHours REAL DEFAULT NULL,
     tags TEXT NOT NULL DEFAULT '',
     createTime INTEGER NOT NULL,
     updateTime INTEGER NOT NULL
@@ -82,12 +84,14 @@ db.exec(`
 const recordColumnDefinitions = [
   { name: "businessCategory", definition: "TEXT NOT NULL DEFAULT '其他'" },
   { name: "workType", definition: "TEXT NOT NULL DEFAULT '其他项'" },
+  { name: "abilityDimension", definition: "TEXT NOT NULL DEFAULT ''" },
   { name: "projectName", definition: "TEXT NOT NULL DEFAULT ''" },
   { name: "productSystem", definition: "TEXT NOT NULL DEFAULT ''" },
   { name: "subtask", definition: "TEXT NOT NULL DEFAULT ''" },
   { name: "quantity", definition: "REAL DEFAULT NULL" },
   { name: "coefficient", definition: "REAL DEFAULT NULL" },
-  { name: "workload", definition: "REAL DEFAULT NULL" }
+  { name: "workload", definition: "REAL DEFAULT NULL" },
+  { name: "timeHours", definition: "REAL DEFAULT NULL" }
 ];
 
 function ensureRecordColumns(): void {
@@ -130,12 +134,14 @@ const selectSql = `
     category,
     businessCategory,
     workType,
+    abilityDimension,
     projectName,
     productSystem,
     subtask,
     quantity,
     coefficient,
     workload,
+    timeHours,
     tags,
     createTime,
     updateTime
@@ -174,6 +180,15 @@ const defaultConfigOptions: Record<ConfigOptionType, string[]> = {
     "现场质量检查",
     "其他项"
   ],
+  abilityDimension: [
+    "新业务探索",
+    "工程技术",
+    "售前支撑",
+    "项目管理与推进",
+    "AI与提效工具",
+    "客户交流",
+    "知识沉淀"
+  ],
   productSystem: ["GM1000", "GM2000", "GM6000", "GM7000", "PHM", "智能巡检", "其他"],
   subtask: [
     "牵引变电所",
@@ -197,6 +212,7 @@ const defaultConfigOptions: Record<ConfigOptionType, string[]> = {
 const defaultLabels: Record<ConfigOptionType, string> = {
   businessCategory: "其他",
   workType: "其他项",
+  abilityDimension: "工程技术",
   productSystem: "其他",
   subtask: "其他"
 };
@@ -609,12 +625,14 @@ function toRecord(row: unknown): WorkRecord {
     category: String(record.category || "其他"),
     businessCategory: String(record.businessCategory || "其他"),
     workType: String(record.workType || "其他项"),
+    abilityDimension: String(record.abilityDimension || ""),
     projectName: String(record.projectName || ""),
     productSystem: String(record.productSystem || ""),
     subtask: String(record.subtask || ""),
     quantity: normalizeNumber(record.quantity),
     coefficient: normalizeNumber(record.coefficient),
     workload: normalizeNumber(record.workload),
+    timeHours: normalizeNumber(record.timeHours),
     tags: String(record.tags || ""),
     createTime: Number(record.createTime),
     updateTime: Number(record.updateTime)
@@ -645,12 +663,14 @@ export function insertRecord(input: RecordInput): WorkRecord {
     category: input.category || "其他",
     businessCategory: inferBusinessCategory(input),
     workType: inferWorkType(input),
+    abilityDimension: normalizeText(input.abilityDimension),
     projectName: normalizeText(input.projectName),
     productSystem: normalizeText(input.productSystem),
     subtask: normalizeText(input.subtask),
     quantity,
     coefficient,
     workload: normalizeWorkload(quantity, coefficient, input.workload),
+    timeHours: normalizeNumber(input.timeHours),
     tags: normalizeTags(input.tags || ""),
     createTime: now,
     updateTime: now
@@ -665,17 +685,19 @@ export function insertRecord(input: RecordInput): WorkRecord {
        category,
        businessCategory,
        workType,
+       abilityDimension,
        projectName,
        productSystem,
        subtask,
        quantity,
        coefficient,
        workload,
+       timeHours,
        tags,
        createTime,
        updateTime
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     record.id,
     record.date,
@@ -684,12 +706,14 @@ export function insertRecord(input: RecordInput): WorkRecord {
     record.category,
     record.businessCategory,
     record.workType,
+    record.abilityDimension,
     record.projectName,
     record.productSystem,
     record.subtask,
     record.quantity,
     record.coefficient,
     record.workload,
+    record.timeHours,
     record.tags,
     record.createTime,
     record.updateTime
@@ -714,12 +738,15 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
     category: input.category || "其他",
     businessCategory: input.businessCategory ? inferBusinessCategory(input) : existing.businessCategory,
     workType: input.workType ? inferWorkType(input) : existing.workType,
+    abilityDimension:
+      input.abilityDimension === undefined ? existing.abilityDimension : normalizeText(input.abilityDimension),
     projectName: input.projectName === undefined ? existing.projectName : normalizeText(input.projectName),
     productSystem: input.productSystem === undefined ? existing.productSystem : normalizeText(input.productSystem),
     subtask: input.subtask === undefined ? existing.subtask : normalizeText(input.subtask),
     quantity,
     coefficient,
     workload: shouldRecalculateWorkload ? normalizeWorkload(quantity, coefficient, input.workload) : existing.workload,
+    timeHours: input.timeHours === undefined ? existing.timeHours : normalizeNumber(input.timeHours),
     tags: normalizeTags(input.tags || ""),
     updateTime: Date.now()
   };
@@ -733,12 +760,14 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
        category = ?,
        businessCategory = ?,
        workType = ?,
+       abilityDimension = ?,
        projectName = ?,
        productSystem = ?,
        subtask = ?,
        quantity = ?,
        coefficient = ?,
        workload = ?,
+       timeHours = ?,
        tags = ?,
        updateTime = ?
      WHERE id = ?`
@@ -749,12 +778,14 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
     next.category,
     next.businessCategory,
     next.workType,
+    next.abilityDimension,
     next.projectName,
     next.productSystem,
     next.subtask,
     next.quantity,
     next.coefficient,
     next.workload,
+    next.timeHours,
     next.tags,
     next.updateTime,
     id

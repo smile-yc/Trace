@@ -37,7 +37,7 @@ const port = Number(process.env.PORT || 4100);
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "10mb" }));
 
-const configOptionTypes = ["businessCategory", "workType", "productSystem", "subtask"] as const;
+const configOptionTypes = ["businessCategory", "workType", "abilityDimension", "productSystem", "subtask"] as const;
 
 const optionalNumberSchema = z.preprocess(
   (value) => (value === "" || value === undefined ? undefined : value),
@@ -52,12 +52,14 @@ const recordSchema = z.object({
   category: z.string().default("其他"),
   businessCategory: z.string().default("其他"),
   workType: z.string().default("其他项"),
+  abilityDimension: z.string().default(""),
   projectName: z.string().default(""),
   productSystem: z.string().default(""),
   subtask: z.string().default(""),
   quantity: z.number().nullable().default(null),
   coefficient: z.number().nullable().default(null),
   workload: z.number().nullable().default(null),
+  timeHours: z.number().nullable().default(null),
   tags: z.string().default(""),
   createTime: z.number(),
   updateTime: z.number()
@@ -70,12 +72,14 @@ const recordInputSchema = z.object({
   category: z.enum(["三新业务", "技术支持", "工程调试", "售前支持", "其他"]).default("其他"),
   businessCategory: z.string().trim().max(80).optional(),
   workType: z.string().trim().max(80).optional(),
+  abilityDimension: z.string().trim().max(80).optional(),
   projectName: z.string().trim().max(120).optional(),
   productSystem: z.string().trim().max(80).optional(),
   subtask: z.string().trim().max(120).optional(),
   quantity: optionalNumberSchema,
   coefficient: optionalNumberSchema,
   workload: optionalNumberSchema,
+  timeHours: optionalNumberSchema,
   tags: z.string().default("")
 });
 

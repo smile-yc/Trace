@@ -1,4 +1,4 @@
-import { Activity, BriefcaseBusiness, CalendarCheck, Layers3, PieChart, Workflow } from "lucide-react";
+import { Activity, BriefcaseBusiness, CalendarCheck, Clock3, Layers3, PieChart, Workflow } from "lucide-react";
 import { useMemo, type CSSProperties } from "react";
 import type { WorkRecord } from "../types";
 import { analyzeRecords, type DistributionItem, type ProjectSummary, type TrendPoint } from "../lib/dashboard";
@@ -222,7 +222,7 @@ function RadarChart({ items }: { items: DistributionItem[] }) {
 }
 
 function TrendChart({ points }: { points: TrendPoint[] }) {
-  const maxValue = Math.max(1, ...points.map((point) => Math.max(point.count, point.workload)));
+  const maxValue = Math.max(1, ...points.map((point) => Math.max(point.count, point.workload, point.timeHours)));
 
   return (
     <section className="dashboard-card trend-card">
@@ -234,10 +234,12 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
         {points.map((point) => {
           const countHeight = Math.max(3, (point.count / maxValue) * 100);
           const workloadHeight = Math.max(3, (point.workload / maxValue) * 100);
+          const timeHeight = Math.max(3, (point.timeHours / maxValue) * 100);
           return (
             <div className="trend-point" key={point.key}>
               <div className="trend-bar-pair">
                 <i className="workload" style={{ height: `${workloadHeight}%` }} title={`当量 ${formatMetric(point.workload)}`} />
+                <i className="time" style={{ height: `${timeHeight}%` }} title={`时间 ${formatMetric(point.timeHours)}h`} />
                 <i className="count" style={{ height: `${countHeight}%` }} title={`记录 ${point.count}`} />
               </div>
               <span>{point.label}</span>
@@ -248,6 +250,7 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
       </div>
       <div className="trend-legend">
         <span><i className="workload" />当量</span>
+        <span><i className="time" />时间</span>
         <span><i className="count" />记录</span>
       </div>
     </section>
@@ -278,6 +281,37 @@ function ProjectRank({ projects }: { projects: ProjectSummary[] }) {
           );
         })}
         {!projects.length && <div className="empty-state">暂无项目数据。</div>}
+      </div>
+    </section>
+  );
+}
+
+function FocusRank({ items }: { items: ReturnType<typeof analyzeRecords>["focusRankings"] }) {
+  const maxScore = Math.max(1, ...items.map((item) => item.score));
+
+  return (
+    <section className="dashboard-card">
+      <div className="dashboard-card-heading">
+        <h3>工作重心排行</h3>
+        <span>50/30/20</span>
+      </div>
+      <div className="project-rank-list">
+        {items.slice(0, 6).map((item, index) => {
+          const width = Math.max(6, (item.score / maxScore) * 100);
+          return (
+            <article className="project-rank-item" key={item.label}>
+              <em>{String(index + 1).padStart(2, "0")}</em>
+              <div>
+                <strong>{item.label}</strong>
+                <span>
+                  {formatMetric(item.score)} 分 / {formatMetric(item.workload)} 当量 / {formatMetric(item.timeHours)}h
+                </span>
+                <i style={{ width: `${width}%` }} />
+              </div>
+            </article>
+          );
+        })}
+        {!items.length && <div className="empty-state">暂无重心数据。</div>}
       </div>
     </section>
   );
@@ -374,6 +408,11 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
           <strong>{formatMetric(analysis.totalWorkload)}</strong>
         </article>
         <article>
+          <Clock3 size={18} />
+          <span>投入时间</span>
+          <strong>{formatMetric(analysis.totalTimeHours)}h</strong>
+        </article>
+        <article>
           <PieChart size={18} />
           <span>主要业务</span>
           <strong>{analysis.topBusinessLabel}</strong>
@@ -394,6 +433,8 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
         <TrendChart points={trend} />
         <ProjectRank projects={analysis.projectSummaries} />
         <DonutChart title="业务分类占比" items={analysis.businessDistribution} />
+        <DonutChart title="能力维度占比" items={analysis.abilityDistribution} />
+        <FocusRank items={analysis.focusRankings} />
         <RadarChart items={analysis.workTypeDistribution} />
         <ProductMatrix items={analysis.productDistribution} />
         <section className="dashboard-card insight-card">
@@ -405,6 +446,7 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
             <p>项目投入集中在 <strong>{analysis.projectSummaries[0]?.projectName ?? "暂无项目"}</strong></p>
             <p>主要业务方向为 <strong>{analysis.topBusinessLabel}</strong></p>
             <p>主要工作类型为 <strong>{analysis.topWorkTypeLabel}</strong></p>
+            <p>能力投入集中在 <strong>{analysis.abilityDistribution[0]?.label ?? "暂无能力维度"}</strong></p>
           </div>
         </section>
       </section>

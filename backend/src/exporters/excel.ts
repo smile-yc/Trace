@@ -35,6 +35,7 @@ function addSummaryRows(sheet: Worksheet, rows: ExportSummaryItem[]): void {
       count: item.count,
       quantity: item.quantity,
       workload: item.workload,
+      timeHours: item.timeHours,
       ratio: `${item.ratio}%`
     });
   });
@@ -59,6 +60,7 @@ function createSummarySheet(workbook: ExcelJS.Workbook, payload: ExportPayload):
   sheet.addRow({ metric: "结束日期", value: analysis.dateEnd, remark: "" });
   sheet.addRow({ metric: "记录总数", value: analysis.totalRecords, remark: "当前导出范围内的工作记录数" });
   sheet.addRow({ metric: "工作当量", value: analysis.totalWorkload, remark: "按记录工作当量求和" });
+  sheet.addRow({ metric: "投入时间", value: analysis.totalTimeHours, remark: "按记录投入时间求和，单位小时" });
   sheet.addRow({ metric: "数量合计", value: analysis.totalQuantity, remark: "按记录数量求和" });
   sheet.addRow({ metric: "活跃天数", value: analysis.activeDays, remark: "有记录的日期数量" });
   sheet.addRow({ metric: "参与项目", value: analysis.projectCount, remark: "按项目名称或首个标签归并" });
@@ -81,12 +83,14 @@ function createRawSheet(workbook: ExcelJS.Workbook, payload: ExportPayload): voi
     { header: "一级类别", key: "category", width: 16 },
     { header: "业务分类", key: "businessCategory", width: 16 },
     { header: "工作类型", key: "workType", width: 18 },
+    { header: "能力维度", key: "abilityDimension", width: 18 },
     { header: "项目名称", key: "projectName", width: 24 },
     { header: "产品系统", key: "productSystem", width: 16 },
     { header: "子任务", key: "subtask", width: 22 },
     { header: "数量", key: "quantity", width: 10 },
     { header: "折算系数", key: "coefficient", width: 12 },
     { header: "工作当量", key: "workload", width: 12 },
+    { header: "投入时间", key: "timeHours", width: 12 },
     { header: "二级标签", key: "tags", width: 28 },
     { header: "创建时间", key: "createTime", width: 22 },
     { header: "更新时间", key: "updateTime", width: 22 }
@@ -100,12 +104,14 @@ function createRawSheet(workbook: ExcelJS.Workbook, payload: ExportPayload): voi
       category: record.category || "其他",
       businessCategory: record.businessCategory || "其他",
       workType: record.workType || "其他项",
+      abilityDimension: record.abilityDimension,
       projectName: record.projectName,
       productSystem: record.productSystem,
       subtask: record.subtask,
       quantity: formatMetric(record.quantity),
       coefficient: formatMetric(record.coefficient),
       workload: formatMetric(record.workload),
+      timeHours: formatMetric(record.timeHours),
       tags: record.tags,
       createTime: formatDateTime(record.createTime),
       updateTime: formatDateTime(record.updateTime)
@@ -125,6 +131,7 @@ function createDistributionSheet(workbook: ExcelJS.Workbook, name: string, rows:
     { header: "记录数", key: "count", width: 12 },
     { header: "数量合计", key: "quantity", width: 14 },
     { header: "当量合计", key: "workload", width: 14 },
+    { header: "时间合计", key: "timeHours", width: 14 },
     { header: "占比", key: "ratio", width: 12 }
   ];
 
@@ -142,6 +149,7 @@ function createWorkloadSheet(workbook: ExcelJS.Workbook, rows: ExportSummaryItem
     { header: "记录数", key: "count", width: 12 },
     { header: "数量合计", key: "quantity", width: 14 },
     { header: "当量合计", key: "workload", width: 14 },
+    { header: "时间合计", key: "timeHours", width: 14 },
     { header: "当量占比", key: "ratio", width: 12 }
   ];
 
@@ -226,6 +234,7 @@ export async function buildExcel(payload: ExportPayload): Promise<Buffer> {
   createRawSheet(workbook, payload);
   createDistributionSheet(workbook, "业务分类汇总", analysis.businessSummary);
   createDistributionSheet(workbook, "工作类型汇总", analysis.workTypeSummary);
+  createDistributionSheet(workbook, "能力维度汇总", analysis.abilitySummary);
   createDistributionSheet(workbook, "项目汇总", analysis.projectSummary);
   createDistributionSheet(workbook, "产品系统汇总", analysis.productSummary);
   createWorkloadSheet(workbook, analysis.dateSummary);

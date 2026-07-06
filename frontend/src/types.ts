@@ -4,9 +4,11 @@ export type BusinessCategory = string;
 
 export type WorkType = string;
 
+export type AbilityDimension = string;
+
 export type ViewMode = "daily" | "weekly" | "monthly" | "yearly" | "all" | "settings";
 
-export type ConfigOptionType = "businessCategory" | "workType" | "productSystem" | "subtask";
+export type ConfigOptionType = "businessCategory" | "workType" | "abilityDimension" | "productSystem" | "subtask";
 
 export interface ConfigOption {
   id: string;
@@ -76,12 +78,14 @@ export interface WorkRecord {
   category: Category;
   businessCategory: BusinessCategory;
   workType: WorkType;
+  abilityDimension: AbilityDimension;
   projectName: string;
   productSystem: string;
   subtask: string;
   quantity: number | null;
   coefficient: number | null;
   workload: number | null;
+  timeHours: number | null;
   tags: string;
   createTime: number;
   updateTime: number;
@@ -94,12 +98,14 @@ export interface RecordInput {
   category: Category;
   businessCategory?: BusinessCategory;
   workType?: WorkType;
+  abilityDimension?: AbilityDimension;
   projectName?: string;
   productSystem?: string;
   subtask?: string;
   quantity?: number | null;
   coefficient?: number | null;
   workload?: number | null;
+  timeHours?: number | null;
   tags: string;
 }
 

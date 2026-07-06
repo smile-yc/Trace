@@ -1,5 +1,5 @@
-import type { BusinessCategory, Category, RecordInput, WorkRecord, WorkType } from "../types";
-import { BUSINESS_CATEGORIES, CATEGORIES, WORK_TYPES } from "../constants";
+import type { AbilityDimension, BusinessCategory, Category, RecordInput, WorkRecord, WorkType } from "../types";
+import { ABILITY_DIMENSIONS, BUSINESS_CATEGORIES, CATEGORIES, WORK_TYPES } from "../constants";
 import { inRange } from "./date";
 
 export function normalizeTags(input: string): string {
@@ -59,6 +59,14 @@ function inferWorkType(input: RecordInput): WorkType {
   return "其他项";
 }
 
+function inferAbilityDimension(input: RecordInput): AbilityDimension {
+  if (input.abilityDimension && ABILITY_DIMENSIONS.includes(input.abilityDimension)) {
+    return input.abilityDimension;
+  }
+
+  return input.abilityDimension || "";
+}
+
 export function createRecord(input: RecordInput): WorkRecord {
   const now = Date.now();
   const quantity = normalizeNumber(input.quantity);
@@ -72,12 +80,14 @@ export function createRecord(input: RecordInput): WorkRecord {
     category: input.category,
     businessCategory: inferBusinessCategory(input),
     workType: inferWorkType(input),
+    abilityDimension: inferAbilityDimension(input),
     projectName: String(input.projectName || "").trim(),
     productSystem: String(input.productSystem || "").trim(),
     subtask: String(input.subtask || "").trim(),
     quantity,
     coefficient,
     workload: normalizeWorkload(quantity, coefficient, input.workload),
+    timeHours: normalizeNumber(input.timeHours),
     tags: normalizeTags(input.tags),
     createTime: now,
     updateTime: now
@@ -104,6 +114,9 @@ export function sanitizeRecord(record: Partial<WorkRecord>): WorkRecord | null {
         : "其他项";
   const quantity = normalizeNumber(record.quantity);
   const coefficient = normalizeNumber(record.coefficient);
+  const abilityDimension = record.abilityDimension
+    ? String(record.abilityDimension)
+    : "";
 
   return {
     id: String(record.id),
@@ -113,12 +126,14 @@ export function sanitizeRecord(record: Partial<WorkRecord>): WorkRecord | null {
     category,
     businessCategory,
     workType,
+    abilityDimension,
     projectName: String(record.projectName || ""),
     productSystem: String(record.productSystem || ""),
     subtask: String(record.subtask || ""),
     quantity,
     coefficient,
     workload: normalizeWorkload(quantity, coefficient, record.workload),
+    timeHours: normalizeNumber(record.timeHours),
     tags: normalizeTags(String(record.tags || "")),
     createTime: Number(record.createTime || Date.now()),
     updateTime: Number(record.updateTime || record.createTime || Date.now())

@@ -1,4 +1,4 @@
-import type { BusinessCategory, Category, ViewMode, WorkType } from "./types";
+import type { AbilityDimension, BusinessCategory, Category, ViewMode, WorkType } from "./types";
 
 export const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
 
@@ -16,6 +16,16 @@ export const WORK_TYPES: WorkType[] = [
   "现场支持",
   "现场质量检查",
   "其他项"
+];
+
+export const ABILITY_DIMENSIONS: AbilityDimension[] = [
+  "新业务探索",
+  "工程技术",
+  "售前支撑",
+  "项目管理与推进",
+  "AI与提效工具",
+  "客户交流",
+  "知识沉淀"
 ];
 
 export const PRODUCT_SYSTEMS = ["GM1000", "GM2000", "GM6000", "GM7000", "PHM", "智能巡检", "其他"];

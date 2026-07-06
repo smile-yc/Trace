@@ -6,18 +6,20 @@ export interface WorkRecord {
   category: string;
   businessCategory: string;
   workType: string;
+  abilityDimension: string;
   projectName: string;
   productSystem: string;
   subtask: string;
   quantity: number | null;
   coefficient: number | null;
   workload: number | null;
+  timeHours: number | null;
   tags: string;
   createTime: number;
   updateTime: number;
 }
 
-export type ConfigOptionType = "businessCategory" | "workType" | "productSystem" | "subtask";
+export type ConfigOptionType = "businessCategory" | "workType" | "abilityDimension" | "productSystem" | "subtask";
 
 export interface ConfigOption {
   id: string;
@@ -86,12 +88,14 @@ export interface RecordInput {
   category: string;
   businessCategory?: string;
   workType?: string;
+  abilityDimension?: string;
   projectName?: string;
   productSystem?: string;
   subtask?: string;
   quantity?: number | null;
   coefficient?: number | null;
   workload?: number | null;
+  timeHours?: number | null;
   tags: string;
 }
 

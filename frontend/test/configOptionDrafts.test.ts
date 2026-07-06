@@ -71,3 +71,20 @@ test("menu choices keep all candidates visible when current value is a default l
     ["三新业务", "传统业务", "其他"]
   );
 });
+
+test("ability dimension custom values default to persisted", () => {
+  const state = getConfigOptionDraftState(options, "abilityDimension", "solution-design");
+  const values = {
+    businessCategory: "传统业务",
+    workType: "工程调试",
+    productSystem: "GM1000",
+    subtask: "开闭所",
+    abilityDimension: "solution-design"
+  };
+
+  assert.equal(state.isCustom, true);
+  assert.equal(state.defaultPersist, true);
+  assert.deepEqual(collectPersistedConfigOptionInputs(options, values, {}), [
+    { type: "abilityDimension", label: "solution-design" }
+  ]);
+});

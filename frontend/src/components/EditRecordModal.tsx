@@ -38,12 +38,14 @@ export function EditRecordModal({ record, onClose, onSave }: EditRecordModalProp
       content,
       businessCategory: record.businessCategory,
       workType: record.workType,
+      abilityDimension: record.abilityDimension,
       projectName: record.projectName,
       productSystem: record.productSystem,
       subtask: record.subtask,
       quantity: record.quantity,
       coefficient: record.coefficient,
-      workload: record.workload
+      workload: record.workload,
+      timeHours: record.timeHours
     });
   }
 

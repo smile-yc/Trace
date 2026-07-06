@@ -45,10 +45,14 @@ export function RecordList({ records, emptyText, onEdit, onDelete }: RecordListP
             <span className="category-chip">{record.businessCategory || record.category}</span>
             <span className="worktype-chip">{record.workType || "其他项"}</span>
             {record.projectName && <span className="detail-chip">项目：{record.projectName}</span>}
+            {record.abilityDimension && <span className="detail-chip">能力：{record.abilityDimension}</span>}
             {record.productSystem && <span className="detail-chip">产品：{record.productSystem}</span>}
             {record.subtask && <span className="detail-chip">工作细项：{record.subtask}</span>}
             {record.workload !== null && record.workload !== undefined && (
               <span className="workload-chip">当量：{record.workload}</span>
+            )}
+            {record.timeHours !== null && record.timeHours !== undefined && (
+              <span className="detail-chip">时间：{record.timeHours}h</span>
             )}
             {splitTags(record.tags).map((tag) => (
               <TagPill key={tag} tag={tag} />
