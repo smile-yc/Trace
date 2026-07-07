@@ -38,8 +38,8 @@ export function Sidebar({ activeView, records, onViewChange }: SidebarProps) {
           <Database size={22} />
         </div>
         <div>
-          <strong>工作报告</strong>
-          <span>Trace Report</span>
+          <strong>Trace</strong>
+          <span>工作痕迹台账</span>
         </div>
       </div>
 
@@ -62,7 +62,7 @@ export function Sidebar({ activeView, records, onViewChange }: SidebarProps) {
       </nav>
 
       <div className="sidebar-footer">
-        <span>数据库记录</span>
+        <span>记录</span>
         <strong>{records.length}</strong>
       </div>
     </aside>

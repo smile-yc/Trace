@@ -40,8 +40,8 @@ export function DailyPage({ records, onAdd, onEdit, onDelete }: DailyPageProps) 
     <>
       <PageHeader
         eyebrow="Daily"
-        title="日报"
-        description={formatDate(date)}
+        title="今日工作台"
+        description={`${formatDate(date)} · 记录、当量与复盘入口`}
         actions={
           <>
             <label className="date-jump">
@@ -68,7 +68,7 @@ export function DailyPage({ records, onAdd, onEdit, onDelete }: DailyPageProps) 
 
       <section className="panel">
         <div className="panel-heading">
-          <h2>添加记录</h2>
+          <h2>快速记录</h2>
         </div>
         <RecordForm key={date} initialDate={date} onSubmit={handleAdd} />
       </section>
