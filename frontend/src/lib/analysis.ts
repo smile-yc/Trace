@@ -14,6 +14,15 @@ export interface DistributionItem {
   ratio: number;
 }
 
+export interface BusinessAbilityRelationItem {
+  businessLabel: string;
+  abilityLabel: string;
+  count: number;
+  workload: number;
+  timeHours: number;
+  businessShare: number;
+}
+
 export interface ProjectSummary {
   projectName: string;
   count: number;
@@ -55,6 +64,7 @@ export interface DashboardAnalysis {
   workTypeDistribution: DistributionItem[];
   abilityDistribution: DistributionItem[];
   productDistribution: DistributionItem[];
+  businessAbilityRelations: BusinessAbilityRelationItem[];
   projectSummaries: ProjectSummary[];
   focusRankings: FocusRankingItem[];
   topBusinessLabel: string;
@@ -185,6 +195,50 @@ export function buildMultiDistribution(
     .sort((a, b) => b.workload - a.workload || b.timeHours - a.timeHours || b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
 }
 
+export function buildBusinessAbilityRelations(records: WorkRecord[]): BusinessAbilityRelationItem[] {
+  const groups = new Map<string, { businessLabel: string; abilityLabel: string; count: number; workload: number; timeHours: number }>();
+  const businessTotals = new Map<string, number>();
+
+  records.forEach((record) => {
+    const businessLabel = (record.businessCategory || record.category || "其他").trim() || "其他";
+    const abilities = parseAbilityDimensions(record.abilityDimension);
+    const finalAbilities = abilities.length ? abilities : ["未填写能力"];
+    const workload = workloadOf(record);
+    const timeHours = timeOf(record);
+
+    businessTotals.set(businessLabel, (businessTotals.get(businessLabel) ?? 0) + workload);
+
+    finalAbilities.forEach((abilityLabel) => {
+      const key = `${businessLabel}\u0000${abilityLabel}`;
+      const current = groups.get(key) ?? { businessLabel, abilityLabel, count: 0, workload: 0, timeHours: 0 };
+      current.count += 1;
+      current.workload += workload;
+      current.timeHours += timeHours;
+      groups.set(key, current);
+    });
+  });
+
+  return Array.from(groups.values())
+    .map((item) => {
+      const total = businessTotals.get(item.businessLabel) ?? 0;
+      return {
+        ...item,
+        workload: roundMetric(item.workload),
+        timeHours: roundMetric(item.timeHours),
+        businessShare: total > 0 ? Math.round((item.workload / total) * 100) : 0
+      };
+    })
+    .sort(
+      (a, b) =>
+        (businessTotals.get(b.businessLabel) ?? 0) - (businessTotals.get(a.businessLabel) ?? 0) ||
+        a.businessLabel.localeCompare(b.businessLabel, "zh-CN") ||
+        b.workload - a.workload ||
+        b.timeHours - a.timeHours ||
+        b.count - a.count ||
+        a.abilityLabel.localeCompare(b.abilityLabel, "zh-CN")
+    );
+}
+
 export function buildProjectSummaries(records: WorkRecord[]): ProjectSummary[] {
   const groups = new Map<string, WorkRecord[]>();
 
@@ -253,6 +307,7 @@ export function analyzeRecords(records: WorkRecord[], options?: AnalysisOptions 
   const workTypeDistribution = buildDistribution(records, (record) => record.workType, "其他项");
   const abilityDistribution = buildMultiDistribution(records, (record) => parseAbilityDimensions(record.abilityDimension), "未填写能力");
   const productDistribution = buildDistribution(records, (record) => record.productSystem, "未填写产品");
+  const businessAbilityRelations = buildBusinessAbilityRelations(records);
 
   return {
     totalRecords: records.length,
@@ -263,6 +318,7 @@ export function analyzeRecords(records: WorkRecord[], options?: AnalysisOptions 
     workTypeDistribution,
     abilityDistribution,
     productDistribution,
+    businessAbilityRelations,
     projectSummaries,
     focusRankings: buildFocusRankings(records, normalizedOptions.focusScoreWeights),
     topBusinessLabel: businessDistribution[0]?.label ?? "暂无",

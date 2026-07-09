@@ -13,6 +13,7 @@ export {
 } from "./analysis";
 export type {
   DashboardAnalysis,
+  BusinessAbilityRelationItem,
   DistributionItem,
   FocusRankingItem,
   ProjectSummary,

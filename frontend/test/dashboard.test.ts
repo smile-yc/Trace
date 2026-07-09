@@ -82,6 +82,45 @@ test("analyzeRecords splits comma separated ability dimensions", () => {
   );
 });
 
+test("analyzeRecords builds business ability relation matrix", () => {
+  const analysis = analyzeRecords([
+    {
+      ...baseRecord,
+      id: "a",
+      businessCategory: "三新业务",
+      abilityDimension: "工程技术,项目管理与推进",
+      workload: 10,
+      timeHours: 4
+    },
+    {
+      ...baseRecord,
+      id: "b",
+      businessCategory: "传统业务",
+      abilityDimension: "工程技术",
+      workload: 2,
+      timeHours: 1
+    },
+    {
+      ...baseRecord,
+      id: "c",
+      businessCategory: "三新业务",
+      abilityDimension: "",
+      workload: 4,
+      timeHours: 2
+    }
+  ] as any);
+
+  assert.deepEqual(
+    analysis.businessAbilityRelations.map((item) => [item.businessLabel, item.abilityLabel, item.count, item.workload, item.businessShare]),
+    [
+      ["三新业务", "工程技术", 1, 10, 71],
+      ["三新业务", "项目管理与推进", 1, 10, 71],
+      ["三新业务", "未填写能力", 1, 4, 29],
+      ["传统业务", "工程技术", 1, 2, 100]
+    ]
+  );
+});
+
 test("analyzeRecords ranks focus by weighted workload time and count shares", () => {
   const analysis = analyzeRecords([
     {
