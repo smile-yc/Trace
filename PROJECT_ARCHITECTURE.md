@@ -79,6 +79,17 @@ trace-work-report-system/
          └─ AllRecordsPage.tsx
 ```
 
+## 前端入口与页面组织
+
+- `frontend/src/main.tsx` 挂载 React 应用。
+- `frontend/src/App.tsx` 是当前真实应用入口，负责主导航、全局弹窗、toast、记录状态加载和页面切换。
+- `frontend/src/components/Sidebar.tsx` 是当前侧边导航组件。
+- `frontend/src/components/EditModal.tsx` 承载记录编辑弹窗，内部复用 `RecordForm`。
+- `frontend/src/components/ReportDashboard.tsx` 承载周报、月报、年报中的核心数据展板。
+- `frontend/src/pages/` 下按业务页面拆分：日报、周报、月报、年报、成长地图、知识资产、全部记录、配置中心。
+
+已经确认并清理的历史遗留组件：`Layout.tsx`、`EditRecordModal.tsx`、`Toast.tsx`。后续新增全局布局或 toast 时，应直接改造当前 `App.tsx` 和实际在用组件，避免重新引入并行实现。
+
 ## 数据流
 
 ```mermaid
@@ -114,6 +125,21 @@ flowchart LR
 - 按二级标签生成报告预览
 - 调用后端导出 Word、PDF、Excel
 - 导出 JSON 备份文件
+
+## 统计口径
+
+当前报表统计以 `WorkRecord` 为基础数据源，前端在周期页面中按日期范围派生统计结果：
+
+- 周报：按日聚合趋势。
+- 月报：按周段聚合趋势。
+- 年报：按月聚合趋势。
+- 工作当量：优先使用记录中的 `workload`；当记录没有显式当量但有 `quantity` 和 `coefficient` 时，按 `quantity × coefficient` 补算。
+- 投入时间：使用 `timeHours` 汇总，空值按 0 处理。
+- 工作重心评分：默认按当量占比 50%、投入时间占比 30%、记录条数占比 20% 综合计算，权重来自配置中心。
+- 能力维度：支持一条记录选择多个能力维度，统计时会拆分后参与能力分布和业务能力关联。
+- 业务与能力关联：业务分类来自 `businessCategory`，能力维度来自 `abilityDimension`。
+
+这部分属于系统统计口径，后续调整图表或指标时应同步更新本节，避免 UI 和文档口径不一致。
 
 ## 后端职责
 
