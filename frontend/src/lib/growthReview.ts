@@ -180,7 +180,7 @@ export function buildGrowthWarnings(
     }
 
     const actualPercent = roundPercent(shares[label] ?? 0);
-    if (targetPercent - actualPercent >= deviation) {
+    if (targetPercent - actualPercent > deviation) {
       warnings.push({
         type: "target-gap",
         label,

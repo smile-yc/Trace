@@ -320,6 +320,12 @@ function normalizeNumber(input: unknown): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+function normalizeOptionalNonNegativeNumber(input: unknown): number | null {
+  const value = normalizeNumber(input);
+  if (value === null || value < 0) return null;
+  return value;
+}
+
 function normalizeRequiredNumber(input: unknown, fallback = 0): number {
   const value = normalizeNumber(input);
   return value === null ? fallback : value;
@@ -379,7 +385,7 @@ function seedAppSettings(): void {
 seedAppSettings();
 
 function normalizeWorkload(quantity: number | null, coefficient: number | null, explicit: unknown): number | null {
-  const workload = normalizeNumber(explicit);
+  const workload = normalizeOptionalNonNegativeNumber(explicit);
   if (workload !== null) return workload;
   if (quantity === null || coefficient === null) return null;
 
@@ -1052,10 +1058,10 @@ function toRecord(row: unknown): WorkRecord {
     projectName: String(record.projectName || ""),
     productSystem: String(record.productSystem || ""),
     subtask: String(record.subtask || ""),
-    quantity: normalizeNumber(record.quantity),
-    coefficient: normalizeNumber(record.coefficient),
-    workload: normalizeNumber(record.workload),
-    timeHours: normalizeNumber(record.timeHours),
+    quantity: normalizeOptionalNonNegativeNumber(record.quantity),
+    coefficient: normalizeOptionalNonNegativeNumber(record.coefficient),
+    workload: normalizeOptionalNonNegativeNumber(record.workload),
+    timeHours: normalizeOptionalNonNegativeNumber(record.timeHours),
     tags: String(record.tags || ""),
     createTime: Number(record.createTime),
     updateTime: Number(record.updateTime)
@@ -1076,8 +1082,8 @@ export function getRecord(id: string): WorkRecord | null {
 
 export function insertRecord(input: RecordInput): WorkRecord {
   const now = Date.now();
-  const quantity = normalizeNumber(input.quantity);
-  const coefficient = normalizeNumber(input.coefficient);
+  const quantity = normalizeOptionalNonNegativeNumber(input.quantity);
+  const coefficient = normalizeOptionalNonNegativeNumber(input.coefficient);
   const record: WorkRecord = {
     id: createId(),
     date: input.date,
@@ -1093,7 +1099,7 @@ export function insertRecord(input: RecordInput): WorkRecord {
     quantity,
     coefficient,
     workload: normalizeWorkload(quantity, coefficient, input.workload),
-    timeHours: normalizeNumber(input.timeHours),
+    timeHours: normalizeOptionalNonNegativeNumber(input.timeHours),
     tags: normalizeTags(input.tags || ""),
     createTime: now,
     updateTime: now
@@ -1149,8 +1155,10 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
   const existing = getRecord(id);
   if (!existing) return null;
 
-  const quantity = input.quantity === undefined ? existing.quantity : normalizeNumber(input.quantity);
-  const coefficient = input.coefficient === undefined ? existing.coefficient : normalizeNumber(input.coefficient);
+  const quantity =
+    input.quantity === undefined ? existing.quantity : normalizeOptionalNonNegativeNumber(input.quantity);
+  const coefficient =
+    input.coefficient === undefined ? existing.coefficient : normalizeOptionalNonNegativeNumber(input.coefficient);
   const shouldRecalculateWorkload =
     input.workload !== undefined || input.quantity !== undefined || input.coefficient !== undefined;
   const next: WorkRecord = {
@@ -1169,7 +1177,8 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
     quantity,
     coefficient,
     workload: shouldRecalculateWorkload ? normalizeWorkload(quantity, coefficient, input.workload) : existing.workload,
-    timeHours: input.timeHours === undefined ? existing.timeHours : normalizeNumber(input.timeHours),
+    timeHours:
+      input.timeHours === undefined ? existing.timeHours : normalizeOptionalNonNegativeNumber(input.timeHours),
     tags: normalizeTags(input.tags || ""),
     updateTime: Date.now()
   };

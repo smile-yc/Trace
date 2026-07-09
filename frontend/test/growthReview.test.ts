@@ -91,6 +91,39 @@ test("buildGrowthWarnings matches targets inside multi ability records", () => {
   assert.equal(warnings.some((warning) => warning.type === "stale-ability" && warning.label === "知识沉淀"), false);
 });
 
+test("buildGrowthWarnings does not warn when actual share exactly reaches target with zero deviation", () => {
+  const warnings = buildGrowthWarnings(
+    [
+      {
+        ...baseRecord,
+        id: "a",
+        date: "2026-07-01",
+        abilityDimension: "工程技术",
+        workload: 50
+      },
+      {
+        ...baseRecord,
+        id: "b",
+        date: "2026-07-01",
+        abilityDimension: "知识沉淀",
+        workload: 50
+      }
+    ] as any,
+    {
+      warningRules: {
+        abilityNoRecordDays: 20,
+        targetShareDeviationPercent: 0
+      },
+      abilityTargets: {
+        工程技术: 50
+      }
+    },
+    "2026-07-06"
+  );
+
+  assert.equal(warnings.some((warning) => warning.type === "target-gap" && warning.label === "工程技术"), false);
+});
+
 test("buildMonthlyReview enriches monthly narrative with milestones and knowledge assets", () => {
   const review = buildMonthlyReview(
     [

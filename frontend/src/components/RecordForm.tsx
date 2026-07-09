@@ -17,6 +17,7 @@ import {
   type ConfigOptionValues
 } from "../lib/configOptionDrafts";
 import { todayKey } from "../lib/date";
+import { getInitialOptionFieldValue, getPostSubmitCoefficientValue } from "../lib/recordFormState";
 import { matchWorkloadStandard } from "../lib/workloadApi";
 import type {
   BusinessCategory,
@@ -303,9 +304,9 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
   const [title, setTitle] = useState(record?.title ?? "");
   const [date, setDate] = useState(record?.date ?? initialDate ?? todayKey());
   const [businessCategory, setBusinessCategory] = useState<BusinessCategory>(
-    record?.businessCategory ?? "其他"
+    getInitialOptionFieldValue(record?.businessCategory)
   );
-  const [workType, setWorkType] = useState(record?.workType ?? "其他项");
+  const [workType, setWorkType] = useState(getInitialOptionFieldValue(record?.workType));
   const [abilityDimension, setAbilityDimension] = useState(record?.abilityDimension ?? "");
   const [projectName, setProjectName] = useState(record?.projectName ?? "");
   const [productSystem, setProductSystem] = useState(record?.productSystem ?? "");
@@ -457,11 +458,18 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
     await persistCustomConfigOptions(normalizedValues);
 
     if (!record) {
+      const nextCoefficient = getPostSubmitCoefficientValue({
+        coefficientTouched,
+        matchedCoefficient: matchedStandard?.coefficient
+      });
+
       setTitle("");
       setTags("");
       setContent("");
       setQuantity("");
-      setCoefficient("");
+      setCoefficient(formatOptionalNumber(nextCoefficient));
+      setCoefficientTouched(false);
+      setMatchedStandard(nextCoefficient === null ? null : matchedStandard);
       setWorkload("");
       setTimeHours("");
       setDate(initialDate ?? todayKey());

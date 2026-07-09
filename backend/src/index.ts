@@ -59,6 +59,11 @@ const optionalNumberSchema = z.preprocess(
   z.coerce.number().finite().nullable().optional()
 );
 
+const optionalNonNegativeNumberSchema = z.preprocess(
+  (value) => (value === "" || value === undefined ? undefined : value),
+  z.coerce.number().finite().min(0).nullable().optional()
+);
+
 const recordSchema = z.object({
   id: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -91,10 +96,10 @@ const recordInputSchema = z.object({
   projectName: z.string().trim().max(120).optional(),
   productSystem: z.string().trim().max(80).optional(),
   subtask: z.string().trim().max(120).optional(),
-  quantity: optionalNumberSchema,
-  coefficient: optionalNumberSchema,
-  workload: optionalNumberSchema,
-  timeHours: optionalNumberSchema,
+  quantity: optionalNonNegativeNumberSchema,
+  coefficient: optionalNonNegativeNumberSchema,
+  workload: optionalNonNegativeNumberSchema,
+  timeHours: optionalNonNegativeNumberSchema,
   tags: z.string().default("")
 });
 

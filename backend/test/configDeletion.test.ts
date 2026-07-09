@@ -36,3 +36,28 @@ test("deleteWorkloadStandard removes a workload standard", () => {
   assert.equal(database.getWorkloadStandard(standard.id), null);
   assert.equal(database.deleteWorkloadStandard(standard.id), false);
 });
+
+test("insertRecord does not persist negative numeric metrics", () => {
+  const record = database.insertRecord({
+    date: "2026-07-09",
+    title: "负数校验",
+    content: "",
+    category: "其他",
+    businessCategory: "传统业务",
+    workType: "工程调试",
+    abilityDimension: "工程技术",
+    projectName: "",
+    productSystem: "",
+    subtask: "",
+    quantity: -1,
+    coefficient: -2,
+    workload: -3,
+    timeHours: -4,
+    tags: ""
+  });
+
+  assert.equal(record.quantity, null);
+  assert.equal(record.coefficient, null);
+  assert.equal(record.workload, null);
+  assert.equal(record.timeHours, null);
+});

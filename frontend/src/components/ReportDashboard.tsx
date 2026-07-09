@@ -12,7 +12,7 @@ import {
   Workflow,
   type LucideIcon
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import type { AppSettings, WorkRecord } from "../types";
 import {
   analyzeRecords,
@@ -40,6 +40,12 @@ interface ChartPoint {
   y: number;
 }
 
+interface TrendTooltipState {
+  point: TrendPoint;
+  x: number;
+  y: number;
+}
+
 function formatMetric(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
@@ -60,11 +66,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function visualSegment(value: number, total: number, circumference: number): number {
-  if (value <= 0 || total <= 0) return 0;
-  return Math.max((value / total) * circumference, 4.5);
-}
-
 function splitLabel(label: string, chunkSize = 5): string[] {
   if (label.length <= chunkSize) return [label];
   return [label.slice(0, chunkSize), label.slice(chunkSize)];
@@ -80,6 +81,126 @@ function polarPoint(cx: number, cy: number, radius: number, angle: number): Char
 
 function toPolyline(points: ChartPoint[]): string {
   return points.map((point) => `${point.x},${point.y}`).join(" ");
+}
+
+function getTrendTooltipPosition(event: ReactMouseEvent<SVGElement>): { x: number; y: number } {
+  const chart = event.currentTarget.closest(".trend-combo-chart");
+  const rect = chart?.getBoundingClientRect();
+
+  if (!rect || rect.width <= 0 || rect.height <= 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const xPadding = Math.min(78, Math.max(40, rect.width / 2 - 8));
+  const yPadding = Math.min(72, Math.max(42, rect.height / 2 - 8));
+
+  return {
+    x: clamp(event.clientX - rect.left, xPadding, Math.max(xPadding, rect.width - xPadding)),
+    y: clamp(event.clientY - rect.top, yPadding, Math.max(yPadding, rect.height - 12))
+  };
+}
+
+function roundedArcPath(cx: number, cy: number, radius: number, startAngle: number, endAngle: number): string {
+  const start = polarPoint(cx, cy, radius, startAngle);
+  const end = polarPoint(cx, cy, radius, endAngle);
+  const largeArc = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
+
+  return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
+}
+
+function SegmentedDonutChart({
+  ariaLabel,
+  centerLabel,
+  className = "",
+  colors,
+  items
+}: {
+  ariaLabel: string;
+  centerLabel: string;
+  className?: string;
+  colors: string[];
+  items: DistributionItem[];
+}) {
+  const total = chartTotal(items);
+  const cx = 180;
+  const cy = 140;
+  const radius = 88;
+  const labelRadius = 116;
+  const labelCount = Math.min(2, items.length);
+  const segmentGap = items.length > 1 ? 5 : 0;
+  let cursor = -90;
+
+  const segments = items.map((item, index) => {
+    const value = metricValue(item);
+    const sweep = total > 0 ? (value / total) * 360 : 0;
+    const gap = Math.min(segmentGap, sweep * 0.45);
+    let startAngle = cursor + gap / 2;
+    let endAngle = cursor + sweep - gap / 2;
+    const midpoint = cursor + sweep / 2;
+
+    if (endAngle <= startAngle) {
+      startAngle = midpoint - 0.8;
+      endAngle = midpoint + 0.8;
+    }
+
+    cursor += sweep;
+
+    const lineStart = polarPoint(cx, cy, labelRadius - 10, midpoint);
+    const lineBend = polarPoint(cx, cy, labelRadius + 13, midpoint);
+    const isRight = lineBend.x >= cx;
+    const lineEnd = { x: lineBend.x + (isRight ? 26 : -26), y: lineBend.y };
+    const textAnchor: "start" | "end" = isRight ? "start" : "end";
+
+    return {
+      color: colors[index % colors.length],
+      item,
+      labelTextY: lineEnd.y - 4,
+      labelValueY: lineEnd.y + 18,
+      lineBend,
+      lineEnd,
+      lineStart,
+      path: roundedArcPath(cx, cy, radius, startAngle, endAngle),
+      percent: percentOf(value, total),
+      textAnchor,
+      textX: lineEnd.x + (isRight ? 8 : -8),
+      value
+    };
+  });
+
+  return (
+    <div className={`segmented-donut-stage ${className}`.trim()}>
+      <svg className="segmented-donut-chart" viewBox="0 -24 360 320" role="img" aria-label={ariaLabel}>
+        <circle className="donut-base-path" cx={cx} cy={cy} r={radius} />
+        {segments.map((segment) => (
+          <path
+            className="donut-segment-path"
+            d={segment.path}
+            key={segment.item.label}
+            stroke={segment.color}
+          />
+        ))}
+        {segments.slice(0, labelCount).map((segment) => (
+          <g className="donut-external-label" key={`${segment.item.label}-label`}>
+            <polyline
+              className="donut-label-line"
+              points={`${segment.lineStart.x},${segment.lineStart.y} ${segment.lineBend.x},${segment.lineBend.y} ${segment.lineEnd.x},${segment.lineEnd.y}`}
+              stroke={segment.color}
+            />
+            <text className="donut-label-text" x={segment.textX} y={segment.labelTextY} textAnchor={segment.textAnchor}>
+              {segment.item.label}
+            </text>
+            <text className="donut-label-value" x={segment.textX} y={segment.labelValueY} textAnchor={segment.textAnchor}>
+              {formatMetric(segment.value)}当量 | {segment.percent}%
+            </text>
+          </g>
+        ))}
+      </svg>
+      <div className="segmented-donut-center">
+        <strong>{formatMetric(total)}</strong>
+        <span>{centerLabel}</span>
+      </div>
+    </div>
+  );
 }
 
 function CardHeading({
@@ -113,9 +234,6 @@ function BusinessCategoryDonut({ items }: { items: DistributionItem[] }) {
   const secondItem = visibleItems[1];
   const topPercent = topItem ? percentOf(metricValue(topItem), total) : 0;
   const secondPercent = secondItem ? percentOf(metricValue(secondItem), total) : 0;
-  const radius = 58;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
 
   return (
     <section className="dashboard-card business-donut-card">
@@ -125,33 +243,12 @@ function BusinessCategoryDonut({ items }: { items: DistributionItem[] }) {
         <div className="business-donut-layout">
           <div className="business-donut-main">
             <div className="business-donut-stage">
-              <div className="business-donut-chart">
-                <svg viewBox="0 0 164 164" role="img" aria-label="业务分类占比圆环图">
-                  <circle className="business-donut-base" cx="82" cy="82" r={radius} />
-                  {visibleItems.map((item, index) => {
-                    const value = metricValue(item);
-                    const dash = total ? visualSegment(value, total, circumference) : 0;
-                    const segment = (
-                      <circle
-                        className="business-donut-segment"
-                        cx="82"
-                        cy="82"
-                        key={item.label}
-                        r={radius}
-                        stroke={businessColors[index % businessColors.length]}
-                        strokeDasharray={`${dash} ${circumference - dash}`}
-                        strokeDashoffset={-offset}
-                      />
-                    );
-                    offset += dash;
-                    return segment;
-                  })}
-                </svg>
-                <div className="business-donut-center">
-                  <strong>{formatMetric(total)}</strong>
-                  <span>{visibleItems.some((item) => item.workload > 0) ? "当量" : "条"}</span>
-                </div>
-              </div>
+              <SegmentedDonutChart
+                ariaLabel="业务分类占比甜甜圈图"
+                centerLabel={visibleItems.some((item) => item.workload > 0) ? "当量" : "条目"}
+                colors={businessColors}
+                items={visibleItems}
+              />
             </div>
 
             <div className="business-donut-legend">
@@ -320,9 +417,6 @@ function WorkTypeProfileChart({ items }: { items: DistributionItem[] }) {
   const secondItem = visibleItems[1];
   const topPercent = topItem ? percentOf(metricValue(topItem), total) : 0;
   const secondPercent = secondItem ? percentOf(metricValue(secondItem), total) : 0;
-  const radius = 48;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
 
   return (
     <section className="dashboard-card worktype-profile-card">
@@ -348,34 +442,13 @@ function WorkTypeProfileChart({ items }: { items: DistributionItem[] }) {
           </div>
 
           <div className="worktype-profile-main">
-            <div className="worktype-donut-chart">
-              <svg viewBox="0 0 136 136" role="img" aria-label="工作类型圆环占比图">
-                <circle className="worktype-donut-base" cx="68" cy="68" r={radius} />
-                {visibleItems.map((item, index) => {
-                  const value = metricValue(item);
-                  const dash = total ? visualSegment(value, total, circumference) : 0;
-                  const segment = (
-                    <circle
-                      className="worktype-donut-segment"
-                      cx="68"
-                      cy="68"
-                      key={item.label}
-                      r={radius}
-                      stroke={workTypeColors[index % workTypeColors.length]}
-                      strokeDasharray={`${dash} ${circumference - dash}`}
-                      strokeDashoffset={-offset}
-                    />
-                  );
-                  offset += dash;
-                  return segment;
-                })}
-              </svg>
-              <div className="worktype-donut-center">
-                <strong>{formatMetric(total)}</strong>
-                <span>总当量</span>
-              </div>
-            </div>
-
+            <SegmentedDonutChart
+              ariaLabel="工作类型画像甜甜圈图"
+              centerLabel="总当量"
+              className="worktype-segmented-donut"
+              colors={workTypeColors}
+              items={visibleItems}
+            />
             <div className="worktype-metric-scroll">
               <div className="worktype-metric-list">
                 {visibleItems.map((item, index) => (
@@ -423,11 +496,22 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
       {visibleBusinesses.length && visibleAbilities.length ? (
         <div className="business-ability-layout">
           <div
-            className="business-ability-matrix"
-            style={{ "--ability-count": visibleAbilities.length } as CSSProperties}
-            role="img"
-            aria-label="业务类型与能力维度关联矩阵"
+            className="business-ability-coordinate"
+            style={{ "--ability-count": visibleAbilities.length, "--business-count": visibleBusinesses.length } as CSSProperties}
           >
+            <span className="business-ability-axis-x">能力维度</span>
+            <span className="business-ability-axis-y">业务类型</span>
+            <div
+              className="business-ability-matrix"
+              role="img"
+              aria-label="业务类型与能力维度关联坐标矩阵"
+            >
+            <span className="matrix-axis-corner">业务类型</span>
+            {visibleAbilities.map((ability) => (
+              <span className="matrix-ability-label" key={ability}>
+                {ability}
+              </span>
+            ))}
             {visibleBusinesses.map((business) => (
               <Fragment key={business}>
                 <span className="matrix-business-label">{business}</span>
@@ -436,7 +520,7 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
                   const value = relation ? (relation.workload > 0 ? relation.workload : relation.count) : 0;
                   const scale = value > 0 ? clamp(value / maxValue, 0.12, 1) : 0;
                   return (
-                    <span className="matrix-cell" key={`${business}-${ability}`}>
+                    <span className="matrix-cell business-ability-gridline" key={`${business}-${ability}`}>
                       {relation && (
                         <i
                           className="relation-bubble"
@@ -444,7 +528,7 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
                             "--bubble-color": abilityColors[abilityIndex % abilityColors.length],
                             "--bubble-size": `${10 + scale * 48}px`
                           } as CSSProperties}
-                          title={`${business} / ${ability}: ${formatMetric(relation.workload)} 当量，${relation.businessShare}%`}
+                          title={`${business} / ${ability}: ${formatMetric(relation.workload)} 当量，${formatMetric(relation.timeHours)}h，占该业务 ${relation.businessShare}%`}
                         />
                       )}
                     </span>
@@ -452,12 +536,7 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
                 })}
               </Fragment>
             ))}
-            <span className="matrix-axis-corner">能力维度</span>
-            {visibleAbilities.map((ability) => (
-              <span className="matrix-axis-footer" key={ability}>
-                <span>{ability}</span>
-              </span>
-            ))}
+            </div>
           </div>
 
           <div className="business-ability-legend">
@@ -492,33 +571,108 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
 }
 
 function TrendChart({ points }: { points: TrendPoint[] }) {
-  const maxValue = Math.max(1, ...points.map((point) => Math.max(point.count, point.workload, point.timeHours)));
+  const [tooltip, setTooltip] = useState<TrendTooltipState | null>(null);
+  const maxValue = Math.max(1, ...points.map((point) => Math.max(point.workload, point.timeHours)));
+  const chartWidth = Math.max(520, points.length * 58 + 76);
+  const chartHeight = 232;
+  const padding = { top: 22, right: 28, bottom: 36, left: 38 };
+  const plotWidth = chartWidth - padding.left - padding.right;
+  const plotHeight = chartHeight - padding.top - padding.bottom;
+  const bottom = padding.top + plotHeight;
+  const step = points.length > 1 ? plotWidth / (points.length - 1) : 0;
+  const barWidth = clamp(points.length ? plotWidth / points.length * 0.34 : 22, 14, 28);
+  const xFor = (index: number) => padding.left + (points.length > 1 ? index * step : plotWidth / 2);
+  const yFor = (value: number) => bottom - (value / maxValue) * plotHeight;
+  const timeLinePoints = points.map((point, index) => `${xFor(index)},${yFor(point.timeHours)}`).join(" ");
+  const showTooltip = (point: TrendPoint, event: ReactMouseEvent<SVGElement>) => {
+    setTooltip({ point, ...getTrendTooltipPosition(event) });
+  };
 
   return (
     <section className="dashboard-card trend-card">
-      <CardHeading icon={Activity} meta="当量 / 记录" title="工作量趋势" tone="cyan" />
-      <div className="trend-bars">
-        {points.map((point) => {
-          const countHeight = Math.max(3, (point.count / maxValue) * 100);
-          const workloadHeight = Math.max(3, (point.workload / maxValue) * 100);
-          const timeHeight = Math.max(3, (point.timeHours / maxValue) * 100);
-          return (
-            <div className="trend-point" key={point.key}>
-              <div className="trend-bar-pair">
-                <i className="workload" style={{ height: `${workloadHeight}%` }} title={`当量 ${formatMetric(point.workload)}`} />
-                <i className="time" style={{ height: `${timeHeight}%` }} title={`时间 ${formatMetric(point.timeHours)}h`} />
-                <i className="count" style={{ height: `${countHeight}%` }} title={`记录 ${point.count}`} />
-              </div>
-              <span>{point.label}</span>
-            </div>
-          );
-        })}
-        {!points.length && <div className="empty-state">暂无趋势数据。</div>}
+      <CardHeading icon={Activity} meta="当量 / 时间" title="工作量趋势" tone="cyan" />
+      <div className="trend-combo-chart" onMouseLeave={() => setTooltip(null)}>
+        {points.length ? (
+          <svg className="trend-combo-svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="工作量趋势柱线组合图">
+            {[0, 0.25, 0.5, 0.75, 1].map((scale) => {
+              const y = padding.top + plotHeight * scale;
+              return (
+                <line
+                  className="trend-grid-line"
+                  key={scale}
+                  x1={padding.left}
+                  x2={chartWidth - padding.right}
+                  y1={y}
+                  y2={y}
+                />
+              );
+            })}
+            {points.map((point, index) => {
+              const x = xFor(index);
+              const workloadY = yFor(point.workload);
+              return (
+                <g key={point.key}>
+                  <rect
+                    className="trend-workload-bar"
+                    height={Math.max(3, bottom - workloadY)}
+                    rx="7"
+                    width={barWidth}
+                    x={x - barWidth / 2}
+                    y={workloadY}
+                    onMouseEnter={(event) => showTooltip(point, event)}
+                    onMouseMove={(event) => showTooltip(point, event)}
+                  >
+                    <title>{`${point.label}：当量 ${formatMetric(point.workload)}，时间 ${formatMetric(point.timeHours)}h`}</title>
+                  </rect>
+                  <rect
+                    className="trend-hit-zone"
+                    height={plotHeight}
+                    width={Math.max(28, barWidth + 18)}
+                    x={x - Math.max(28, barWidth + 18) / 2}
+                    y={padding.top}
+                    onMouseEnter={(event) => showTooltip(point, event)}
+                    onMouseMove={(event) => showTooltip(point, event)}
+                  />
+                  <text className="trend-label" x={x} y={chartHeight - 10} textAnchor="middle">
+                    {point.label}
+                  </text>
+                </g>
+              );
+            })}
+            <polyline className="trend-time-line" points={timeLinePoints} />
+            {points.map((point, index) => {
+              const x = xFor(index);
+              const y = yFor(point.timeHours);
+              return (
+                <circle
+                  className="trend-time-dot"
+                  cx={x}
+                  cy={y}
+                  key={`${point.key}-time`}
+                  r="4"
+                  onMouseEnter={(event) => showTooltip(point, event)}
+                  onMouseMove={(event) => showTooltip(point, event)}
+                />
+              );
+            })}
+          </svg>
+        ) : (
+          <div className="empty-state">暂无趋势数据。</div>
+        )}
+        {tooltip && (
+          <div
+            className="trend-tooltip"
+            style={{ "--tooltip-x": `${tooltip.x}px`, "--tooltip-y": `${tooltip.y}px` } as CSSProperties}
+          >
+            <strong>{tooltip.point.label}</strong>
+            <span>当量 {formatMetric(tooltip.point.workload)}</span>
+            <span>时间 {formatMetric(tooltip.point.timeHours)}h</span>
+          </div>
+        )}
       </div>
       <div className="trend-legend">
         <span><i className="workload" />当量</span>
         <span><i className="time" />时间</span>
-        <span><i className="count" />记录</span>
       </div>
     </section>
   );
@@ -528,7 +682,7 @@ function ProjectRank({ projects }: { projects: ProjectSummary[] }) {
   const maxValue = Math.max(1, ...projects.map((project) => Math.max(project.count, project.workload)));
 
   return (
-    <section className="dashboard-card">
+    <section className="dashboard-card project-rank-card">
       <CardHeading icon={BriefcaseBusiness} meta={`${projects.length} 个项目`} title="项目工作量排行" tone="purple" />
       <div className="project-rank-list">
         {projects.slice(0, 8).map((project, index) => {
@@ -722,23 +876,34 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
       </section>
 
       <section className="dashboard-grid mixed">
-        <BusinessCategoryDonut items={analysis.businessDistribution} />
-        <AbilityRadarChart items={analysis.abilityDistribution} />
-        <FocusRank items={analysis.focusRankings} settings={settings} />
-        <WorkTypeProfileChart items={analysis.workTypeDistribution} />
-        <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} />
-        <TrendChart points={trend} />
-        <ProjectRank projects={analysis.projectSummaries} />
-        <ProductMatrix items={analysis.productDistribution} />
-        <section className="dashboard-card insight-card">
-          <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" />
-          <div className="insight-lines">
-            <p>项目投入集中在 <strong>{analysis.projectSummaries[0]?.projectName ?? "暂无项目"}</strong></p>
-            <p>主要业务方向为 <strong>{analysis.topBusinessLabel}</strong></p>
-            <p>主要工作类型为 <strong>{analysis.topWorkTypeLabel}</strong></p>
-            <p>能力投入集中在 <strong>{analysis.abilityDistribution[0]?.label ?? "暂无能力维度"}</strong></p>
-          </div>
-        </section>
+        <div className="dashboard-row dashboard-row-three">
+          <BusinessCategoryDonut items={analysis.businessDistribution} />
+          <TrendChart points={trend} />
+          <ProjectRank projects={analysis.projectSummaries} />
+        </div>
+
+        <div className="dashboard-row dashboard-row-two dashboard-row-ability">
+          <AbilityRadarChart items={analysis.abilityDistribution} />
+          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} />
+        </div>
+
+        <div className="dashboard-row dashboard-row-two">
+          <WorkTypeProfileChart items={analysis.workTypeDistribution} />
+          <ProductMatrix items={analysis.productDistribution} />
+        </div>
+
+        <div className="dashboard-row dashboard-row-two dashboard-row-focus">
+          <FocusRank items={analysis.focusRankings} settings={settings} />
+          <section className="dashboard-card insight-card">
+            <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" />
+            <div className="insight-lines">
+              <p>项目投入集中在 <strong>{analysis.projectSummaries[0]?.projectName ?? "暂无项目"}</strong></p>
+              <p>主要业务方向为 <strong>{analysis.topBusinessLabel}</strong></p>
+              <p>主要工作类型为 <strong>{analysis.topWorkTypeLabel}</strong></p>
+              <p>能力投入集中在 <strong>{analysis.abilityDistribution[0]?.label ?? "暂无能力维度"}</strong></p>
+            </div>
+          </section>
+        </div>
       </section>
 
       <ProjectCards projects={analysis.projectSummaries} />
