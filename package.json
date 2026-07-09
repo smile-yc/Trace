@@ -12,7 +12,7 @@
     "dev": "concurrently -n backend,frontend -c gold,cyan \"pnpm --filter @trace-report/backend dev\" \"pnpm --filter @trace-report/frontend dev\"",
     "build": "pnpm --filter @trace-report/backend build && pnpm --filter @trace-report/frontend build",
     "typecheck": "pnpm --filter @trace-report/backend typecheck && pnpm --filter @trace-report/frontend typecheck",
-    "test": "node --test --experimental-strip-types --experimental-specifier-resolution=node backend/test/configDeletion.test.ts backend/test/validation.test.ts frontend/test/abilityDimensions.test.ts frontend/test/configOptionDrafts.test.ts frontend/test/dashboard.test.ts frontend/test/growthReview.test.ts frontend/test/recordFormState.test.ts frontend/test/styles.test.ts",
+    "test": "node --test --experimental-strip-types --experimental-specifier-resolution=node backend/test/configDeletion.test.ts backend/test/validation.test.ts frontend/test/abilityDimensions.test.ts frontend/test/appToast.test.ts frontend/test/configOptionDrafts.test.ts frontend/test/dashboard.test.ts frontend/test/growthReview.test.ts frontend/test/recordFormState.test.ts frontend/test/styles.test.ts",
     "start": "pnpm --filter @trace-report/backend start"
   },
   "devDependencies": {

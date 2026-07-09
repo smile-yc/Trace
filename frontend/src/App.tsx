@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { EditModal } from "./components/EditModal";
 import { ReportModal } from "./components/ReportModal";
 import { Sidebar } from "./components/Sidebar";
@@ -22,10 +22,18 @@ export function App() {
   const [report, setReport] = useState<ReportBundle | null>(null);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   function showToast(message: string): void {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
     setToast(message);
-    window.setTimeout(() => setToast(null), 2400);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 2400);
   }
 
   async function handleAdd(input: RecordInput): Promise<void> {
