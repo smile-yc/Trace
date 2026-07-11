@@ -16,9 +16,12 @@ test("new record form leaves configurable fields empty until config defaults loa
   assert.equal(getInitialOptionFieldValue("传统业务"), "传统业务");
   assert.match(
     recordFormSource,
-    /useState<BusinessCategory>\([\s\S]*getInitialOptionFieldValue\(record\?\.businessCategory\)[\s\S]*\)/
+    /useState<BusinessCategory>\([\s\S]*getInitialOptionFieldValue\(record\?\.businessCategory \?\? savedDraft\?\.businessCategory\)[\s\S]*\)/
   );
-  assert.equal(recordFormSource.includes("useState(getInitialOptionFieldValue(record?.workType))"), true);
+  assert.equal(
+    recordFormSource.includes("useState(getInitialOptionFieldValue(record?.workType ?? savedDraft?.workType))"),
+    true
+  );
 });
 
 test("new record reset keeps matched standard coefficient for continuous entry", () => {

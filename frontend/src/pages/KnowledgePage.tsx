@@ -4,6 +4,7 @@ import { PageHeader } from "../components/PageHeader";
 import { StatCards } from "../components/StatCards";
 import { createKnowledgeAsset, fetchKnowledgeAssets, updateKnowledgeAssetApi } from "../lib/knowledgeApi";
 import { summarizeKnowledgeAssets } from "../lib/growthReview";
+import { filterKnowledgeRecordOptions } from "../lib/recordFilters";
 import type { KnowledgeAsset, KnowledgeAssetStatus, WorkRecord } from "../types";
 
 interface KnowledgePageProps {
@@ -43,16 +44,14 @@ const statusLabels: Record<KnowledgeAssetStatus, string> = {
   archived: "已归档"
 };
 
-function newestRecords(records: WorkRecord[]): WorkRecord[] {
-  return records.slice().sort((a, b) => b.date.localeCompare(a.date) || b.createTime - a.createTime).slice(0, 40);
-}
-
 export function KnowledgePage({ records, onNotify }: KnowledgePageProps) {
   const [assets, setAssets] = useState<KnowledgeAsset[]>([]);
   const [draft, setDraft] = useState<KnowledgeDraft>(emptyDraft);
   const [assetDrafts, setAssetDrafts] = useState<Record<string, Pick<KnowledgeAsset, "status" | "remark">>>({});
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [recordStartDate, setRecordStartDate] = useState("");
+  const [recordEndDate, setRecordEndDate] = useState("");
 
   async function loadAssets(): Promise<void> {
     try {
@@ -77,7 +76,10 @@ export function KnowledgePage({ records, onNotify }: KnowledgePageProps) {
   }, []);
 
   const assetSummary = useMemo(() => summarizeKnowledgeAssets(assets), [assets]);
-  const recordOptions = useMemo(() => newestRecords(records), [records]);
+  const recordOptions = useMemo(
+    () => filterKnowledgeRecordOptions(records, { startDate: recordStartDate, endDate: recordEndDate, defaultLimit: 15 }),
+    [records, recordStartDate, recordEndDate]
+  );
 
   function selectSourceRecord(recordId: string): void {
     const record = records.find((item) => item.id === recordId);
@@ -173,9 +175,17 @@ export function KnowledgePage({ records, onNotify }: KnowledgePageProps) {
             </select>
           </label>
           <label>
+            <span>开始日期</span>
+            <input type="date" value={recordStartDate} onChange={(event) => setRecordStartDate(event.target.value)} />
+          </label>
+          <label>
+            <span>结束日期</span>
+            <input type="date" value={recordEndDate} onChange={(event) => setRecordEndDate(event.target.value)} />
+          </label>
+          <label>
             <span>关联日报</span>
-            <select value={draft.sourceRecordId} onChange={(event) => selectSourceRecord(event.target.value)}>
-              <option value="">不关联</option>
+            <select disabled={!recordOptions.length} value={draft.sourceRecordId} onChange={(event) => selectSourceRecord(event.target.value)}>
+              <option value="">{recordOptions.length ? "不关联" : "无匹配日报"}</option>
               {recordOptions.map((record) => (
                 <option key={record.id} value={record.id}>
                   {record.date} {record.title}

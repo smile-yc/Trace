@@ -481,6 +481,36 @@ textarea:focus-visible {
   gap: 14px;
 }
 
+.record-form-actions,
+.archive-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.record-form-actions .primary-button {
+  margin-left: auto;
+}
+
+.archive-filter-row label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 730;
+}
+
+.archive-filter-row select,
+.archive-filter-row input {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 10px;
+}
+
 .form-section {
   display: grid;
   gap: 11px;

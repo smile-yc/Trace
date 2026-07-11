@@ -156,7 +156,7 @@ export function App() {
       return <SettingsPage onNotify={showToast} />;
     }
 
-    return <DailyPage records={records} onAdd={handleAdd} onEdit={setEditingRecord} onDelete={handleDelete} />;
+    return <DailyPage records={records} onAdd={handleAdd} onEdit={setEditingRecord} onDelete={handleDelete} onNotify={showToast} />;
   }
 
   return (

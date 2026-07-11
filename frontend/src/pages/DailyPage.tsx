@@ -13,9 +13,10 @@ interface DailyPageProps {
   onAdd: (input: RecordInput) => void | Promise<void>;
   onEdit: (record: WorkRecord) => void;
   onDelete: (record: WorkRecord) => void | Promise<void>;
+  onNotify: (message: string) => void;
 }
 
-export function DailyPage({ records, onAdd, onEdit, onDelete }: DailyPageProps) {
+export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify }: DailyPageProps) {
   const [date, setDate] = useState(todayKey());
   const dailyRecords = useMemo(() => filterByDate(records, date), [records, date]);
   const stats = useMemo(() => {
@@ -70,7 +71,7 @@ export function DailyPage({ records, onAdd, onEdit, onDelete }: DailyPageProps) 
         <div className="panel-heading">
           <h2>快速记录</h2>
         </div>
-        <RecordForm key={date} initialDate={date} onSubmit={handleAdd} />
+        <RecordForm key={date} initialDate={date} onSubmit={handleAdd} onNotify={onNotify} />
       </section>
 
       <section className="panel">

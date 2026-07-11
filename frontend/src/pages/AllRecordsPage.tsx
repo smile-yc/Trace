@@ -7,7 +7,9 @@ import { TagPill } from "../components/TagPill";
 import type { WorkRecord } from "../types";
 import { buildJsonBackup } from "../lib/storage";
 import { downloadText } from "../lib/download";
-import { countUniqueTags, getAllTags, sortRecordsDesc, splitTags } from "../lib/records";
+import { todayKey } from "../lib/date";
+import { filterArchivedRecords, type ArchiveMode } from "../lib/recordFilters";
+import { countUniqueTags, getAllTags } from "../lib/records";
 
 interface AllRecordsPageProps {
   records: WorkRecord[];
@@ -25,11 +27,37 @@ export function AllRecordsPage({
   onGenerateReport
 }: AllRecordsPageProps) {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [archiveMode, setArchiveMode] = useState<ArchiveMode>(null);
+  const [archivePeriod, setArchivePeriod] = useState("");
   const tags = useMemo(() => getAllTags(records), [records]);
-  const visibleRecords = useMemo(() => {
-    if (!selectedTag) return sortRecordsDesc(records);
-    return sortRecordsDesc(records.filter((record) => splitTags(record.tags).includes(selectedTag)));
-  }, [records, selectedTag]);
+  const visibleRecords = useMemo(
+    () => filterArchivedRecords(records, { mode: archiveMode, period: archivePeriod, selectedTag, today: todayKey() }),
+    [records, archiveMode, archivePeriod, selectedTag]
+  );
+
+  function defaultPeriod(mode: Exclude<ArchiveMode, null>): string {
+    const today = todayKey();
+    if (mode === "month") return today.slice(0, 7);
+    if (mode === "year") return today.slice(0, 4);
+    const date = new Date(`${today}T00:00:00`);
+    const thursday = new Date(date);
+    thursday.setDate(date.getDate() + 4 - (date.getDay() || 7));
+    const yearStart = new Date(thursday.getFullYear(), 0, 1);
+    const week = Math.ceil((((thursday.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${thursday.getFullYear()}-W${String(week).padStart(2, "0")}`;
+  }
+
+  function selectArchiveMode(value: string): void {
+    const mode = (value || null) as ArchiveMode;
+    setArchiveMode(mode);
+    setArchivePeriod(mode ? defaultPeriod(mode) : "");
+  }
+
+  function clearFilters(): void {
+    setSelectedTag(null);
+    setArchiveMode(null);
+    setArchivePeriod("");
+  }
 
   const handleJsonExport = () => {
     const stamp = new Date().toISOString().slice(0, 10);
@@ -39,7 +67,7 @@ export function AllRecordsPage({
   const handleClear = async () => {
     if (window.confirm("确认清空所有记录吗？此操作无法撤销。")) {
       await onClear();
-      setSelectedTag(null);
+      clearFilters();
     }
   };
 
@@ -48,7 +76,7 @@ export function AllRecordsPage({
       <PageHeader
         eyebrow="All Records"
         title="全部记录"
-        description={selectedTag ? `正在筛选：${selectedTag}` : "按日期倒序展示所有历史记录"}
+        description={selectedTag || archiveMode ? "按归档周期与标签组合筛选" : "默认显示当前周记录"}
         actions={
           <>
             <button className="ghost-button" onClick={handleJsonExport} type="button">
@@ -74,6 +102,32 @@ export function AllRecordsPage({
           { label: "标签总数", value: countUniqueTags(records) }
         ]}
       />
+
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>时间归档</h2>
+          {(archiveMode || selectedTag) && (
+            <button className="inline-clear" onClick={clearFilters} type="button">
+              <X size={14} />
+              清除全部筛选
+            </button>
+          )}
+        </div>
+        <div className="archive-filter-row">
+          <label>
+            <span>归档方式</span>
+            <select value={archiveMode ?? ""} onChange={(event) => selectArchiveMode(event.target.value)}>
+              <option value="">默认当前周</option>
+              <option value="week">按周</option>
+              <option value="month">按月</option>
+              <option value="year">按年</option>
+            </select>
+          </label>
+          {archiveMode === "week" && <input aria-label="选择周" type="week" value={archivePeriod} onChange={(event) => setArchivePeriod(event.target.value)} />}
+          {archiveMode === "month" && <input aria-label="选择月份" type="month" value={archivePeriod} onChange={(event) => setArchivePeriod(event.target.value)} />}
+          {archiveMode === "year" && <input aria-label="选择年份" min="2000" max="2100" type="number" value={archivePeriod} onChange={(event) => setArchivePeriod(event.target.value)} />}
+        </div>
+      </section>
 
       <section className="panel">
         <div className="panel-heading">
@@ -103,7 +157,7 @@ export function AllRecordsPage({
         </div>
         <RecordList
           records={visibleRecords}
-          emptyText={selectedTag ? "当前标签下暂无记录。" : "还没有任何记录。"}
+          emptyText={selectedTag || archiveMode ? "当前筛选条件下暂无记录。" : "当前周暂无记录。"}
           onEdit={onEdit}
           onDelete={onDelete}
         />

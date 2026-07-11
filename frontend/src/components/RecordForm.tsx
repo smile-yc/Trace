@@ -17,6 +17,7 @@ import {
   type ConfigOptionValues
 } from "../lib/configOptionDrafts";
 import { todayKey } from "../lib/date";
+import { clearRecordDraft, loadRecordDraft, saveRecordDraft, type RecordDraft } from "../lib/recordDraft";
 import { getInitialOptionFieldValue, getPostSubmitCoefficientValue } from "../lib/recordFormState";
 import { matchWorkloadStandard } from "../lib/workloadApi";
 import type {
@@ -34,6 +35,7 @@ interface RecordFormProps {
   record?: WorkRecord;
   compact?: boolean;
   onSubmit: (input: RecordInput) => void | Promise<void>;
+  onNotify?: (message: string) => void;
 }
 
 type FallbackOptions = Record<ConfigOptionType, string[]>;
@@ -296,29 +298,34 @@ function AbilityMultiSelectField({
   );
 }
 
-export function RecordForm({ initialDate, record, compact = false, onSubmit }: RecordFormProps) {
+export function RecordForm({ initialDate, record, compact = false, onSubmit, onNotify }: RecordFormProps) {
+  const savedDraft = !record && typeof window !== "undefined" ? loadRecordDraft(window.localStorage) : null;
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>([]);
   const [configError, setConfigError] = useState<string | null>(null);
   const [configPersistenceSelections, setConfigPersistenceSelections] =
     useState<ConfigOptionPersistenceSelections>({});
-  const [title, setTitle] = useState(record?.title ?? "");
-  const [date, setDate] = useState(record?.date ?? initialDate ?? todayKey());
+  const [title, setTitle] = useState(record?.title ?? savedDraft?.title ?? "");
+  const [date, setDate] = useState(record?.date ?? savedDraft?.date ?? initialDate ?? todayKey());
   const [businessCategory, setBusinessCategory] = useState<BusinessCategory>(
-    getInitialOptionFieldValue(record?.businessCategory)
+    getInitialOptionFieldValue(record?.businessCategory ?? savedDraft?.businessCategory)
   );
-  const [workType, setWorkType] = useState(getInitialOptionFieldValue(record?.workType));
-  const [abilityDimension, setAbilityDimension] = useState(record?.abilityDimension ?? "");
-  const [projectName, setProjectName] = useState(record?.projectName ?? "");
-  const [productSystem, setProductSystem] = useState(record?.productSystem ?? "");
-  const [subtask, setSubtask] = useState(record?.subtask ?? "");
-  const [quantity, setQuantity] = useState(formatOptionalNumber(record?.quantity));
-  const [coefficient, setCoefficient] = useState(formatOptionalNumber(record?.coefficient));
+  const [workType, setWorkType] = useState(getInitialOptionFieldValue(record?.workType ?? savedDraft?.workType));
+  const [abilityDimension, setAbilityDimension] = useState(record?.abilityDimension ?? savedDraft?.abilityDimension ?? "");
+  const [projectName, setProjectName] = useState(record?.projectName ?? savedDraft?.projectName ?? "");
+  const [productSystem, setProductSystem] = useState(record?.productSystem ?? savedDraft?.productSystem ?? "");
+  const [subtask, setSubtask] = useState(record?.subtask ?? savedDraft?.subtask ?? "");
+  const [quantity, setQuantity] = useState(record ? formatOptionalNumber(record.quantity) : savedDraft?.quantity ?? "");
+  const [coefficient, setCoefficient] = useState(record ? formatOptionalNumber(record.coefficient) : savedDraft?.coefficient ?? "");
   const [coefficientTouched, setCoefficientTouched] = useState(Boolean(record?.coefficient));
-  const [workload, setWorkload] = useState(formatOptionalNumber(record?.workload));
-  const [timeHours, setTimeHours] = useState(formatOptionalNumber(record?.timeHours));
+  const [workload, setWorkload] = useState(record ? formatOptionalNumber(record.workload) : savedDraft?.workload ?? "");
+  const [timeHours, setTimeHours] = useState(record ? formatOptionalNumber(record.timeHours) : savedDraft?.timeHours ?? "");
   const [matchedStandard, setMatchedStandard] = useState<WorkloadStandard | null>(null);
-  const [tags, setTags] = useState(record?.tags ?? "");
-  const [content, setContent] = useState(record?.content ?? "");
+  const [tags, setTags] = useState(record?.tags ?? savedDraft?.tags ?? "");
+  const [content, setContent] = useState(record?.content ?? savedDraft?.content ?? "");
+
+  useEffect(() => {
+    if (!record && savedDraft) onNotify?.("已恢复日报草稿");
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -394,6 +401,46 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
     setConfigPersistenceSelections((current) => ({ ...current, [key]: checked }));
   }
 
+  function currentDraft(): RecordDraft {
+    return {
+      version: 1, date, title, businessCategory, workType, abilityDimension, projectName, productSystem,
+      subtask, quantity, coefficient, workload, timeHours, tags, content
+    };
+  }
+
+  function handleSaveDraft(): void {
+    try {
+      saveRecordDraft(window.localStorage, currentDraft());
+      onNotify?.("日报草稿已保存");
+    } catch {
+      onNotify?.("日报草稿保存失败");
+    }
+  }
+
+  function handleClearDraft(): void {
+    try {
+      clearRecordDraft(window.localStorage);
+      setTitle("");
+      setBusinessCategory("");
+      setWorkType("");
+      setAbilityDimension("");
+      setProjectName("");
+      setProductSystem("");
+      setSubtask("");
+      setQuantity("");
+      setCoefficient("");
+      setCoefficientTouched(false);
+      setWorkload("");
+      setTimeHours("");
+      setTags("");
+      setContent("");
+      setDate(initialDate ?? todayKey());
+      onNotify?.("日报草稿已清除");
+    } catch {
+      onNotify?.("日报草稿清除失败");
+    }
+  }
+
   async function persistCustomConfigOptions(values: ConfigOptionValues): Promise<void> {
     const inputs = collectPersistedConfigOptionInputs(
       configOptions,
@@ -458,6 +505,11 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
     await persistCustomConfigOptions(normalizedValues);
 
     if (!record) {
+      try {
+        clearRecordDraft(window.localStorage);
+      } catch {
+        onNotify?.("记录已保存，但草稿清除失败");
+      }
       const nextCoefficient = getPostSubmitCoefficientValue({
         coefficientTouched,
         matchedCoefficient: matchedStandard?.coefficient
@@ -650,10 +702,18 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit }: R
         </label>
       </div>
 
-      <button className="primary-button" type="submit">
-        {record ? <Save size={17} /> : <Plus size={17} />}
-        {record ? "保存修改" : "添加记录"}
-      </button>
+      <div className="record-form-actions">
+        {!record && (
+          <>
+            <button className="ghost-button" onClick={handleSaveDraft} type="button">保存草稿</button>
+            <button className="ghost-button" onClick={handleClearDraft} type="button">清除草稿</button>
+          </>
+        )}
+        <button className="primary-button" type="submit">
+          {record ? <Save size={17} /> : <Plus size={17} />}
+          {record ? "保存修改" : "添加记录"}
+        </button>
+      </div>
     </form>
   );
 }
