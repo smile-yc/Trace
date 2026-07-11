@@ -1,6 +1,8 @@
 import type { WorkRecord } from "../types";
 
 export type ArchiveMode = "week" | "month" | "year" | null;
+export type ReportDetailMode = "week" | "month";
+export type ReportType = "month" | "year";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 const toDateKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -17,6 +19,15 @@ function getWeekRange(dateKey: string): { start: string; end: string } {
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   return { start: toDateKey(start), end: toDateKey(end) };
+}
+
+function getIsoWeekKey(dateKey: string): string {
+  const date = parseDateKey(dateKey);
+  const thursday = new Date(date);
+  thursday.setDate(date.getDate() + 4 - (date.getDay() || 7));
+  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  const week = Math.ceil((((thursday.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${thursday.getFullYear()}-W${pad(week)}`;
 }
 
 function sortRecordsDesc(records: WorkRecord[]): WorkRecord[] {
@@ -83,4 +94,34 @@ export function filterArchivedRecords(records: WorkRecord[], filter: ArchiveReco
       ? null
       : getWeekRange(filter.today);
   return sortRecordsDesc(range ? tagFiltered.filter((record) => inRange(record.date, range.start, range.end)) : tagFiltered);
+}
+
+export function getDefaultReportDetailPeriod(
+  reportType: ReportType,
+  reportKey: string,
+  mode: ReportDetailMode,
+  today: string
+): string {
+  if (mode === "month") {
+    return reportType === "year" && reportKey === today.slice(0, 4) ? today.slice(0, 7) : `${reportKey.slice(0, 4)}-01`;
+  }
+  const currentKey = reportType === "month" ? today.slice(0, 7) : today.slice(0, 4);
+  const reportStart = reportType === "month" ? `${reportKey}-01` : `${reportKey}-01-01`;
+  const anchor = reportKey === currentKey ? today : reportStart;
+  return getIsoWeekKey(anchor);
+}
+
+export function filterReportDetailRecords(
+  records: WorkRecord[],
+  reportRange: { start: string; end: string },
+  mode: ReportDetailMode,
+  period: string,
+  fallbackPeriod: string
+): WorkRecord[] {
+  const detailRange = getArchiveRange(mode, period) ?? getArchiveRange(mode, fallbackPeriod);
+  if (!detailRange) return [];
+  const start = detailRange.start > reportRange.start ? detailRange.start : reportRange.start;
+  const end = detailRange.end < reportRange.end ? detailRange.end : reportRange.end;
+  if (start > end) return [];
+  return sortRecordsDesc(records.filter((record) => inRange(record.date, start, end)));
 }

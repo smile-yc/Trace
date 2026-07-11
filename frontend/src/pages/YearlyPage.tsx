@@ -11,7 +11,13 @@ import { buildYearMonthTrend, sumWorkload } from "../lib/dashboard";
 import { buildMonthlyReview, summarizeKnowledgeAssets, summarizeMilestones } from "../lib/growthReview";
 import { fetchKnowledgeAssets } from "../lib/knowledgeApi";
 import { fetchMilestones } from "../lib/milestoneApi";
-import { countActiveMonths, countUniqueTags, filterByRange, groupByMonth } from "../lib/records";
+import { countActiveMonths, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
+import {
+  filterReportDetailRecords,
+  getArchiveRange,
+  getDefaultReportDetailPeriod,
+  type ReportDetailMode
+} from "../lib/recordFilters";
 
 interface YearlyPageProps {
   records: WorkRecord[];
@@ -24,17 +30,42 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [assets, setAssets] = useState<KnowledgeAsset[]>([]);
   const range = useMemo(() => getYearRange(date), [date]);
+  const [detailMode, setDetailMode] = useState<ReportDetailMode>("week");
+  const [detailPeriod, setDetailPeriod] = useState(() =>
+    getDefaultReportDetailPeriod("year", todayKey().slice(0, 4), "week", todayKey())
+  );
+  const defaultDetailPeriod = useMemo(
+    () => getDefaultReportDetailPeriod("year", range.year, detailMode, todayKey()),
+    [range.year, detailMode]
+  );
   const yearlyRecords = useMemo(
     () => filterByRange(records, range.start, range.end),
     [records, range.start, range.end]
   );
-  const groups = useMemo(() => groupByMonth(yearlyRecords), [yearlyRecords]);
+  const detailRecords = useMemo(
+    () => filterReportDetailRecords(yearlyRecords, range, detailMode, detailPeriod, defaultDetailPeriod),
+    [yearlyRecords, range, detailMode, detailPeriod, defaultDetailPeriod]
+  );
+  const detailGroups = useMemo(() => groupByDate(detailRecords), [detailRecords]);
   const trend = useMemo(() => buildYearMonthTrend(yearlyRecords, range.year), [yearlyRecords, range.year]);
   const title = `${range.year}年年报`;
   const activeMonths = countActiveMonths(yearlyRecords);
   const yearlyReview = useMemo(() => buildMonthlyReview(yearlyRecords, milestones, assets), [yearlyRecords, milestones, assets]);
   const milestoneSummaries = useMemo(() => summarizeMilestones(milestones), [milestones]);
   const assetSummary = useMemo(() => summarizeKnowledgeAssets(assets), [assets]);
+  const detailRange = getArchiveRange(detailMode, detailPeriod || defaultDetailPeriod);
+  const detailStart = detailRange && detailRange.start > range.start ? detailRange.start : range.start;
+  const detailEnd = detailRange && detailRange.end < range.end ? detailRange.end : range.end;
+
+  useEffect(() => {
+    setDetailMode("week");
+    setDetailPeriod(getDefaultReportDetailPeriod("year", range.year, "week", todayKey()));
+  }, [range.year]);
+
+  function selectDetailMode(mode: ReportDetailMode): void {
+    setDetailMode(mode);
+    setDetailPeriod(getDefaultReportDetailPeriod("year", range.year, mode, todayKey()));
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -127,9 +158,23 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
       <section className="panel">
         <div className="panel-heading">
           <h2>原始明细</h2>
-          <span>{yearlyRecords.length} 条</span>
+          <span>{detailRecords.length} 条 · {detailStart} - {detailEnd}</span>
         </div>
-        <SummaryGroups groups={groups} emptyText="全年暂无记录。" groupType="month" />
+        <div className="report-detail-archive">
+          <label>
+            <span>归档方式</span>
+            <select value={detailMode} onChange={(event) => selectDetailMode(event.target.value as ReportDetailMode)}>
+              <option value="week">按周</option>
+              <option value="month">按月</option>
+            </select>
+          </label>
+          {detailMode === "week" ? (
+            <input aria-label="选择明细周" type="week" value={detailPeriod} onChange={(event) => setDetailPeriod(event.target.value)} />
+          ) : (
+            <input aria-label="选择明细月份" min={`${range.year}-01`} max={`${range.year}-12`} type="month" value={detailPeriod} onChange={(event) => setDetailPeriod(event.target.value)} />
+          )}
+        </div>
+        <SummaryGroups groups={detailGroups} emptyText={detailMode === "week" ? "该周暂无记录。" : "该月暂无记录。"} />
       </section>
     </>
   );

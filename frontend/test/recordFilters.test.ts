@@ -3,12 +3,19 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { filterArchivedRecords, filterKnowledgeRecordOptions } from "../src/lib/recordFilters.ts";
+import {
+  filterArchivedRecords,
+  filterKnowledgeRecordOptions,
+  filterReportDetailRecords,
+  getDefaultReportDetailPeriod
+} from "../src/lib/recordFilters.ts";
 import type { WorkRecord } from "../src/types.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const knowledgeSource = readFileSync(resolve(__dirname, "../src/pages/KnowledgePage.tsx"), "utf8");
 const allRecordsSource = readFileSync(resolve(__dirname, "../src/pages/AllRecordsPage.tsx"), "utf8");
+const monthlySource = readFileSync(resolve(__dirname, "../src/pages/MonthlyPage.tsx"), "utf8");
+const yearlySource = readFileSync(resolve(__dirname, "../src/pages/YearlyPage.tsx"), "utf8");
 
 function record(id: string, date: string, tags = "", createTime = 1): WorkRecord {
   return {
@@ -51,6 +58,38 @@ test("tag-only filtering includes history and composes with an archive", () => {
   assert.deepEqual(filterArchivedRecords(records, { mode: "month", period: "2026-07", selectedTag: "alpha", today: "2026-07-11" }).map(({ id }) => id), ["match"]);
 });
 
+test("report detail defaults use current periods and historical period starts", () => {
+  assert.equal(getDefaultReportDetailPeriod("month", "2026-07", "week", "2026-07-11"), "2026-W28");
+  assert.equal(getDefaultReportDetailPeriod("month", "2026-06", "week", "2026-07-11"), "2026-W23");
+  assert.equal(getDefaultReportDetailPeriod("year", "2026", "week", "2026-07-11"), "2026-W28");
+  assert.equal(getDefaultReportDetailPeriod("year", "2025", "week", "2026-07-11"), "2025-W01");
+  assert.equal(getDefaultReportDetailPeriod("year", "2026", "month", "2026-07-11"), "2026-07");
+  assert.equal(getDefaultReportDetailPeriod("year", "2025", "month", "2026-07-11"), "2025-01");
+});
+
+test("report detail filtering clips periods to report boundaries and falls back from empty input", () => {
+  const records = [
+    record("before-month", "2026-05-31"),
+    record("month-start", "2026-06-01"),
+    record("month-week", "2026-06-07"),
+    record("after-week", "2026-06-08"),
+    record("year-start", "2025-01-01"),
+    record("previous-year", "2024-12-30")
+  ];
+  assert.deepEqual(
+    filterReportDetailRecords(records, { start: "2026-06-01", end: "2026-06-30" }, "week", "2026-W23", "2026-W23").map(({ id }) => id),
+    ["month-week", "month-start"]
+  );
+  assert.deepEqual(
+    filterReportDetailRecords(records, { start: "2025-01-01", end: "2025-12-31" }, "week", "2025-W01", "2025-W01").map(({ id }) => id),
+    ["year-start"]
+  );
+  assert.deepEqual(
+    filterReportDetailRecords(records, { start: "2026-06-01", end: "2026-06-30" }, "week", "", "2026-W23").map(({ id }) => id),
+    ["month-week", "month-start"]
+  );
+});
+
 test("knowledge page renders date bounds and an empty linked-record state", () => {
   assert.equal(knowledgeSource.includes('type="date"'), true);
   assert.equal(knowledgeSource.includes("开始日期"), true);
@@ -65,4 +104,22 @@ test("all records page exposes archive modes and filters report generation scope
   assert.equal(allRecordsSource.includes("按年"), true);
   assert.equal(allRecordsSource.includes("filterArchivedRecords"), true);
   assert.match(allRecordsSource, /onGenerateReport\(visibleRecords/);
+});
+
+test("monthly page archives only raw details by week", () => {
+  assert.equal(monthlySource.includes('type="week"'), true);
+  assert.equal(monthlySource.includes("filterReportDetailRecords"), true);
+  assert.match(monthlySource, /SummaryGroups groups=\{detailGroups\}/);
+  assert.match(monthlySource, /onGenerateReport\(monthlyRecords/);
+  assert.match(monthlySource, /records=\{monthlyRecords\}[\s\S]*periodType="month"/);
+});
+
+test("yearly page archives only raw details by week or month", () => {
+  assert.equal(yearlySource.includes('value="week"'), true);
+  assert.equal(yearlySource.includes('value="month"'), true);
+  assert.equal(yearlySource.includes('type="week"'), true);
+  assert.equal(yearlySource.includes('type="month"'), true);
+  assert.match(yearlySource, /SummaryGroups groups=\{detailGroups\}/);
+  assert.match(yearlySource, /onGenerateReport\(yearlyRecords/);
+  assert.match(yearlySource, /records=\{yearlyRecords\}[\s\S]*periodType="year"/);
 });

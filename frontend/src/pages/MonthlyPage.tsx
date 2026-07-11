@@ -12,6 +12,7 @@ import { buildGrowthWarnings, buildMonthlyReview } from "../lib/growthReview";
 import { fetchKnowledgeAssets } from "../lib/knowledgeApi";
 import { fetchMilestones } from "../lib/milestoneApi";
 import { countActiveDays, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
+import { filterReportDetailRecords, getArchiveRange, getDefaultReportDetailPeriod } from "../lib/recordFilters";
 import { DEFAULT_APP_SETTINGS, fetchSettings } from "../lib/settingsApi";
 
 interface MonthlyPageProps {
@@ -26,16 +27,38 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [assets, setAssets] = useState<KnowledgeAsset[]>([]);
   const range = useMemo(() => getMonthRange(date), [date]);
+  const defaultDetailWeek = useMemo(
+    () => getDefaultReportDetailPeriod("month", range.monthKey, "week", todayKey()),
+    [range.monthKey]
+  );
+  const [detailWeek, setDetailWeek] = useState(() =>
+    getDefaultReportDetailPeriod("month", todayKey().slice(0, 7), "week", todayKey())
+  );
   const monthlyRecords = useMemo(
     () => filterByRange(records, range.start, range.end),
     [records, range.start, range.end]
   );
-  const groups = useMemo(() => groupByDate(monthlyRecords), [monthlyRecords]);
+  const detailRecords = useMemo(
+    () => filterReportDetailRecords(monthlyRecords, range, "week", detailWeek, defaultDetailWeek),
+    [monthlyRecords, range, detailWeek, defaultDetailWeek]
+  );
+  const detailGroups = useMemo(() => groupByDate(detailRecords), [detailRecords]);
   const trend = useMemo(() => buildMonthWeekTrend(monthlyRecords, range.monthKey), [monthlyRecords, range.monthKey]);
   const title = `${formatMonthLabel(range.monthKey)}月报`;
   const activeDays = countActiveDays(monthlyRecords);
   const review = useMemo(() => buildMonthlyReview(monthlyRecords, milestones, assets), [monthlyRecords, milestones, assets]);
   const warnings = useMemo(() => buildGrowthWarnings(monthlyRecords, settings, range.end), [monthlyRecords, settings, range.end]);
+  const lastDetailWeek = useMemo(
+    () => getDefaultReportDetailPeriod("month", range.monthKey, "week", range.end),
+    [range.monthKey, range.end]
+  );
+  const detailRange = getArchiveRange("week", detailWeek || defaultDetailWeek);
+  const detailStart = detailRange && detailRange.start > range.start ? detailRange.start : range.start;
+  const detailEnd = detailRange && detailRange.end < range.end ? detailRange.end : range.end;
+
+  useEffect(() => {
+    setDetailWeek(defaultDetailWeek);
+  }, [defaultDetailWeek]);
 
   useEffect(() => {
     let ignore = false;
@@ -126,9 +149,15 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
       <section className="panel">
         <div className="panel-heading">
           <h2>原始明细</h2>
-          <span>{monthlyRecords.length} 条</span>
+          <span>{detailRecords.length} 条 · {detailStart} - {detailEnd}</span>
         </div>
-        <SummaryGroups groups={groups} emptyText="本月暂无记录。" />
+        <div className="report-detail-archive">
+          <label>
+            <span>按周归档</span>
+            <input min={defaultDetailWeek} max={lastDetailWeek} type="week" value={detailWeek} onChange={(event) => setDetailWeek(event.target.value)} />
+          </label>
+        </div>
+        <SummaryGroups groups={detailGroups} emptyText="该周暂无记录。" />
       </section>
     </>
   );

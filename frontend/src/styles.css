@@ -511,6 +511,32 @@ textarea:focus-visible {
   padding: 8px 10px;
 }
 
+.report-detail-archive {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.report-detail-archive label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 730;
+}
+
+.report-detail-archive input,
+.report-detail-archive select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 10px;
+}
+
 .form-section {
   display: grid;
   gap: 11px;
