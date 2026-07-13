@@ -6,7 +6,7 @@ export interface ParsedWorkloadStandardRow {
   productSystem: string;
   subtask: string;
   unit: string;
-  coefficient: number;
+  coefficient: number | null;
   remark: string;
 }
 
@@ -54,8 +54,8 @@ export async function parseWorkloadStandardWorkbook(buffer: Buffer): Promise<Par
       .map((field) => read(field as keyof ParsedWorkloadStandardRow));
     if (values.every((value) => !value)) return;
     const coefficientText = read("coefficient");
-    const coefficient = Number(coefficientText);
-    if (!coefficientText || !Number.isFinite(coefficient)) throw new Error("WORKLOAD_STANDARD_IMPORT_INVALID");
+    const parsedCoefficient = Number(coefficientText);
+    const coefficient = coefficientText && Number.isFinite(parsedCoefficient) ? parsedCoefficient : null;
     rows.push({
       businessCategory: read("businessCategory"),
       workType: read("workType"),

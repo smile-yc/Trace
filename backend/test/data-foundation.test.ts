@@ -204,7 +204,7 @@ test("record updates refresh provenance and replace ability allocations atomical
   assert.deepEqual(updated?.abilityAllocations.map((item: { abilityId: string }) => item.abilityId), ["management"]);
 });
 
-test("Excel parsing rejects blank and non-finite coefficients", async () => {
+test("Excel parsing preserves blank and non-finite coefficients for row-level preview errors", async () => {
   const { default: ExcelJS } = await import("exceljs");
   const { parseWorkloadStandardWorkbook } = await import("../src/core/workloadStandardImport.ts");
   const workbook = new ExcelJS.Workbook();
@@ -214,10 +214,12 @@ test("Excel parsing rejects blank and non-finite coefficients", async () => {
   sheet.addRow(["三新业务", "工程设计", "Infinity"]);
 
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-  await assert.rejects(
-    () => parseWorkloadStandardWorkbook(buffer),
-    /WORKLOAD_STANDARD_IMPORT_INVALID/
-  );
+  const rows = await parseWorkloadStandardWorkbook(buffer);
+  const preview = database.previewWorkloadStandardImport(rows);
+  assert.deepEqual(preview.rows.map((row: { status: string; rowNumber: number }) => ({ status: row.status, rowNumber: row.rowNumber })), [
+    { status: "invalid", rowNumber: 1 },
+    { status: "invalid", rowNumber: 2 }
+  ]);
 });
 
 test("import preview marks repeated keys inside the same workbook as conflicts", () => {
@@ -226,6 +228,22 @@ test("import preview marks repeated keys inside the same workbook as conflicts",
     { businessCategory: "三新业务", workType: "现场支持", coefficient: 2, unit: "项" }
   ]);
   assert.deepEqual(preview.rows.map((row: { status: string }) => row.status), ["conflict", "conflict"]);
+});
+
+test("import confirmation rejects duplicate file keys even with use-imported decisions", () => {
+  const before = database.listWorkloadStandardVersions().length;
+  assert.throws(
+    () => database.confirmWorkloadStandardImport({
+      name: "重复键导入版本",
+      rows: [
+        { businessCategory: "三新业务", workType: "现场质量检查", coefficient: 1, unit: "项" },
+        { businessCategory: "三新业务", workType: "现场质量检查", coefficient: 2, unit: "项" }
+      ],
+      conflictResolutions: { "1": "use_imported", "2": "use_imported" }
+    }),
+    /WORKLOAD_STANDARD_IMPORT_DUPLICATE_KEYS/
+  );
+  assert.equal(database.listWorkloadStandardVersions().length, before);
 });
 
 test("HTTP matching accepts versionId and returns both transition response shapes", async (t) => {

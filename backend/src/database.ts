@@ -999,7 +999,7 @@ export interface WorkloadStandardImportRow {
   productSystem?: string;
   subtask?: string;
   unit?: string;
-  coefficient: number;
+  coefficient: number | null;
   remark?: string;
 }
 
@@ -1035,11 +1035,12 @@ export function previewWorkloadStandardImport(rows: WorkloadStandardImportRow[])
     const key = [row.businessCategory, row.workType, row.productSystem, row.subtask].join("\u0000");
     keyRows.set(key, [...(keyRows.get(key) ?? []), row.rowNumber]);
   });
-  const conflictingRows = new Set(Array.from(keyRows.values()).filter((numbers) => numbers.length > 1).flat());
+  const duplicateKeyRowNumbers = Array.from(keyRows.values()).filter((numbers) => numbers.length > 1).flat();
+  const conflictingRows = new Set(duplicateKeyRowNumbers);
   previewRows.forEach((row) => {
     if (conflictingRows.has(row.rowNumber)) row.status = "conflict";
   });
-  return { baseVersionId: version?.id ?? null, rows: previewRows };
+  return { baseVersionId: version?.id ?? null, duplicateKeyRowNumbers, rows: previewRows };
 }
 
 export function confirmWorkloadStandardImport(input: {
@@ -1051,6 +1052,7 @@ export function confirmWorkloadStandardImport(input: {
 }): WorkloadStandardVersion {
   const preview = previewWorkloadStandardImport(input.rows);
   if (preview.rows.some((row) => row.status === "invalid")) throw new Error("WORKLOAD_STANDARD_IMPORT_INVALID");
+  if (preview.duplicateKeyRowNumbers.length > 0) throw new Error("WORKLOAD_STANDARD_IMPORT_DUPLICATE_KEYS");
   if (preview.rows.some((row) => row.status === "conflict" && !input.conflictResolutions?.[String(row.rowNumber)])) {
     throw new Error("WORKLOAD_STANDARD_IMPORT_CONFLICT_UNRESOLVED");
   }
