@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { EditModal } from "./components/EditModal";
 import { ReportModal } from "./components/ReportModal";
-import { Sidebar } from "./components/Sidebar";
+import { AppShell } from "./components/layout";
 import { AllRecordsPage } from "./pages/AllRecordsPage";
 import { DailyPage } from "./pages/DailyPage";
 import { GrowthPage } from "./pages/GrowthPage";
@@ -13,11 +13,12 @@ import { YearlyPage } from "./pages/YearlyPage";
 import { exportOffice } from "./lib/exportApi";
 import { generateTagReport } from "./lib/report";
 import { useRecords } from "./lib/useRecords";
-import type { ExportFormat, RecordInput, ReportBundle, ViewMode, WorkRecord } from "./types";
+import { createPageRegistry, getNavigationLabel, TRACE_NAVIGATION } from "./navigation";
+import type { ExportFormat, RecordInput, ReportBundle, WorkRecord } from "./types";
 
 export function App() {
   const { records, loading, error, addRecord, updateRecord, deleteRecord, clearRecords } = useRecords();
-  const [activeView, setActiveView] = useState<ViewMode>("daily");
+  const [activePageId, setActivePageId] = useState("daily");
   const [editingRecord, setEditingRecord] = useState<WorkRecord | null>(null);
   const [report, setReport] = useState<ReportBundle | null>(null);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
@@ -119,54 +120,52 @@ export function App() {
     }
   }
 
-  function renderPage() {
-    if (activeView === "weekly") {
-      return <WeeklyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} />;
-    }
-
-    if (activeView === "monthly") {
-      return <MonthlyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} />;
-    }
-
-    if (activeView === "yearly") {
-      return <YearlyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} />;
-    }
-
-    if (activeView === "growth") {
-      return <GrowthPage records={records} onNotify={showToast} />;
-    }
-
-    if (activeView === "knowledge") {
-      return <KnowledgePage records={records} onNotify={showToast} />;
-    }
-
-    if (activeView === "all") {
-      return (
-        <AllRecordsPage
-          records={records}
-          onEdit={setEditingRecord}
-          onDelete={handleDelete}
-          onClear={handleClear}
-          onGenerateReport={handleGenerateReport}
-        />
-      );
-    }
-
-    if (activeView === "settings") {
-      return <SettingsPage onNotify={showToast} />;
-    }
-
-    return <DailyPage records={records} onAdd={handleAdd} onEdit={setEditingRecord} onDelete={handleDelete} onNotify={showToast} />;
-  }
+  const pageRegistry = createPageRegistry({
+    defaultPageId: "daily",
+    pages: [
+      {
+        id: "daily",
+        label: "今日工作台",
+        group: "records",
+        render: () => (
+          <DailyPage records={records} onAdd={handleAdd} onEdit={setEditingRecord} onDelete={handleDelete} onNotify={showToast} />
+        )
+      },
+      {
+        id: "all",
+        label: "工作台账",
+        group: "records",
+        render: () => (
+          <AllRecordsPage
+            records={records}
+            onEdit={setEditingRecord}
+            onDelete={handleDelete}
+            onClear={handleClear}
+            onGenerateReport={handleGenerateReport}
+          />
+        )
+      },
+      { id: "weekly", label: "周报", group: "review", render: () => <WeeklyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} /> },
+      { id: "monthly", label: "月报", group: "review", render: () => <MonthlyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} /> },
+      { id: "yearly", label: "年报", group: "review", render: () => <YearlyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} /> },
+      { id: "growth", label: "成长与目标", group: "growth", render: () => <GrowthPage records={records} onNotify={showToast} /> },
+      { id: "knowledge", label: "成果管理", group: "work", render: () => <KnowledgePage records={records} onNotify={showToast} /> },
+      { id: "settings", label: "配置与数据", group: "system", render: () => <SettingsPage onNotify={showToast} /> }
+    ]
+  });
+  const activePage = pageRegistry.getPage(activePageId) ?? pageRegistry.getDefaultPage();
 
   return (
-    <div className="app-shell">
-      <Sidebar activeView={activeView} records={records} onViewChange={setActiveView} />
-      <main className="workspace">
+    <AppShell
+      activePageId={activePage.id}
+      activePageLabel={getNavigationLabel(activePage.id)}
+      navigation={TRACE_NAVIGATION}
+      onNavigate={setActivePageId}
+      footer={<><span>记录</span><strong>{records.length}</strong></>}
+    >
         {loading && <div className="status-banner">正在从服务器数据库读取记录...</div>}
         {error && <div className="status-banner error">数据加载失败：{error}</div>}
-        {renderPage()}
-      </main>
+        {activePage.render(undefined)}
 
       <EditModal record={editingRecord} onClose={() => setEditingRecord(null)} onSave={handleSaveEdit} />
       <ReportModal
@@ -178,6 +177,6 @@ export function App() {
       />
 
       {toast && <div className="toast no-print">{toast}</div>}
-    </div>
+    </AppShell>
   );
 }

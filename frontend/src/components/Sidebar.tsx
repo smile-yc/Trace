@@ -1,70 +1,87 @@
-import {
-  CalendarDays,
-  CalendarRange,
-  BookOpen,
-  Database,
-  FileStack,
-  Layers,
-  ListFilter,
-  SlidersHorizontal,
-  TrendingUp,
-  type LucideIcon
-} from "lucide-react";
-import { VIEWS } from "../constants";
-import type { ViewMode, WorkRecord } from "../types";
-
-const icons: Record<ViewMode, LucideIcon> = {
-  daily: CalendarDays,
-  weekly: CalendarRange,
-  monthly: FileStack,
-  yearly: Layers,
-  growth: TrendingUp,
-  knowledge: BookOpen,
-  all: ListFilter,
-  settings: SlidersHorizontal
-};
+import { Route, X } from "lucide-react";
+import type { ReactNode } from "react";
+import type { TraceNavigationItem } from "../navigation";
 
 interface SidebarProps {
-  activeView: ViewMode;
-  records: WorkRecord[];
-  onViewChange: (view: ViewMode) => void;
+  activePageId: string;
+  isOpen: boolean;
+  navigation: ReadonlyArray<TraceNavigationItem>;
+  footer?: ReactNode;
+  onNavigate: (pageId: string) => void;
+  onClose: () => void;
 }
 
-export function Sidebar({ activeView, records, onViewChange }: SidebarProps) {
+const GROUPS: ReadonlyArray<TraceNavigationItem["group"]> = ["记录", "工作", "成长", "复盘", "系统"];
+
+export function Sidebar({ activePageId, isOpen, navigation, footer, onNavigate, onClose }: SidebarProps) {
   return (
-    <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-mark">
-          <Database size={22} />
+    <aside id="app-navigation" className={`app-sidebar sidebar ${isOpen ? "is-open" : ""}`} aria-label="主导航">
+      <div className="sidebar-brand">
+        <div className="sidebar-brand-mark" aria-hidden="true">
+          <Route size={21} />
         </div>
-        <div>
+        <div className="sidebar-brand-copy">
           <strong>Trace</strong>
-          <span>工作痕迹台账</span>
+          <span>2026</span>
         </div>
+        <button className="sidebar-close ui-icon-button" type="button" aria-label="关闭导航" title="关闭导航" onClick={onClose}>
+          <X aria-hidden="true" size={20} />
+        </button>
       </div>
 
-      <nav className="nav-list" aria-label="报告视图">
-        {VIEWS.map((view) => {
-          const Icon = icons[view.key];
-          const isActive = activeView === view.key;
+      <nav className="sidebar-navigation" aria-label="Trace 模块">
+        {GROUPS.map((group) => {
+          const items = navigation.filter((item) => item.group === group);
+          if (!items.length) return null;
+
           return (
-            <button
-              className={`nav-item ${isActive ? "active" : ""}`}
-              key={view.key}
-              onClick={() => onViewChange(view.key)}
-              type="button"
-            >
-              <Icon size={18} />
-              <span>{view.label}</span>
-            </button>
+            <section className={`nav-group ${group === "系统" ? "nav-group-system" : ""}`} key={group} aria-labelledby={`nav-${group}`}>
+              <h2 id={`nav-${group}`} className="nav-group-label">
+                {group}
+              </h2>
+              <div className="nav-group-items">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const childActive = item.children?.some((child) => child.pageId === activePageId) ?? false;
+                  const active = item.pageId === activePageId || childActive;
+
+                  return (
+                    <div className="nav-entry" key={item.id}>
+                      <button
+                        className={`nav-item ${active ? "active" : ""}`}
+                        type="button"
+                        disabled={item.disabled}
+                        aria-current={item.pageId === activePageId ? "page" : undefined}
+                        onClick={() => item.pageId && onNavigate(item.pageId)}
+                      >
+                        <Icon aria-hidden="true" size={18} />
+                        <span>{item.label}</span>
+                      </button>
+                      {item.children && (
+                        <div className="nav-children">
+                          {item.children.map((child) => (
+                            <button
+                              className={`nav-child ${activePageId === child.pageId ? "active" : ""}`}
+                              type="button"
+                              key={child.id}
+                              aria-current={activePageId === child.pageId ? "page" : undefined}
+                              onClick={() => onNavigate(child.pageId)}
+                            >
+                              {child.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           );
         })}
       </nav>
 
-      <div className="sidebar-footer">
-        <span>记录</span>
-        <strong>{records.length}</strong>
-      </div>
+      {footer && <div className="sidebar-summary">{footer}</div>}
     </aside>
   );
 }
