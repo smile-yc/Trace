@@ -17,9 +17,16 @@ import type {
   MilestoneInput,
   MilestoneUpdateInput,
   RecordInput,
+  AbilityAllocation,
+  AbilityAllocationInput,
+  CoefficientSource,
   WorkloadStandard,
   WorkloadStandardInput,
   WorkloadStandardUpdateInput,
+  WorkloadStandardVersion,
+  WorkloadStandardVersionInput,
+  WorkloadStandardVersionStatus,
+  WorkloadStandardMatch,
   WorkRecord
 } from "./types.js";
 
@@ -32,6 +39,29 @@ fs.mkdirSync(dataDir, { recursive: true });
 const db = new DatabaseSync(dbPath);
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
+
+interface Migration {
+  version: number;
+  name: string;
+  up(database: DatabaseSync): void;
+}
+
+function runMigrations(database: DatabaseSync, migrations: readonly Migration[]): void {
+  database.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, appliedTime INTEGER NOT NULL)");
+  const applied = new Set(database.prepare("SELECT version FROM schema_migrations").all().map((row) => Number((row as { version: unknown }).version)));
+  for (const migration of migrations) {
+    if (applied.has(migration.version)) continue;
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      migration.up(database);
+      database.prepare("INSERT INTO schema_migrations (version, name, appliedTime) VALUES (?, ?, ?)").run(migration.version, migration.name, Date.now());
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS records (
     id TEXT PRIMARY KEY,
@@ -129,7 +159,99 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_knowledge_assets_status ON knowledge_assets(status, updateTime);
+
+  CREATE TABLE IF NOT EXISTS record_ability_allocations (
+    recordId TEXT NOT NULL,
+    abilityId TEXT NOT NULL,
+    abilityName TEXT NOT NULL,
+    percentage REAL NOT NULL,
+    PRIMARY KEY (recordId, abilityId),
+    FOREIGN KEY (recordId) REFERENCES records(id) ON DELETE CASCADE
+  );
 `);
+
+function hasColumn(table: string, column: string): boolean {
+  return db.prepare(`PRAGMA table_info(${table})`).all()
+    .some((item) => String((item as { name: unknown }).name) === column);
+}
+
+const foundationMigrations: Migration[] = [
+  {
+    version: 2026071301,
+    name: "version workload standards",
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS workload_standard_versions (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          year INTEGER DEFAULT NULL,
+          status TEXT NOT NULL CHECK(status IN ('draft', 'active', 'retired')),
+          sourceType TEXT NOT NULL DEFAULT 'manual',
+          sourceName TEXT NOT NULL DEFAULT '',
+          createTime INTEGER NOT NULL,
+          updateTime INTEGER NOT NULL
+        );
+      `);
+      const now = Date.now();
+      database.prepare(`INSERT OR IGNORE INTO workload_standard_versions
+        (id, name, year, status, sourceType, sourceName, createTime, updateTime)
+        VALUES (?, ?, NULL, 'active', 'legacy', ?, ?, ?)`)
+        .run("legacy-standard-version", "迁移前标准", "现有 Trace 数据", now, now);
+      const hasVersion = database.prepare("PRAGMA table_info(workload_standards)").all()
+        .some((item) => String((item as { name: unknown }).name) === "versionId");
+      if (!hasVersion) {
+        database.exec(`
+          ALTER TABLE workload_standards RENAME TO workload_standards_legacy;
+          CREATE TABLE workload_standards (
+            id TEXT PRIMARY KEY,
+            versionId TEXT NOT NULL,
+            businessCategory TEXT NOT NULL DEFAULT '',
+            workType TEXT NOT NULL DEFAULT '',
+            productSystem TEXT NOT NULL DEFAULT '',
+            subtask TEXT NOT NULL DEFAULT '',
+            unit TEXT NOT NULL DEFAULT '',
+            coefficient REAL NOT NULL,
+            remark TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            createTime INTEGER NOT NULL,
+            updateTime INTEGER NOT NULL,
+            UNIQUE(versionId, businessCategory, workType, productSystem, subtask),
+            FOREIGN KEY(versionId) REFERENCES workload_standard_versions(id) ON DELETE RESTRICT
+          );
+          INSERT INTO workload_standards
+            (id, versionId, businessCategory, workType, productSystem, subtask, unit, coefficient, remark, enabled, createTime, updateTime)
+          SELECT id, 'legacy-standard-version', businessCategory, workType, productSystem, subtask, '', coefficient, remark, enabled, createTime, updateTime
+          FROM workload_standards_legacy;
+          DROP TABLE workload_standards_legacy;
+          CREATE INDEX IF NOT EXISTS idx_workload_standards_lookup
+            ON workload_standards(versionId, businessCategory, workType, productSystem, subtask, enabled);
+        `);
+      }
+    }
+  },
+  {
+    version: 2026071302,
+    name: "snapshot record provenance",
+    up(database) {
+      const columns = new Set(database.prepare("PRAGMA table_info(records)").all()
+        .map((item) => String((item as { name: unknown }).name)));
+      const additions = [
+        ["workloadUnit", "TEXT NOT NULL DEFAULT ''"],
+        ["coefficientSource", "TEXT NOT NULL DEFAULT 'none'"],
+        ["coefficientStandardId", "TEXT DEFAULT NULL"],
+        ["coefficientStandardVersionId", "TEXT DEFAULT NULL"],
+        ["workloadFormulaVersion", "TEXT NOT NULL DEFAULT 'quantity_x_coefficient_v1'"]
+      ];
+      for (const [name, definition] of additions) {
+        if (!columns.has(name)) database.exec(`ALTER TABLE records ADD COLUMN ${name} ${definition}`);
+      }
+      database.exec(`UPDATE records SET coefficientSource = CASE WHEN coefficient IS NULL THEN 'none' ELSE 'legacy' END
+        WHERE coefficientSource = 'none'`);
+    }
+  }
+];
+
+runMigrations(db, foundationMigrations);
 
 const recordColumnDefinitions = [
   { name: "businessCategory", definition: "TEXT NOT NULL DEFAULT '其他'" },
@@ -168,12 +290,20 @@ function ensureRecordColumns(): void {
     UPDATE records SET workType = '售前方案'
     WHERE workType = '其他项' AND category = '售前支持';
 
-    UPDATE records SET workload = quantity * coefficient
-    WHERE workload IS NULL AND quantity IS NOT NULL AND coefficient IS NOT NULL;
   `);
 }
 
 ensureRecordColumns();
+
+function backfillLegacyAbilityAllocations(): void {
+  const rows = db.prepare("SELECT id, abilityDimension FROM records").all() as Array<{ id: string; abilityDimension: string }>;
+  rows.forEach((row) => {
+    const count = Number((db.prepare("SELECT COUNT(*) AS count FROM record_ability_allocations WHERE recordId = ?").get(row.id) as { count: number }).count);
+    if (count === 0) replaceAbilityAllocations(row.id, normalizeAbilityAllocations(undefined, row.abilityDimension));
+  });
+}
+
+backfillLegacyAbilityAllocations();
 
 const selectSql = `
   SELECT
@@ -193,6 +323,11 @@ const selectSql = `
     workload,
     timeHours,
     tags,
+    workloadUnit,
+    coefficientSource,
+    coefficientStandardId,
+    coefficientStandardVersionId,
+    workloadFormulaVersion,
     createTime,
     updateTime
   FROM records
@@ -385,8 +520,6 @@ function seedAppSettings(): void {
 seedAppSettings();
 
 function normalizeWorkload(quantity: number | null, coefficient: number | null, explicit: unknown): number | null {
-  const workload = normalizeOptionalNonNegativeNumber(explicit);
-  if (workload !== null) return workload;
   if (quantity === null || coefficient === null) return null;
 
   return Number((quantity * coefficient).toFixed(4));
@@ -434,10 +567,12 @@ function toConfigOption(row: unknown): ConfigOption {
 function toWorkloadStandard(row: unknown): WorkloadStandard {
   const standard = row as {
     id: unknown;
+    versionId: unknown;
     businessCategory: unknown;
     workType: unknown;
     productSystem: unknown;
     subtask: unknown;
+    unit: unknown;
     coefficient: unknown;
     remark: unknown;
     enabled: unknown;
@@ -447,10 +582,12 @@ function toWorkloadStandard(row: unknown): WorkloadStandard {
 
   return {
     id: String(standard.id),
+    versionId: String(standard.versionId || "legacy-standard-version"),
     businessCategory: String(standard.businessCategory || ""),
     workType: String(standard.workType || ""),
     productSystem: String(standard.productSystem || ""),
     subtask: String(standard.subtask || ""),
+    unit: String(standard.unit || ""),
     coefficient: Number(standard.coefficient),
     remark: String(standard.remark || ""),
     enabled: Boolean(standard.enabled),
@@ -653,7 +790,61 @@ export function reorderConfigOptions(type: ConfigOptionType, orderedIds: string[
   return listConfigOptions(type);
 }
 
+function toWorkloadStandardVersion(row: unknown): WorkloadStandardVersion {
+  const version = row as Record<string, unknown>;
+  return {
+    id: String(version.id),
+    name: String(version.name),
+    year: version.year === null || version.year === undefined ? null : Number(version.year),
+    status: String(version.status) as WorkloadStandardVersionStatus,
+    sourceType: String(version.sourceType) as WorkloadStandardVersion["sourceType"],
+    sourceName: String(version.sourceName || ""),
+    createTime: Number(version.createTime),
+    updateTime: Number(version.updateTime)
+  };
+}
+
+export function listWorkloadStandardVersions(): WorkloadStandardVersion[] {
+  return db.prepare("SELECT * FROM workload_standard_versions ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, year DESC, createTime DESC")
+    .all().map(toWorkloadStandardVersion);
+}
+
+export function getWorkloadStandardVersion(id: string): WorkloadStandardVersion | null {
+  const row = db.prepare("SELECT * FROM workload_standard_versions WHERE id = ?").get(id);
+  return row ? toWorkloadStandardVersion(row) : null;
+}
+
+export function getActiveWorkloadStandardVersion(): WorkloadStandardVersion | null {
+  const row = db.prepare("SELECT * FROM workload_standard_versions WHERE status = 'active' LIMIT 1").get();
+  return row ? toWorkloadStandardVersion(row) : null;
+}
+
+export function insertWorkloadStandardVersion(input: WorkloadStandardVersionInput): WorkloadStandardVersion {
+  const now = Date.now();
+  const id = createId();
+  db.prepare(`INSERT INTO workload_standard_versions (id, name, year, status, sourceType, sourceName, createTime, updateTime)
+    VALUES (?, ?, ?, 'draft', ?, ?, ?, ?)`)
+    .run(id, normalizeText(input.name), input.year ?? null, input.sourceType ?? "manual", normalizeText(input.sourceName), now, now);
+  return getWorkloadStandardVersion(id) as WorkloadStandardVersion;
+}
+
+export function activateWorkloadStandardVersion(id: string): WorkloadStandardVersion | null {
+  if (!getWorkloadStandardVersion(id)) return null;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const now = Date.now();
+    db.prepare("UPDATE workload_standard_versions SET status = 'retired', updateTime = ? WHERE status = 'active' AND id != ?").run(now, id);
+    db.prepare("UPDATE workload_standard_versions SET status = 'active', updateTime = ? WHERE id = ?").run(now, id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getWorkloadStandardVersion(id);
+}
+
 function findWorkloadStandardByKey(
+  versionId: string,
   businessCategory: string,
   workType: string,
   productSystem: string,
@@ -664,26 +855,28 @@ function findWorkloadStandardByKey(
     ? db
         .prepare(
           `SELECT * FROM workload_standards
-           WHERE businessCategory = ? AND workType = ? AND productSystem = ? AND subtask = ? AND id != ?`
+           WHERE versionId = ? AND businessCategory = ? AND workType = ? AND productSystem = ? AND subtask = ? AND id != ?`
         )
-        .get(businessCategory, workType, productSystem, subtask, excludeId)
+        .get(versionId, businessCategory, workType, productSystem, subtask, excludeId)
     : db
         .prepare(
           `SELECT * FROM workload_standards
-           WHERE businessCategory = ? AND workType = ? AND productSystem = ? AND subtask = ?`
+           WHERE versionId = ? AND businessCategory = ? AND workType = ? AND productSystem = ? AND subtask = ?`
         )
-        .get(businessCategory, workType, productSystem, subtask);
+        .get(versionId, businessCategory, workType, productSystem, subtask);
 
   return row ? toWorkloadStandard(row) : null;
 }
 
-export function listWorkloadStandards(): WorkloadStandard[] {
+export function listWorkloadStandards(versionId = getActiveWorkloadStandardVersion()?.id): WorkloadStandard[] {
+  if (!versionId) return [];
   return db
     .prepare(
       `SELECT * FROM workload_standards
+       WHERE versionId = ?
        ORDER BY enabled DESC, businessCategory ASC, workType ASC, productSystem ASC, subtask ASC, createTime ASC`
     )
-    .all()
+    .all(versionId)
     .map(toWorkloadStandard);
 }
 
@@ -693,17 +886,19 @@ export function getWorkloadStandard(id: string): WorkloadStandard | null {
 }
 
 export function insertWorkloadStandard(input: WorkloadStandardInput): WorkloadStandard {
+  const versionId = input.versionId ?? getActiveWorkloadStandardVersion()?.id;
   const businessCategory = normalizeText(input.businessCategory);
   const workType = normalizeText(input.workType);
   const productSystem = normalizeText(input.productSystem);
   const subtask = normalizeText(input.subtask);
   const coefficient = normalizeNumber(input.coefficient);
 
+  if (!versionId || !getWorkloadStandardVersion(versionId)) throw new Error("WORKLOAD_STANDARD_VERSION_NOT_FOUND");
   if (!businessCategory || !workType || coefficient === null) {
     throw new Error("WORKLOAD_STANDARD_INVALID");
   }
 
-  if (findWorkloadStandardByKey(businessCategory, workType, productSystem, subtask)) {
+  if (findWorkloadStandardByKey(versionId, businessCategory, workType, productSystem, subtask)) {
     throw new Error("WORKLOAD_STANDARD_DUPLICATE");
   }
 
@@ -713,23 +908,27 @@ export function insertWorkloadStandard(input: WorkloadStandardInput): WorkloadSt
   db.prepare(
     `INSERT INTO workload_standards (
        id,
+       versionId,
        businessCategory,
        workType,
        productSystem,
        subtask,
+       unit,
        coefficient,
        remark,
        enabled,
        createTime,
        updateTime
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
+    versionId,
     businessCategory,
     workType,
     productSystem,
     subtask,
+    normalizeText(input.unit),
     coefficient,
     normalizeText(input.remark),
     input.enabled === false ? 0 : 1,
@@ -755,7 +954,7 @@ export function updateWorkloadStandard(id: string, input: WorkloadStandardUpdate
     throw new Error("WORKLOAD_STANDARD_INVALID");
   }
 
-  if (findWorkloadStandardByKey(businessCategory, workType, productSystem, subtask, id)) {
+  if (findWorkloadStandardByKey(existing.versionId, businessCategory, workType, productSystem, subtask, id)) {
     throw new Error("WORKLOAD_STANDARD_DUPLICATE");
   }
 
@@ -765,6 +964,7 @@ export function updateWorkloadStandard(id: string, input: WorkloadStandardUpdate
          workType = ?,
          productSystem = ?,
          subtask = ?,
+         unit = ?,
          coefficient = ?,
          remark = ?,
          enabled = ?,
@@ -775,6 +975,7 @@ export function updateWorkloadStandard(id: string, input: WorkloadStandardUpdate
     workType,
     productSystem,
     subtask,
+    input.unit === undefined ? existing.unit : normalizeText(input.unit),
     coefficient,
     input.remark === undefined ? existing.remark : normalizeText(input.remark),
     (input.enabled ?? existing.enabled) ? 1 : 0,
@@ -786,27 +987,111 @@ export function updateWorkloadStandard(id: string, input: WorkloadStandardUpdate
 }
 
 export function deleteWorkloadStandard(id: string): boolean {
+  const referenced = Number((db.prepare("SELECT COUNT(*) AS count FROM records WHERE coefficientStandardId = ?").get(id) as { count: number }).count);
+  if (referenced > 0) throw new Error("WORKLOAD_STANDARD_IN_USE");
   const result = db.prepare("DELETE FROM workload_standards WHERE id = ?").run(id);
   return result.changes > 0;
 }
 
+export interface WorkloadStandardImportRow {
+  businessCategory: string;
+  workType: string;
+  productSystem?: string;
+  subtask?: string;
+  unit?: string;
+  coefficient: number;
+  remark?: string;
+}
+
+type ImportStatus = "new" | "duplicate" | "conflict" | "invalid";
+
+function normalizeImportRow(input: WorkloadStandardImportRow) {
+  const row = {
+    businessCategory: normalizeText(input.businessCategory),
+    workType: normalizeText(input.workType),
+    productSystem: normalizeText(input.productSystem),
+    subtask: normalizeText(input.subtask),
+    unit: normalizeText(input.unit),
+    coefficient: normalizeNumber(input.coefficient),
+    remark: normalizeText(input.remark)
+  };
+  return row;
+}
+
+export function previewWorkloadStandardImport(rows: WorkloadStandardImportRow[]) {
+  const version = getActiveWorkloadStandardVersion();
+  return {
+    baseVersionId: version?.id ?? null,
+    rows: rows.map((input, index) => {
+      const row = normalizeImportRow(input);
+      let status: ImportStatus = "invalid";
+      if (row.businessCategory && row.workType && row.coefficient !== null && row.coefficient >= 0) {
+        const existing = version ? findWorkloadStandardByKey(version.id, row.businessCategory, row.workType, row.productSystem, row.subtask) : null;
+        status = !existing ? "new" : existing.coefficient === row.coefficient && existing.unit === row.unit && existing.remark === row.remark ? "duplicate" : "conflict";
+      }
+      return { rowNumber: index + 1, status, ...row, coefficient: row.coefficient };
+    })
+  };
+}
+
+export function confirmWorkloadStandardImport(input: {
+  name: string;
+  year?: number | null;
+  sourceName?: string;
+  rows: WorkloadStandardImportRow[];
+  conflictResolutions?: Record<string, "keep_system" | "use_imported">;
+}): WorkloadStandardVersion {
+  const preview = previewWorkloadStandardImport(input.rows);
+  if (preview.rows.some((row) => row.status === "invalid")) throw new Error("WORKLOAD_STANDARD_IMPORT_INVALID");
+  if (preview.rows.some((row) => row.status === "conflict" && !input.conflictResolutions?.[String(row.rowNumber)])) {
+    throw new Error("WORKLOAD_STANDARD_IMPORT_CONFLICT_UNRESOLVED");
+  }
+  const active = getActiveWorkloadStandardVersion();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const version = insertWorkloadStandardVersion({ name: input.name, year: input.year, sourceType: "excel", sourceName: input.sourceName });
+    if (active) {
+      for (const standard of listWorkloadStandards(active.id)) {
+        insertWorkloadStandard({ ...standard, versionId: version.id });
+      }
+    }
+    for (const row of preview.rows) {
+      if (row.status === "duplicate") continue;
+      const existing = findWorkloadStandardByKey(version.id, row.businessCategory, row.workType, row.productSystem, row.subtask);
+      if (existing && input.conflictResolutions?.[String(row.rowNumber)] === "keep_system") continue;
+      if (existing) {
+        updateWorkloadStandard(existing.id, { coefficient: row.coefficient as number, unit: row.unit, remark: row.remark });
+      } else {
+        insertWorkloadStandard({ versionId: version.id, businessCategory: row.businessCategory, workType: row.workType, productSystem: row.productSystem, subtask: row.subtask, unit: row.unit, coefficient: row.coefficient as number, remark: row.remark });
+      }
+    }
+    db.exec("COMMIT");
+    return getWorkloadStandardVersion(version.id) as WorkloadStandardVersion;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 export function matchWorkloadStandard(input: {
+  versionId?: string;
   businessCategory?: string;
   workType?: string;
   productSystem?: string;
   subtask?: string;
-}): WorkloadStandard | null {
+}): WorkloadStandardMatch | null {
   const businessCategory = normalizeText(input.businessCategory);
   const workType = normalizeText(input.workType);
   const productSystem = normalizeText(input.productSystem);
   const subtask = normalizeText(input.subtask);
 
-  if (!businessCategory || !workType) return null;
+  const version = input.versionId ? getWorkloadStandardVersion(input.versionId) : getActiveWorkloadStandardVersion();
+  if (!businessCategory || !workType || !version) return null;
 
   const rows = db
     .prepare(
       `SELECT * FROM workload_standards
-       WHERE enabled = 1
+       WHERE versionId = ? AND enabled = 1
          AND businessCategory = ?
          AND workType = ?
          AND productSystem IN (?, '')
@@ -819,9 +1104,15 @@ export function matchWorkloadStandard(input: {
          createTime ASC
        LIMIT 1`
     )
-    .all(businessCategory, workType, productSystem, subtask, productSystem, subtask);
+    .all(version.id, businessCategory, workType, productSystem, subtask, productSystem, subtask);
 
-  return rows[0] ? toWorkloadStandard(rows[0]) : null;
+  if (!rows[0]) return null;
+  const standard = toWorkloadStandard(rows[0]);
+  return {
+    standard,
+    version,
+    matchLevel: standard.productSystem === productSystem && standard.subtask === subtask && standard.productSystem !== "" && standard.subtask !== "" ? "exact" : "general"
+  };
 }
 
 export function getAppSettings(): AppSettings {
@@ -1044,9 +1335,58 @@ export function updateKnowledgeAsset(id: string, input: KnowledgeAssetUpdateInpu
   return getKnowledgeAsset(id);
 }
 
+function splitAbilityNames(value: string): string[] {
+  return Array.from(new Set(value.split(/[,，、\s]+/).map((item) => item.trim()).filter(Boolean)));
+}
+
+function normalizeAbilityAllocations(
+  input: AbilityAllocationInput[] | undefined,
+  legacyAbilityDimension: string
+): Array<Pick<AbilityAllocation, "abilityId" | "abilityName" | "percentage">> {
+  if (input?.length) {
+    const allocations = input.map((item) => ({
+      abilityId: normalizeText(item.abilityId),
+      abilityName: normalizeText(item.abilityName),
+      percentage: normalizeNumber(item.percentage)
+    }));
+    const total = allocations.reduce((sum, item) => sum + (item.percentage ?? 0), 0);
+    if (allocations.some((item) => !item.abilityId || !item.abilityName || item.percentage === null || item.percentage < 0) || Math.abs(total - 100) > 0.000001) {
+      throw new Error("ABILITY_ALLOCATION_INVALID");
+    }
+    return allocations as Array<Pick<AbilityAllocation, "abilityId" | "abilityName" | "percentage">>;
+  }
+  const names = splitAbilityNames(legacyAbilityDimension);
+  return names.map((abilityName, index) => ({
+    abilityId: `legacy:${encodeURIComponent(abilityName)}`,
+    abilityName,
+    percentage: index === names.length - 1 ? 100 - (100 / names.length) * index : 100 / names.length
+  }));
+}
+
+function getAbilityAllocations(record: Pick<WorkRecord, "id" | "timeHours" | "workload">): AbilityAllocation[] {
+  return db.prepare("SELECT abilityId, abilityName, percentage FROM record_ability_allocations WHERE recordId = ? ORDER BY abilityName ASC")
+    .all(record.id).map((row) => {
+      const item = row as { abilityId: unknown; abilityName: unknown; percentage: unknown };
+      const percentage = Number(item.percentage);
+      return {
+        abilityId: String(item.abilityId),
+        abilityName: String(item.abilityName),
+        percentage,
+        allocatedTimeHours: record.timeHours === null ? null : Number((record.timeHours * percentage / 100).toFixed(4)),
+        allocatedWorkload: record.workload === null ? null : Number((record.workload * percentage / 100).toFixed(4))
+      };
+    });
+}
+
+function replaceAbilityAllocations(recordId: string, allocations: Array<Pick<AbilityAllocation, "abilityId" | "abilityName" | "percentage">>): void {
+  db.prepare("DELETE FROM record_ability_allocations WHERE recordId = ?").run(recordId);
+  const statement = db.prepare("INSERT INTO record_ability_allocations (recordId, abilityId, abilityName, percentage) VALUES (?, ?, ?, ?)");
+  allocations.forEach((allocation) => statement.run(recordId, allocation.abilityId, allocation.abilityName, allocation.percentage));
+}
+
 function toRecord(row: unknown): WorkRecord {
   const record = row as WorkRecord;
-  return {
+  const base = {
     id: String(record.id),
     date: String(record.date),
     title: String(record.title),
@@ -1063,9 +1403,15 @@ function toRecord(row: unknown): WorkRecord {
     workload: normalizeOptionalNonNegativeNumber(record.workload),
     timeHours: normalizeOptionalNonNegativeNumber(record.timeHours),
     tags: String(record.tags || ""),
+    workloadUnit: String(record.workloadUnit || ""),
+    coefficientSource: String(record.coefficientSource || "none") as CoefficientSource,
+    coefficientStandardId: record.coefficientStandardId === null ? null : String(record.coefficientStandardId || "") || null,
+    coefficientStandardVersionId: record.coefficientStandardVersionId === null ? null : String(record.coefficientStandardVersionId || "") || null,
+    workloadFormulaVersion: "quantity_x_coefficient_v1" as const,
     createTime: Number(record.createTime),
     updateTime: Number(record.updateTime)
   };
+  return { ...base, abilityAllocations: getAbilityAllocations(base) };
 }
 
 export function listRecords(): WorkRecord[] {
@@ -1083,7 +1429,13 @@ export function getRecord(id: string): WorkRecord | null {
 export function insertRecord(input: RecordInput): WorkRecord {
   const now = Date.now();
   const quantity = normalizeOptionalNonNegativeNumber(input.quantity);
-  const coefficient = normalizeOptionalNonNegativeNumber(input.coefficient);
+  const standard = input.coefficientStandardId ? getWorkloadStandard(input.coefficientStandardId) : null;
+  if (input.coefficientStandardId && (!standard || !standard.enabled)) throw new Error("WORKLOAD_STANDARD_MISMATCH");
+  const coefficient = standard ? standard.coefficient : normalizeOptionalNonNegativeNumber(input.coefficient);
+  if (standard && input.coefficient !== undefined && input.coefficient !== null && Number(input.coefficient) !== standard.coefficient) {
+    throw new Error("WORKLOAD_STANDARD_MISMATCH");
+  }
+  const allocations = normalizeAbilityAllocations(input.abilityAllocations, normalizeText(input.abilityDimension));
   const record: WorkRecord = {
     id: createId(),
     date: input.date,
@@ -1092,7 +1444,7 @@ export function insertRecord(input: RecordInput): WorkRecord {
     category: input.category || "其他",
     businessCategory: inferBusinessCategory(input),
     workType: inferWorkType(input),
-    abilityDimension: normalizeText(input.abilityDimension),
+    abilityDimension: allocations.map((item) => item.abilityName).join(","),
     projectName: normalizeText(input.projectName),
     productSystem: normalizeText(input.productSystem),
     subtask: normalizeText(input.subtask),
@@ -1101,6 +1453,12 @@ export function insertRecord(input: RecordInput): WorkRecord {
     workload: normalizeWorkload(quantity, coefficient, input.workload),
     timeHours: normalizeOptionalNonNegativeNumber(input.timeHours),
     tags: normalizeTags(input.tags || ""),
+    workloadUnit: standard?.unit ?? normalizeText(input.workloadUnit),
+    coefficientSource: standard ? (standard.productSystem === normalizeText(input.productSystem) && standard.subtask === normalizeText(input.subtask) && standard.productSystem !== "" && standard.subtask !== "" ? "standard_exact" : "standard_general") : coefficient === null ? "none" : "manual",
+    coefficientStandardId: standard?.id ?? null,
+    coefficientStandardVersionId: standard?.versionId ?? null,
+    workloadFormulaVersion: "quantity_x_coefficient_v1",
+    abilityAllocations: [],
     createTime: now,
     updateTime: now
   };
@@ -1123,10 +1481,11 @@ export function insertRecord(input: RecordInput): WorkRecord {
        workload,
        timeHours,
        tags,
+       workloadUnit, coefficientSource, coefficientStandardId, coefficientStandardVersionId, workloadFormulaVersion,
        createTime,
        updateTime
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     record.id,
     record.date,
@@ -1144,11 +1503,13 @@ export function insertRecord(input: RecordInput): WorkRecord {
     record.workload,
     record.timeHours,
     record.tags,
+    record.workloadUnit, record.coefficientSource, record.coefficientStandardId, record.coefficientStandardVersionId, record.workloadFormulaVersion,
     record.createTime,
     record.updateTime
   );
 
-  return record;
+  replaceAbilityAllocations(record.id, allocations);
+  return getRecord(record.id) as WorkRecord;
 }
 
 export function updateRecord(id: string, input: RecordInput): WorkRecord | null {

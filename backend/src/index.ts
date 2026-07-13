@@ -9,6 +9,8 @@ import {
   getAppSettings,
   getDatabasePath,
   insertKnowledgeAsset,
+  insertWorkloadStandardVersion,
+  activateWorkloadStandardVersion,
   insertRecord,
   insertConfigOption,
   insertMilestone,
@@ -18,6 +20,7 @@ import {
   listMilestones,
   listRecords,
   listWorkloadStandards,
+  listWorkloadStandardVersions,
   matchWorkloadStandard,
   reorderConfigOptions,
   updateAppSettings,
@@ -31,6 +34,7 @@ import { buildExcel } from "./exporters/excel.js";
 import { buildPdf } from "./exporters/pdf.js";
 import { buildWord } from "./exporters/word.js";
 import { sanitizeFileName } from "./report.js";
+import { createImportRouter } from "./routes/import.js";
 import type {
   AppSettingsInput,
   ConfigOptionInput,
@@ -44,6 +48,7 @@ import type {
   RecordInput,
   WorkloadStandardInput,
   WorkloadStandardUpdateInput
+  ,WorkloadStandardVersionInput
 } from "./types.js";
 
 const app = express();
@@ -51,6 +56,7 @@ const port = Number(process.env.PORT || 4100);
 
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "10mb" }));
+app.use("/api/import", createImportRouter());
 
 const configOptionTypes = ["businessCategory", "workType", "abilityDimension", "productSystem", "subtask"] as const;
 
@@ -81,6 +87,18 @@ const recordSchema = z.object({
   workload: z.number().nullable().default(null),
   timeHours: z.number().nullable().default(null),
   tags: z.string().default(""),
+  workloadUnit: z.string().default(""),
+  coefficientSource: z.enum(["none", "legacy", "manual", "standard_exact", "standard_general"]).default("none"),
+  coefficientStandardId: z.string().nullable().default(null),
+  coefficientStandardVersionId: z.string().nullable().default(null),
+  workloadFormulaVersion: z.literal("quantity_x_coefficient_v1").default("quantity_x_coefficient_v1"),
+  abilityAllocations: z.array(z.object({
+    abilityId: z.string(),
+    abilityName: z.string(),
+    percentage: z.number(),
+    allocatedTimeHours: z.number().nullable(),
+    allocatedWorkload: z.number().nullable()
+  })).default([]),
   createTime: z.number(),
   updateTime: z.number()
 });
@@ -99,6 +117,13 @@ const recordInputSchema = z.object({
   quantity: optionalNonNegativeNumberSchema,
   coefficient: optionalNonNegativeNumberSchema,
   workload: optionalNonNegativeNumberSchema,
+  workloadUnit: z.string().trim().max(40).optional(),
+  coefficientStandardId: z.string().trim().nullable().optional(),
+  abilityAllocations: z.array(z.object({
+    abilityId: z.string().trim().min(1).max(120),
+    abilityName: z.string().trim().min(1).max(120),
+    percentage: z.coerce.number().finite().min(0).max(100)
+  })).max(30).optional(),
   timeHours: optionalNonNegativeNumberSchema,
   tags: z.string().default("")
 });
@@ -124,10 +149,12 @@ const configReorderSchema = z.object({
 });
 
 const workloadStandardInputSchema = z.object({
+  versionId: z.string().trim().min(1).optional(),
   businessCategory: z.string().trim().min(1).max(80),
   workType: z.string().trim().min(1).max(80),
   productSystem: z.string().trim().max(80).optional().default(""),
   subtask: z.string().trim().max(120).optional().default(""),
+  unit: z.string().trim().max(40).optional().default(""),
   coefficient: z.coerce.number().finite().min(0),
   remark: z.string().trim().max(300).optional().default(""),
   enabled: z.boolean().optional()
@@ -138,9 +165,17 @@ const workloadStandardUpdateSchema = z.object({
   workType: z.string().trim().min(1).max(80).optional(),
   productSystem: z.string().trim().max(80).optional(),
   subtask: z.string().trim().max(120).optional(),
+  unit: z.string().trim().max(40).optional(),
   coefficient: z.coerce.number().finite().min(0).optional(),
   remark: z.string().trim().max(300).optional(),
   enabled: z.boolean().optional()
+});
+
+const workloadStandardVersionInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  year: z.coerce.number().int().min(2000).max(2200).nullable().optional(),
+  sourceType: z.enum(["manual", "excel"]).optional(),
+  sourceName: z.string().trim().max(200).optional()
 });
 
 const workloadMatchSchema = z.object({
@@ -316,8 +351,35 @@ app.post("/api/config-options/reorder", (req, res, next) => {
   }
 });
 
-app.get("/api/workload-standards", (_req, res) => {
-  res.json({ standards: listWorkloadStandards() });
+app.get("/api/workload-standard-versions", (_req, res) => {
+  res.json({ versions: listWorkloadStandardVersions() });
+});
+
+app.post("/api/workload-standard-versions", (req, res, next) => {
+  try {
+    const version = insertWorkloadStandardVersion(workloadStandardVersionInputSchema.parse(req.body) as WorkloadStandardVersionInput);
+    res.status(201).json({ version });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/workload-standard-versions/:id/activate", (req, res, next) => {
+  try {
+    const version = activateWorkloadStandardVersion(req.params.id);
+    if (!version) {
+      res.status(404).json({ message: "Workload standard version not found." });
+      return;
+    }
+    res.json({ version });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/workload-standards", (req, res) => {
+  const versionId = typeof req.query.versionId === "string" ? req.query.versionId : undefined;
+  res.json({ standards: listWorkloadStandards(versionId) });
 });
 
 app.post("/api/workload-standards", (req, res, next) => {
@@ -358,7 +420,7 @@ app.delete("/api/workload-standards/:id", (req, res) => {
 app.get("/api/workload-standards/match", (req, res, next) => {
   try {
     const input = workloadMatchSchema.parse(req.query);
-    res.json({ standard: matchWorkloadStandard(input) });
+    res.json({ match: matchWorkloadStandard(input) });
   } catch (error) {
     next(error);
   }
@@ -527,6 +589,26 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 
   if (error instanceof Error && error.message === "WORKLOAD_STANDARD_INVALID") {
     res.status(400).json({ message: "当量标准缺少必填项或折算系数无效。" });
+    return;
+  }
+
+  if (error instanceof Error && error.message.startsWith("WORKLOAD_STANDARD_IMPORT_")) {
+    res.status(400).json({ message: "导入文件、冲突决策或标准行无效。" });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "ABILITY_ALLOCATION_INVALID") {
+    res.status(400).json({ message: "能力分配比例必须合计为 100%。" });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "WORKLOAD_STANDARD_MISMATCH") {
+    res.status(400).json({ message: "标准与记录分类或实际系数不一致。" });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "WORKLOAD_STANDARD_IN_USE") {
+    res.status(409).json({ message: "该标准已被历史记录引用，不能删除。" });
     return;
   }
 

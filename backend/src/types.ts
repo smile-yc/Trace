@@ -15,8 +15,30 @@ export interface WorkRecord {
   workload: number | null;
   timeHours: number | null;
   tags: string;
+  workloadUnit: string;
+  coefficientSource: CoefficientSource;
+  coefficientStandardId: string | null;
+  coefficientStandardVersionId: string | null;
+  workloadFormulaVersion: "quantity_x_coefficient_v1";
+  abilityAllocations: AbilityAllocation[];
   createTime: number;
   updateTime: number;
+}
+
+export type CoefficientSource = "none" | "legacy" | "manual" | "standard_exact" | "standard_general";
+
+export interface AbilityAllocation {
+  abilityId: string;
+  abilityName: string;
+  percentage: number;
+  allocatedTimeHours: number | null;
+  allocatedWorkload: number | null;
+}
+
+export interface AbilityAllocationInput {
+  abilityId: string;
+  abilityName: string;
+  percentage: number;
 }
 
 export type ConfigOptionType = "businessCategory" | "workType" | "abilityDimension" | "productSystem" | "subtask";
@@ -50,10 +72,12 @@ export interface ConfigOptionUpdateInput {
 
 export interface WorkloadStandard {
   id: string;
+  versionId: string;
   businessCategory: string;
   workType: string;
   productSystem: string;
   subtask: string;
+  unit: string;
   coefficient: number;
   remark: string;
   enabled: boolean;
@@ -61,11 +85,39 @@ export interface WorkloadStandard {
   updateTime: number;
 }
 
+export type WorkloadStandardVersionStatus = "draft" | "active" | "retired";
+
+export interface WorkloadStandardVersion {
+  id: string;
+  name: string;
+  year: number | null;
+  status: WorkloadStandardVersionStatus;
+  sourceType: "legacy" | "manual" | "excel";
+  sourceName: string;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface WorkloadStandardVersionInput {
+  name: string;
+  year?: number | null;
+  sourceType?: "manual" | "excel";
+  sourceName?: string;
+}
+
+export interface WorkloadStandardMatch {
+  standard: WorkloadStandard;
+  version: WorkloadStandardVersion;
+  matchLevel: "exact" | "general";
+}
+
 export interface WorkloadStandardInput {
+  versionId?: string;
   businessCategory: string;
   workType: string;
   productSystem?: string;
   subtask?: string;
+  unit?: string;
   coefficient: number;
   remark?: string;
   enabled?: boolean;
@@ -76,6 +128,7 @@ export interface WorkloadStandardUpdateInput {
   workType?: string;
   productSystem?: string;
   subtask?: string;
+  unit?: string;
   coefficient?: number;
   remark?: string;
   enabled?: boolean;
@@ -201,6 +254,9 @@ export interface RecordInput {
   quantity?: number | null;
   coefficient?: number | null;
   workload?: number | null;
+  workloadUnit?: string;
+  coefficientStandardId?: string | null;
+  abilityAllocations?: AbilityAllocationInput[];
   timeHours?: number | null;
   tags: string;
 }

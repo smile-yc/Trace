@@ -39,10 +39,12 @@ export interface ConfigOptionUpdateInput {
 
 export interface WorkloadStandard {
   id: string;
+  versionId: string;
   businessCategory: string;
   workType: string;
   productSystem: string;
   subtask: string;
+  unit: string;
   coefficient: number;
   remark: string;
   enabled: boolean;
@@ -50,11 +52,32 @@ export interface WorkloadStandard {
   updateTime: number;
 }
 
+export type WorkloadStandardVersionStatus = "draft" | "active" | "retired";
+
+export interface WorkloadStandardVersion {
+  id: string;
+  name: string;
+  year: number | null;
+  status: WorkloadStandardVersionStatus;
+  sourceType: "legacy" | "manual" | "excel";
+  sourceName: string;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface WorkloadStandardMatch {
+  standard: WorkloadStandard;
+  version: WorkloadStandardVersion;
+  matchLevel: "exact" | "general";
+}
+
 export interface WorkloadStandardInput {
+  versionId?: string;
   businessCategory: string;
   workType: string;
   productSystem?: string;
   subtask?: string;
+  unit?: string;
   coefficient: number;
   remark?: string;
   enabled?: boolean;
@@ -65,6 +88,7 @@ export interface WorkloadStandardUpdateInput {
   workType?: string;
   productSystem?: string;
   subtask?: string;
+  unit?: string;
   coefficient?: number;
   remark?: string;
   enabled?: boolean;
@@ -193,6 +217,12 @@ export interface WorkRecord {
   workload: number | null;
   timeHours: number | null;
   tags: string;
+  workloadUnit?: string;
+  coefficientSource?: import("./types/domain/workload").CoefficientSource;
+  coefficientStandardId?: string | null;
+  coefficientStandardVersionId?: string | null;
+  workloadFormulaVersion?: "quantity_x_coefficient_v1";
+  abilityAllocations?: import("./types/domain/workload").AbilityAllocation[];
   createTime: number;
   updateTime: number;
 }
@@ -211,6 +241,13 @@ export interface RecordInput {
   quantity?: number | null;
   coefficient?: number | null;
   workload?: number | null;
+  workloadUnit?: string;
+  coefficientStandardId?: string | null;
+  abilityAllocations?: Array<{
+    abilityId: string;
+    abilityName: string;
+    percentage: number;
+  }>;
   timeHours?: number | null;
   tags: string;
 }
