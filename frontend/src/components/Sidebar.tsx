@@ -1,10 +1,11 @@
 import { Route, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { forwardRef, type ReactNode } from "react";
 import type { TraceNavigationItem } from "../navigation";
 
 interface SidebarProps {
   activePageId: string;
   isOpen: boolean;
+  mobileHidden: boolean;
   navigation: ReadonlyArray<TraceNavigationItem>;
   footer?: ReactNode;
   onNavigate: (pageId: string) => void;
@@ -13,9 +14,11 @@ interface SidebarProps {
 
 const GROUPS: ReadonlyArray<TraceNavigationItem["group"]> = ["记录", "工作", "成长", "复盘", "系统"];
 
-export function Sidebar({ activePageId, isOpen, navigation, footer, onNavigate, onClose }: SidebarProps) {
+export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar({ activePageId, isOpen, mobileHidden, navigation, footer, onNavigate, onClose }, ref) {
+  const inertAttribute = mobileHidden ? { inert: "" } : {};
+
   return (
-    <aside id="app-navigation" className={`app-sidebar sidebar ${isOpen ? "is-open" : ""}`} aria-label="主导航">
+    <aside {...inertAttribute} ref={ref} id="app-navigation" className={`app-sidebar sidebar ${isOpen ? "is-open" : ""}`} aria-label="主导航" aria-hidden={mobileHidden} tabIndex={-1}>
       <div className="sidebar-brand">
         <div className="sidebar-brand-mark" aria-hidden="true">
           <Route size={21} />
@@ -24,7 +27,7 @@ export function Sidebar({ activePageId, isOpen, navigation, footer, onNavigate, 
           <strong>Trace</strong>
           <span>2026</span>
         </div>
-        <button className="sidebar-close ui-icon-button" type="button" aria-label="关闭导航" title="关闭导航" onClick={onClose}>
+        <button className="sidebar-close ui-icon-button" type="button" aria-label="关闭导航" title="关闭导航" data-focus-initial="true" onClick={onClose}>
           <X aria-hidden="true" size={20} />
         </button>
       </div>
@@ -84,4 +87,4 @@ export function Sidebar({ activePageId, isOpen, navigation, footer, onNavigate, 
       {footer && <div className="sidebar-summary">{footer}</div>}
     </aside>
   );
-}
+});

@@ -14,6 +14,15 @@ function readSource(path: string): string {
   }
 }
 
+function getLoadedStylesheets(): Array<{ path: string; source: string }> {
+  const main = readSource("../src/main.tsx");
+  const imports = [...main.matchAll(/import\s+["'](\.\/styles(?:\.css|\/[^"']+\.css))["'];/g)];
+  return imports.map((match) => ({
+    path: match[1],
+    source: readSource(`../src/${match[1].replace(/^\.\//, "")}`)
+  }));
+}
+
 async function importSource<T>(path: string): Promise<Partial<T>> {
   try {
     return (await import(pathToFileURL(resolve(__dirname, path)).href)) as T;
@@ -38,6 +47,21 @@ test("design tokens use the approved light Trace palette and compact geometry", 
   assert.equal(tokens.includes("linear-gradient"), false);
   assert.equal(tokens.includes("radial-gradient"), false);
   assert.equal(tokens.includes("prefers-color-scheme: dark"), false);
+});
+
+test("every loaded stylesheet is free of gradients, fake dark mode and radii above 8px", () => {
+  const stylesheets = getLoadedStylesheets();
+
+  assert.ok(stylesheets.length >= 8, "foundation and three domain style entries must all be loaded");
+  for (const stylesheet of stylesheets) {
+    assert.ok(stylesheet.source.length > 0, `${stylesheet.path} must resolve to a stylesheet`);
+    assert.equal(/(?:linear|radial|conic)-gradient\s*\(/i.test(stylesheet.source), false, `${stylesheet.path} contains a gradient`);
+    assert.equal(/prefers-color-scheme\s*:\s*dark/i.test(stylesheet.source), false, `${stylesheet.path} contains fake dark mode`);
+    const oversizedRadii = [...stylesheet.source.matchAll(/border-radius\s*:\s*(\d+)px/gi)]
+      .map((match) => Number(match[1]))
+      .filter((radius) => radius > 8);
+    assert.deepEqual(oversizedRadii, [], `${stylesheet.path} contains radii above 8px`);
+  }
 });
 
 test("layout provides a 216px desktop sidebar and a mobile top bar with drawer", () => {
@@ -92,6 +116,20 @@ test("the drawer close control stays hidden on desktop and appears at the mobile
   assert.match(layout, /@media \(max-width: 800px\)[\s\S]*\.app-sidebar\s*\{[\s\S]*z-index: 60;/);
 });
 
+test("all mobile navigation and compact action targets are at least 44px square", () => {
+  const components = readSource("../src/styles/components.css");
+  const mobileBlock = components.match(/@media \(max-width: 800px\) \{[\s\S]*?\n\}/)?.[0] ?? "";
+
+  assert.match(mobileBlock, /button,[\s\S]*a\[href\],[\s\S]*\[role="button"\][\s\S]*min-width: var\(--touch-target\);/);
+  assert.match(mobileBlock, /button,[\s\S]*a\[href\],[\s\S]*\[role="button"\][\s\S]*min-height: var\(--touch-target\) !important;/);
+
+  for (const selector of [".nav-item", ".nav-child", ".ui-select-option", ".ui-filter-chip button", ".ui-filter-clear"]) {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(mobileBlock, new RegExp(`${escaped}[\\s\\S]*min-height: var\\(--touch-target\\);`), `${selector} needs 44px height`);
+    assert.match(mobileBlock, new RegExp(`${escaped}[\\s\\S]*min-width: var\\(--touch-target\\);`), `${selector} needs 44px width`);
+  }
+});
+
 test("page registry preserves order, resolves pages and rejects duplicate ids", async () => {
   type RegistryModule = {
     createPageRegistry: <Context>(options: {
@@ -127,6 +165,96 @@ test("page registry preserves order, resolves pages and rejects duplicate ids", 
     () => createPageRegistry({ pages: [pages[0], pages[0]], defaultPageId: "daily" }),
     /duplicate page id/i
   );
+});
+
+test("page registry composes strongly typed domain page packages", async () => {
+  type RegistryModule = {
+    createPageRegistry: <Context>(options: {
+      packages: ReadonlyArray<{
+        id: string;
+        pages: ReadonlyArray<{ id: string; label: string; group: "records"; render: (context: Context) => unknown }>;
+      }>;
+      defaultPageId: string;
+    }) => { pages: ReadonlyArray<{ id: string }> };
+  };
+  const module = await importSource<RegistryModule>("../src/navigation/pageRegistry.ts");
+
+  const createPageRegistry = module.createPageRegistry!;
+  const registry = createPageRegistry({
+    packages: [
+      { id: "records", pages: [{ id: "daily", label: "今日工作台", group: "records", render: () => "daily" }] },
+      { id: "ledger", pages: [{ id: "all", label: "工作台账", group: "records", render: () => "all" }] }
+    ],
+    defaultPageId: "daily"
+  });
+
+  assert.deepEqual(registry.pages.map((page) => page.id), ["daily", "all"]);
+});
+
+test("page navigation state keeps visited pages mounted and remembers scroll positions", async () => {
+  type NavigationStateModule = {
+    createPageNavigationState: (defaultPageId: string) => {
+      activePageId: string;
+      visitedPageIds: ReadonlyArray<string>;
+      scrollPositions: Readonly<Record<string, number>>;
+    };
+    navigateToPage: (
+      state: { activePageId: string; visitedPageIds: ReadonlyArray<string>; scrollPositions: Readonly<Record<string, number>> },
+      nextPageId: string,
+      currentScrollTop: number
+    ) => { activePageId: string; visitedPageIds: ReadonlyArray<string>; scrollPositions: Readonly<Record<string, number>> };
+    getPageScrollTop: (state: { scrollPositions: Readonly<Record<string, number>> }, pageId: string) => number;
+  };
+  const module = await importSource<NavigationStateModule>("../src/navigation/pageNavigationState.ts");
+
+  assert.equal(typeof module.createPageNavigationState, "function");
+  const initial = module.createPageNavigationState!("daily");
+  const ledger = module.navigateToPage!(initial, "all", 320);
+  const returned = module.navigateToPage!(ledger, "daily", 88);
+
+  assert.deepEqual(returned.visitedPageIds, ["daily", "all"]);
+  assert.equal(returned.activePageId, "daily");
+  assert.equal(module.getPageScrollTop!(returned, "daily"), 320);
+  assert.equal(module.getPageScrollTop!(returned, "all"), 88);
+});
+
+test("focus-cycle logic wraps Tab and Shift+Tab inside an open surface", async () => {
+  type FocusModule = {
+    getWrappedFocusIndex: (currentIndex: number, focusableCount: number, backwards: boolean) => number;
+  };
+  const module = await importSource<FocusModule>("../src/components/ui/focusScope.ts");
+
+  assert.equal(typeof module.getWrappedFocusIndex, "function");
+  assert.equal(module.getWrappedFocusIndex!(2, 3, false), 0);
+  assert.equal(module.getWrappedFocusIndex!(0, 3, true), 2);
+  assert.equal(module.getWrappedFocusIndex!(-1, 3, false), 0);
+  assert.equal(module.getWrappedFocusIndex!(-1, 0, false), -1);
+});
+
+test("closed mobile drawer renders inert as an empty attribute and removes it when open", () => {
+  const sidebar = readSource("../src/components/Sidebar.tsx");
+
+  assert.match(sidebar, /const inertAttribute = mobileHidden \? \{ inert: "" \} : \{\};/, "closed drawers must render inert=\"\" without a React boolean-attribute warning");
+  assert.match(sidebar, /<aside \{\.\.\.inertAttribute\}/, "open drawers must omit the inert attribute");
+});
+
+test("drawer, modal and detail panel use the shared focus scope and modal aria contract", () => {
+  const appShell = readSource("../src/components/layout/AppShell.tsx");
+  const mobileTopBar = readSource("../src/components/layout/MobileTopBar.tsx");
+  const sidebar = readSource("../src/components/Sidebar.tsx");
+  const modal = readSource("../src/components/ui/ModalDialog.tsx");
+  const detail = readSource("../src/components/ui/DetailPanel.tsx");
+
+  assert.match(appShell, /useFocusScope/);
+  assert.match(mobileTopBar, /aria-expanded=\{open\}/);
+  assert.match(mobileTopBar, /aria-controls="app-navigation"/);
+  assert.match(sidebar, /aria-hidden=\{mobileHidden\}/);
+  assert.match(modal, /useFocusScope/);
+  assert.match(modal, /createPortal/);
+  assert.match(modal, /aria-modal="true"/);
+  assert.match(detail, /useFocusScope/);
+  assert.match(detail, /createPortal/);
+  assert.match(detail, /aria-modal="true"/);
 });
 
 test("navigation exposes the seven confirmed product modules in grouped order", async () => {
@@ -171,9 +299,55 @@ test("search options match labels and keywords without changing source order", a
 
 test("application keeps every legacy page reachable through registered ids", () => {
   const app = readSource("../src/App.tsx");
+  const pagePackage = readSource("../src/navigation/corePagePackage.tsx");
 
   for (const pageId of ["daily", "all", "weekly", "monthly", "yearly", "growth", "knowledge", "settings"]) {
-    assert.match(app, new RegExp(`id: ["']${pageId}["']`));
+    assert.match(pagePackage, new RegExp(`id: ["']${pageId}["']`));
   }
   assert.match(app, /createPageRegistry/);
+  assert.match(app, /AppPageContext/);
+  assert.equal(app.includes("./pages/"), false);
+});
+
+test("domain page style entries are stable and imported after the foundation", () => {
+  const main = readSource("../src/main.tsx");
+
+  assert.match(main, /import "\.\/styles\/work-outcomes\.css";/);
+  assert.match(main, /import "\.\/styles\/growth-reports\.css";/);
+  assert.match(main, /import "\.\/styles\/settings-data\.css";/);
+});
+
+test("form field aria state links labels, descriptions, errors and required controls", async () => {
+  type FieldAriaModule = {
+    buildFieldAria: (options: {
+      controlId: string;
+      hintId: string;
+      errorId: string;
+      hasHint: boolean;
+      hasError: boolean;
+      required: boolean;
+      describedBy?: string;
+    }) => Record<string, unknown>;
+  };
+  const module = await importSource<FieldAriaModule>("../src/components/ui/formFieldAria.ts");
+
+  assert.equal(typeof module.buildFieldAria, "function");
+  assert.deepEqual(
+    module.buildFieldAria!({
+      controlId: "hours",
+      hintId: "hours-hint",
+      errorId: "hours-error",
+      hasHint: true,
+      hasError: true,
+      required: true,
+      describedBy: "external-help"
+    }),
+    {
+      id: "hours",
+      "aria-describedby": "external-help hours-hint hours-error",
+      "aria-invalid": true,
+      "aria-required": true,
+      required: true
+    }
+  );
 });

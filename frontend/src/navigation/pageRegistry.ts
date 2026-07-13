@@ -9,6 +9,11 @@ export interface PageRegistration<Context, PageId extends string = string> {
   render: (context: Context) => ReactNode;
 }
 
+export interface DomainPagePackage<Context, PageId extends string = string> {
+  id: string;
+  pages: ReadonlyArray<PageRegistration<Context, PageId>>;
+}
+
 export interface PageRegistry<Context, PageId extends string = string> {
   pages: ReadonlyArray<PageRegistration<Context, PageId>>;
   getPage: (id: string) => PageRegistration<Context, PageId> | undefined;
@@ -17,14 +22,17 @@ export interface PageRegistry<Context, PageId extends string = string> {
 }
 
 interface CreatePageRegistryOptions<Context, PageId extends string> {
-  pages: ReadonlyArray<PageRegistration<Context, PageId>>;
+  pages?: ReadonlyArray<PageRegistration<Context, PageId>>;
+  packages?: ReadonlyArray<DomainPagePackage<Context, PageId>>;
   defaultPageId: PageId;
 }
 
 export function createPageRegistry<Context, PageId extends string = string>({
-  pages,
+  pages: directPages,
+  packages = [],
   defaultPageId
 }: CreatePageRegistryOptions<Context, PageId>): PageRegistry<Context, PageId> {
+  const pages = directPages ?? packages.flatMap((pagePackage) => pagePackage.pages);
   const pageMap = new Map<PageId, PageRegistration<Context, PageId>>();
 
   for (const page of pages) {

@@ -1,24 +1,25 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { EditModal } from "./components/EditModal";
 import { ReportModal } from "./components/ReportModal";
 import { AppShell } from "./components/layout";
-import { AllRecordsPage } from "./pages/AllRecordsPage";
-import { DailyPage } from "./pages/DailyPage";
-import { GrowthPage } from "./pages/GrowthPage";
-import { KnowledgePage } from "./pages/KnowledgePage";
-import { MonthlyPage } from "./pages/MonthlyPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { WeeklyPage } from "./pages/WeeklyPage";
-import { YearlyPage } from "./pages/YearlyPage";
 import { exportOffice } from "./lib/exportApi";
 import { generateTagReport } from "./lib/report";
 import { useRecords } from "./lib/useRecords";
-import { createPageRegistry, getNavigationLabel, TRACE_NAVIGATION } from "./navigation";
+import {
+  CORE_PAGE_PACKAGES,
+  createPageNavigationState,
+  createPageRegistry,
+  getNavigationLabel,
+  getPageScrollTop,
+  navigateToPage,
+  TRACE_NAVIGATION,
+  type AppPageContext
+} from "./navigation";
 import type { ExportFormat, RecordInput, ReportBundle, WorkRecord } from "./types";
 
 export function App() {
   const { records, loading, error, addRecord, updateRecord, deleteRecord, clearRecords } = useRecords();
-  const [activePageId, setActivePageId] = useState("daily");
+  const [pageNavigation, setPageNavigation] = useState(() => createPageNavigationState("daily"));
   const [editingRecord, setEditingRecord] = useState<WorkRecord | null>(null);
   const [report, setReport] = useState<ReportBundle | null>(null);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
@@ -120,52 +121,65 @@ export function App() {
     }
   }
 
-  const pageRegistry = createPageRegistry({
+  const pageRegistry = createPageRegistry<AppPageContext>({
     defaultPageId: "daily",
-    pages: [
-      {
-        id: "daily",
-        label: "今日工作台",
-        group: "records",
-        render: () => (
-          <DailyPage records={records} onAdd={handleAdd} onEdit={setEditingRecord} onDelete={handleDelete} onNotify={showToast} />
-        )
-      },
-      {
-        id: "all",
-        label: "工作台账",
-        group: "records",
-        render: () => (
-          <AllRecordsPage
-            records={records}
-            onEdit={setEditingRecord}
-            onDelete={handleDelete}
-            onClear={handleClear}
-            onGenerateReport={handleGenerateReport}
-          />
-        )
-      },
-      { id: "weekly", label: "周报", group: "review", render: () => <WeeklyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} /> },
-      { id: "monthly", label: "月报", group: "review", render: () => <MonthlyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} /> },
-      { id: "yearly", label: "年报", group: "review", render: () => <YearlyPage records={records} onGenerateReport={handleGenerateReport} onNotify={showToast} /> },
-      { id: "growth", label: "成长与目标", group: "growth", render: () => <GrowthPage records={records} onNotify={showToast} /> },
-      { id: "knowledge", label: "成果管理", group: "work", render: () => <KnowledgePage records={records} onNotify={showToast} /> },
-      { id: "settings", label: "配置与数据", group: "system", render: () => <SettingsPage onNotify={showToast} /> }
-    ]
+    packages: CORE_PAGE_PACKAGES
   });
-  const activePage = pageRegistry.getPage(activePageId) ?? pageRegistry.getDefaultPage();
+  const activePage = pageRegistry.getPage(pageNavigation.activePageId) ?? pageRegistry.getDefaultPage();
+  const pageContext: AppPageContext = {
+    records,
+    onAddRecord: handleAdd,
+    onEditRecord: setEditingRecord,
+    onDeleteRecord: handleDelete,
+    onClearRecords: handleClear,
+    onGenerateReport: handleGenerateReport,
+    onNotify: showToast
+  };
+
+  function handleNavigate(pageId: string) {
+    setPageNavigation((current) => navigateToPage(current, pageId, window.scrollY));
+  }
+
+  useLayoutEffect(() => {
+    const scrollTop = getPageScrollTop(pageNavigation, pageNavigation.activePageId);
+    const frame = window.requestAnimationFrame(() => window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pageNavigation.activePageId]);
 
   return (
     <AppShell
       activePageId={activePage.id}
       activePageLabel={getNavigationLabel(activePage.id)}
       navigation={TRACE_NAVIGATION}
-      onNavigate={setActivePageId}
+      onNavigate={handleNavigate}
       footer={<><span>记录</span><strong>{records.length}</strong></>}
     >
         {loading && <div className="status-banner">正在从服务器数据库读取记录...</div>}
         {error && <div className="status-banner error">数据加载失败：{error}</div>}
-        {activePage.render(undefined)}
+        <div className="app-page-stack">
+          {pageRegistry.pages
+            .filter((page) => pageNavigation.visitedPageIds.includes(page.id))
+            .map((page) => {
+              const isActive = page.id === activePage.id;
+              const domainClass = page.group === "system"
+                ? "trace-settings-data"
+                : page.group === "growth" || page.group === "review"
+                  ? "trace-growth-reports"
+                  : "trace-work-outcomes";
+
+              return (
+                <section
+                  className={`app-page ${domainClass}`}
+                  data-page-id={page.id}
+                  hidden={!isActive}
+                  aria-hidden={!isActive}
+                  key={page.id}
+                >
+                  {page.render(pageContext)}
+                </section>
+              );
+            })}
+        </div>
 
       <EditModal record={editingRecord} onClose={() => setEditingRecord(null)} onSave={handleSaveEdit} />
       <ReportModal

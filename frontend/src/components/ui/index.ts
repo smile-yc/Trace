@@ -21,3 +21,7 @@ export type { DetailPanelProps } from "./DetailPanel";
 export type { ModalDialogProps } from "./ModalDialog";
 export type { SearchOption } from "./searchOptions";
 export { filterSearchOptions } from "./searchOptions";
+export { buildFieldAria } from "./formFieldAria";
+export type { FieldAriaProps } from "./formFieldAria";
+export { getWrappedFocusIndex, useFocusScope } from "./focusScope";
+export type { UseFocusScopeOptions } from "./focusScope";

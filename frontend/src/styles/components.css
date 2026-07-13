@@ -827,6 +827,22 @@
     display: inline;
   }
 
+  button,
+  a[href],
+  [role="button"] {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target) !important;
+  }
+
+  .nav-item,
+  .nav-child,
+  .ui-select-option,
+  .ui-filter-chip button,
+  .ui-filter-clear {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+
   .page-header {
     display: grid;
     gap: var(--space-3);

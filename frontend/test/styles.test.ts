@@ -56,7 +56,11 @@ test("report dashboard proportion cards expose refined detail layouts", () => {
 test("report dashboard follows BI visual requirements", () => {
   assert.equal(reportDashboard.includes("visibleItems = items.slice(0, maxVisibleItems)"), true);
   assert.equal(reportDashboard.includes("Top ${visibleItems.length}"), true);
-  assert.equal(styles.includes("border-radius: 16px;"), true);
+  assert.equal(styles.includes("border-radius: 8px;"), true);
+  assert.deepEqual(
+    [...styles.matchAll(/border-radius:\s*(\d+)px/g)].map((match) => Number(match[1])).filter((radius) => radius > 8),
+    []
+  );
   assert.match(styles, /\.business-insight-card \{[\s\S]*var\(--navy\);/);
   assert.equal(styles.includes(".business-legend-meta"), true);
 });
