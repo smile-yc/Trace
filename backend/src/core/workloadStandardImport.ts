@@ -53,13 +53,16 @@ export async function parseWorkloadStandardWorkbook(buffer: Buffer): Promise<Par
     const values = ["businessCategory", "workType", "productSystem", "subtask", "unit", "coefficient", "remark"]
       .map((field) => read(field as keyof ParsedWorkloadStandardRow));
     if (values.every((value) => !value)) return;
+    const coefficientText = read("coefficient");
+    const coefficient = Number(coefficientText);
+    if (!coefficientText || !Number.isFinite(coefficient)) throw new Error("WORKLOAD_STANDARD_IMPORT_INVALID");
     rows.push({
       businessCategory: read("businessCategory"),
       workType: read("workType"),
       productSystem: read("productSystem"),
       subtask: read("subtask"),
       unit: read("unit"),
-      coefficient: Number(read("coefficient")),
+      coefficient,
       remark: read("remark")
     });
   });

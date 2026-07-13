@@ -13,7 +13,7 @@ const importRowSchema = z.object({
   productSystem: z.string().optional(),
   subtask: z.string().optional(),
   unit: z.string().optional(),
-  coefficient: z.coerce.number(),
+  coefficient: z.number().finite(),
   remark: z.string().optional()
 });
 

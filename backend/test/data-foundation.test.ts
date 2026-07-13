@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { spawn } from "node:child_process";
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-data-foundation-"));
 process.env.DATA_DIR = dataDir;
@@ -100,7 +101,7 @@ test("standard import preview distinguishes new duplicate conflict and invalid r
   ]);
 
   assert.deepEqual(preview.rows.map((row: { status: string }) => row.status), [
-    "duplicate",
+    "conflict",
     "conflict",
     "new",
     "invalid"
@@ -144,4 +145,120 @@ test("Excel standard sheet parsing maps the supported header aliases", async () 
     coefficient: 1.5,
     remark: "Excel 导入"
   }]);
+});
+
+test("record rejects a supplied standard that does not match its classification", () => {
+  const version = database.getActiveWorkloadStandardVersion();
+  assert.ok(version);
+  const standard = database.insertWorkloadStandard({
+    versionId: version.id,
+    businessCategory: "三新业务",
+    workType: "工程测试",
+    coefficient: 5,
+    unit: "项"
+  });
+
+  assert.throws(
+    () => database.insertRecord(recordInput({ coefficient: 5, coefficientStandardId: standard.id })),
+    /WORKLOAD_STANDARD_MISMATCH/
+  );
+});
+
+test("duplicate ability IDs reject atomically without persisting a record", () => {
+  const before = database.listRecords().length;
+  assert.throws(
+    () => database.insertRecord(recordInput({
+      abilityAllocations: [
+        { abilityId: "engineering", abilityName: "工程技术", percentage: 50 },
+        { abilityId: "engineering", abilityName: "工程技术", percentage: 50 }
+      ]
+    })),
+    /ABILITY_ALLOCATION_INVALID/
+  );
+  assert.equal(database.listRecords().length, before);
+});
+
+test("record updates refresh provenance and replace ability allocations atomically", () => {
+  const version = database.getActiveWorkloadStandardVersion();
+  assert.ok(version);
+  const standard = database.insertWorkloadStandard({
+    versionId: version.id,
+    businessCategory: "传统业务",
+    workType: "工程调试",
+    productSystem: "Trace",
+    subtask: "更新快照",
+    coefficient: 4,
+    unit: "次"
+  });
+  const record = database.insertRecord(recordInput({ subtask: "旧任务" }));
+  const updated = database.updateRecord(record.id, recordInput({
+    subtask: "更新快照",
+    coefficient: 4,
+    coefficientStandardId: standard.id,
+    abilityAllocations: [{ abilityId: "management", abilityName: "项目管理与推进", percentage: 100 }]
+  }));
+
+  assert.equal(updated?.coefficientSource, "standard_exact");
+  assert.equal(updated?.workloadUnit, "次");
+  assert.equal(updated?.coefficientStandardId, standard.id);
+  assert.deepEqual(updated?.abilityAllocations.map((item: { abilityId: string }) => item.abilityId), ["management"]);
+});
+
+test("Excel parsing rejects blank and non-finite coefficients", async () => {
+  const { default: ExcelJS } = await import("exceljs");
+  const { parseWorkloadStandardWorkbook } = await import("../src/core/workloadStandardImport.ts");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("工作当量标准");
+  sheet.addRow(["业务分类", "工作类型", "系数"]);
+  sheet.addRow(["三新业务", "工程测试", ""]);
+  sheet.addRow(["三新业务", "工程设计", "Infinity"]);
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  await assert.rejects(
+    () => parseWorkloadStandardWorkbook(buffer),
+    /WORKLOAD_STANDARD_IMPORT_INVALID/
+  );
+});
+
+test("import preview marks repeated keys inside the same workbook as conflicts", () => {
+  const preview = database.previewWorkloadStandardImport([
+    { businessCategory: "三新业务", workType: "现场支持", coefficient: 1, unit: "项" },
+    { businessCategory: "三新业务", workType: "现场支持", coefficient: 2, unit: "项" }
+  ]);
+  assert.deepEqual(preview.rows.map((row: { status: string }) => row.status), ["conflict", "conflict"]);
+});
+
+test("HTTP matching accepts versionId and returns both transition response shapes", async (t) => {
+  const httpDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-match-http-"));
+  const port = 4300 + Math.floor(Math.random() * 500);
+  const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], {
+    cwd: path.resolve(process.cwd(), "backend"),
+    env: { ...process.env, PORT: String(port), DATA_DIR: httpDataDir, DB_PATH: path.join(httpDataDir, "report.sqlite") },
+    stdio: "ignore"
+  });
+  t.after(() => child.kill());
+  let ready = false;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+      if (response.ok) {
+        ready = true;
+        break;
+      }
+    } catch {
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(ready, true);
+  const version = await (await fetch(`http://127.0.0.1:${port}/api/workload-standard-versions`)).json() as { versions: Array<{ id: string }> };
+  const created = await fetch(`http://127.0.0.1:${port}/api/workload-standards`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ versionId: version.versions[0].id, businessCategory: "三新业务", workType: "工程测试", coefficient: 3 })
+  });
+  assert.equal(created.status, 201);
+  const response = await fetch(`http://127.0.0.1:${port}/api/workload-standards/match?versionId=${encodeURIComponent(version.versions[0].id)}&businessCategory=三新业务&workType=工程测试`);
+  const body = await response.json() as { standard?: { coefficient: number }; match?: { standard: { coefficient: number } } };
+  assert.equal(body.standard?.coefficient, 3);
+  assert.equal(body.match?.standard.coefficient, 3);
 });

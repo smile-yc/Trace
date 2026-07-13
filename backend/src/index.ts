@@ -179,6 +179,7 @@ const workloadStandardVersionInputSchema = z.object({
 });
 
 const workloadMatchSchema = z.object({
+  versionId: z.string().trim().min(1).optional(),
   businessCategory: z.string().trim().min(1).max(80),
   workType: z.string().trim().min(1).max(80),
   productSystem: z.string().trim().max(80).optional().default(""),
@@ -420,7 +421,8 @@ app.delete("/api/workload-standards/:id", (req, res) => {
 app.get("/api/workload-standards/match", (req, res, next) => {
   try {
     const input = workloadMatchSchema.parse(req.query);
-    res.json({ match: matchWorkloadStandard(input) });
+    const match = matchWorkloadStandard(input);
+    res.json({ standard: match?.standard ?? null, match });
   } catch (error) {
     next(error);
   }

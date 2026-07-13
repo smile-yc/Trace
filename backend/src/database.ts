@@ -1020,18 +1020,26 @@ function normalizeImportRow(input: WorkloadStandardImportRow) {
 
 export function previewWorkloadStandardImport(rows: WorkloadStandardImportRow[]) {
   const version = getActiveWorkloadStandardVersion();
-  return {
-    baseVersionId: version?.id ?? null,
-    rows: rows.map((input, index) => {
-      const row = normalizeImportRow(input);
-      let status: ImportStatus = "invalid";
-      if (row.businessCategory && row.workType && row.coefficient !== null && row.coefficient >= 0) {
-        const existing = version ? findWorkloadStandardByKey(version.id, row.businessCategory, row.workType, row.productSystem, row.subtask) : null;
-        status = !existing ? "new" : existing.coefficient === row.coefficient && existing.unit === row.unit && existing.remark === row.remark ? "duplicate" : "conflict";
-      }
-      return { rowNumber: index + 1, status, ...row, coefficient: row.coefficient };
-    })
-  };
+  const previewRows = rows.map((input, index) => {
+    const row = normalizeImportRow(input);
+    let status: ImportStatus = "invalid";
+    if (row.businessCategory && row.workType && row.coefficient !== null && row.coefficient >= 0) {
+      const existing = version ? findWorkloadStandardByKey(version.id, row.businessCategory, row.workType, row.productSystem, row.subtask) : null;
+      status = !existing ? "new" : existing.coefficient === row.coefficient && existing.unit === row.unit && existing.remark === row.remark ? "duplicate" : "conflict";
+    }
+    return { rowNumber: index + 1, status, ...row, coefficient: row.coefficient };
+  });
+  const keyRows = new Map<string, number[]>();
+  previewRows.forEach((row) => {
+    if (row.status === "invalid") return;
+    const key = [row.businessCategory, row.workType, row.productSystem, row.subtask].join("\u0000");
+    keyRows.set(key, [...(keyRows.get(key) ?? []), row.rowNumber]);
+  });
+  const conflictingRows = new Set(Array.from(keyRows.values()).filter((numbers) => numbers.length > 1).flat());
+  previewRows.forEach((row) => {
+    if (conflictingRows.has(row.rowNumber)) row.status = "conflict";
+  });
+  return { baseVersionId: version?.id ?? null, rows: previewRows };
 }
 
 export function confirmWorkloadStandardImport(input: {
@@ -1350,7 +1358,8 @@ function normalizeAbilityAllocations(
       percentage: normalizeNumber(item.percentage)
     }));
     const total = allocations.reduce((sum, item) => sum + (item.percentage ?? 0), 0);
-    if (allocations.some((item) => !item.abilityId || !item.abilityName || item.percentage === null || item.percentage < 0) || Math.abs(total - 100) > 0.000001) {
+    const abilityIds = new Set(allocations.map((item) => item.abilityId));
+    if (abilityIds.size !== allocations.length || allocations.some((item) => !item.abilityId || !item.abilityName || item.percentage === null || item.percentage < 0) || Math.abs(total - 100) > 0.000001) {
       throw new Error("ABILITY_ALLOCATION_INVALID");
     }
     return allocations as Array<Pick<AbilityAllocation, "abilityId" | "abilityName" | "percentage">>;
@@ -1382,6 +1391,42 @@ function replaceAbilityAllocations(recordId: string, allocations: Array<Pick<Abi
   db.prepare("DELETE FROM record_ability_allocations WHERE recordId = ?").run(recordId);
   const statement = db.prepare("INSERT INTO record_ability_allocations (recordId, abilityId, abilityName, percentage) VALUES (?, ?, ?, ?)");
   allocations.forEach((allocation) => statement.run(recordId, allocation.abilityId, allocation.abilityName, allocation.percentage));
+}
+
+function resolveRecordStandard(
+  standardId: string | null | undefined,
+  fields: Pick<WorkRecord, "businessCategory" | "workType" | "productSystem" | "subtask">,
+  submittedCoefficient: number | null | undefined,
+  workloadUnit: string
+): Pick<WorkRecord, "coefficient" | "workloadUnit" | "coefficientSource" | "coefficientStandardId" | "coefficientStandardVersionId" | "workloadFormulaVersion"> {
+  if (!standardId) {
+    const coefficient = normalizeOptionalNonNegativeNumber(submittedCoefficient);
+    return {
+      coefficient,
+      workloadUnit: normalizeText(workloadUnit),
+      coefficientSource: coefficient === null ? "none" : "manual",
+      coefficientStandardId: null,
+      coefficientStandardVersionId: null,
+      workloadFormulaVersion: "quantity_x_coefficient_v1"
+    };
+  }
+
+  const standard = getWorkloadStandard(standardId);
+  const match = standard?.enabled
+    ? matchWorkloadStandard({ versionId: standard.versionId, ...fields })
+    : null;
+  if (!standard || match?.standard.id !== standard.id) throw new Error("WORKLOAD_STANDARD_MISMATCH");
+  if (submittedCoefficient !== undefined && submittedCoefficient !== null && Number(submittedCoefficient) !== standard.coefficient) {
+    throw new Error("WORKLOAD_STANDARD_MISMATCH");
+  }
+  return {
+    coefficient: standard.coefficient,
+    workloadUnit: standard.unit,
+    coefficientSource: match.matchLevel === "exact" ? "standard_exact" : "standard_general",
+    coefficientStandardId: standard.id,
+    coefficientStandardVersionId: standard.versionId,
+    workloadFormulaVersion: "quantity_x_coefficient_v1"
+  };
 }
 
 function toRecord(row: unknown): WorkRecord {
@@ -1429,41 +1474,44 @@ export function getRecord(id: string): WorkRecord | null {
 export function insertRecord(input: RecordInput): WorkRecord {
   const now = Date.now();
   const quantity = normalizeOptionalNonNegativeNumber(input.quantity);
-  const standard = input.coefficientStandardId ? getWorkloadStandard(input.coefficientStandardId) : null;
-  if (input.coefficientStandardId && (!standard || !standard.enabled)) throw new Error("WORKLOAD_STANDARD_MISMATCH");
-  const coefficient = standard ? standard.coefficient : normalizeOptionalNonNegativeNumber(input.coefficient);
-  if (standard && input.coefficient !== undefined && input.coefficient !== null && Number(input.coefficient) !== standard.coefficient) {
-    throw new Error("WORKLOAD_STANDARD_MISMATCH");
-  }
   const allocations = normalizeAbilityAllocations(input.abilityAllocations, normalizeText(input.abilityDimension));
+  const fields = {
+    businessCategory: inferBusinessCategory(input),
+    workType: inferWorkType(input),
+    productSystem: normalizeText(input.productSystem),
+    subtask: normalizeText(input.subtask)
+  };
+  const provenance = resolveRecordStandard(input.coefficientStandardId, fields, input.coefficient, input.workloadUnit ?? "");
   const record: WorkRecord = {
     id: createId(),
     date: input.date,
     title: input.title.trim() || "无标题",
     content: input.content.trim(),
     category: input.category || "其他",
-    businessCategory: inferBusinessCategory(input),
-    workType: inferWorkType(input),
+    businessCategory: fields.businessCategory,
+    workType: fields.workType,
     abilityDimension: allocations.map((item) => item.abilityName).join(","),
     projectName: normalizeText(input.projectName),
-    productSystem: normalizeText(input.productSystem),
-    subtask: normalizeText(input.subtask),
+    productSystem: fields.productSystem,
+    subtask: fields.subtask,
     quantity,
-    coefficient,
-    workload: normalizeWorkload(quantity, coefficient, input.workload),
+    coefficient: provenance.coefficient,
+    workload: normalizeWorkload(quantity, provenance.coefficient, input.workload),
     timeHours: normalizeOptionalNonNegativeNumber(input.timeHours),
     tags: normalizeTags(input.tags || ""),
-    workloadUnit: standard?.unit ?? normalizeText(input.workloadUnit),
-    coefficientSource: standard ? (standard.productSystem === normalizeText(input.productSystem) && standard.subtask === normalizeText(input.subtask) && standard.productSystem !== "" && standard.subtask !== "" ? "standard_exact" : "standard_general") : coefficient === null ? "none" : "manual",
-    coefficientStandardId: standard?.id ?? null,
-    coefficientStandardVersionId: standard?.versionId ?? null,
-    workloadFormulaVersion: "quantity_x_coefficient_v1",
+    workloadUnit: provenance.workloadUnit,
+    coefficientSource: provenance.coefficientSource,
+    coefficientStandardId: provenance.coefficientStandardId,
+    coefficientStandardVersionId: provenance.coefficientStandardVersionId,
+    workloadFormulaVersion: provenance.workloadFormulaVersion,
     abilityAllocations: [],
     createTime: now,
     updateTime: now
   };
 
-  db.prepare(
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(
     `INSERT INTO records (
        id,
        date,
@@ -1486,7 +1534,7 @@ export function insertRecord(input: RecordInput): WorkRecord {
        updateTime
      )
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+    ).run(
     record.id,
     record.date,
     record.title,
@@ -1506,9 +1554,13 @@ export function insertRecord(input: RecordInput): WorkRecord {
     record.workloadUnit, record.coefficientSource, record.coefficientStandardId, record.coefficientStandardVersionId, record.workloadFormulaVersion,
     record.createTime,
     record.updateTime
-  );
-
-  replaceAbilityAllocations(record.id, allocations);
+    );
+    replaceAbilityAllocations(record.id, allocations);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
   return getRecord(record.id) as WorkRecord;
 }
 
@@ -1516,35 +1568,59 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
   const existing = getRecord(id);
   if (!existing) return null;
 
-  const quantity =
-    input.quantity === undefined ? existing.quantity : normalizeOptionalNonNegativeNumber(input.quantity);
-  const coefficient =
-    input.coefficient === undefined ? existing.coefficient : normalizeOptionalNonNegativeNumber(input.coefficient);
-  const shouldRecalculateWorkload =
-    input.workload !== undefined || input.quantity !== undefined || input.coefficient !== undefined;
+  const quantity = input.quantity === undefined ? existing.quantity : normalizeOptionalNonNegativeNumber(input.quantity);
+  const fields = {
+    businessCategory: input.businessCategory ? inferBusinessCategory(input) : existing.businessCategory,
+    workType: input.workType ? inferWorkType(input) : existing.workType,
+    productSystem: input.productSystem === undefined ? existing.productSystem : normalizeText(input.productSystem),
+    subtask: input.subtask === undefined ? existing.subtask : normalizeText(input.subtask)
+  };
+  const refreshProvenance = input.coefficient !== undefined || input.coefficientStandardId !== undefined || input.workloadUnit !== undefined || input.businessCategory !== undefined || input.workType !== undefined || input.productSystem !== undefined || input.subtask !== undefined;
+  const provenance = refreshProvenance
+    ? resolveRecordStandard(input.coefficientStandardId === undefined ? existing.coefficientStandardId : input.coefficientStandardId, fields, input.coefficient === undefined ? existing.coefficient : input.coefficient, input.workloadUnit === undefined ? existing.workloadUnit : input.workloadUnit)
+    : {
+      coefficient: existing.coefficient,
+      workloadUnit: existing.workloadUnit,
+      coefficientSource: existing.coefficientSource,
+      coefficientStandardId: existing.coefficientStandardId,
+      coefficientStandardVersionId: existing.coefficientStandardVersionId,
+      workloadFormulaVersion: existing.workloadFormulaVersion
+    };
+  const refreshAllocations = input.abilityAllocations !== undefined || input.abilityDimension !== undefined;
+  const allocations = refreshAllocations
+    ? normalizeAbilityAllocations(input.abilityAllocations, input.abilityDimension === undefined ? existing.abilityDimension : normalizeText(input.abilityDimension))
+    : existing.abilityAllocations.map(({ abilityId, abilityName, percentage }) => ({ abilityId, abilityName, percentage }));
+  const shouldRecalculateWorkload = input.workload !== undefined || input.quantity !== undefined || refreshProvenance;
   const next: WorkRecord = {
     ...existing,
     date: input.date,
     title: input.title.trim() || "无标题",
     content: input.content.trim(),
     category: input.category || "其他",
-    businessCategory: input.businessCategory ? inferBusinessCategory(input) : existing.businessCategory,
-    workType: input.workType ? inferWorkType(input) : existing.workType,
-    abilityDimension:
-      input.abilityDimension === undefined ? existing.abilityDimension : normalizeText(input.abilityDimension),
+    businessCategory: fields.businessCategory,
+    workType: fields.workType,
+    abilityDimension: allocations.map((item) => item.abilityName).join(","),
     projectName: input.projectName === undefined ? existing.projectName : normalizeText(input.projectName),
-    productSystem: input.productSystem === undefined ? existing.productSystem : normalizeText(input.productSystem),
-    subtask: input.subtask === undefined ? existing.subtask : normalizeText(input.subtask),
+    productSystem: fields.productSystem,
+    subtask: fields.subtask,
     quantity,
-    coefficient,
-    workload: shouldRecalculateWorkload ? normalizeWorkload(quantity, coefficient, input.workload) : existing.workload,
+    coefficient: provenance.coefficient,
+    workload: shouldRecalculateWorkload ? normalizeWorkload(quantity, provenance.coefficient, input.workload) : existing.workload,
     timeHours:
       input.timeHours === undefined ? existing.timeHours : normalizeOptionalNonNegativeNumber(input.timeHours),
     tags: normalizeTags(input.tags || ""),
+    workloadUnit: provenance.workloadUnit,
+    coefficientSource: provenance.coefficientSource,
+    coefficientStandardId: provenance.coefficientStandardId,
+    coefficientStandardVersionId: provenance.coefficientStandardVersionId,
+    workloadFormulaVersion: provenance.workloadFormulaVersion,
+    abilityAllocations: [],
     updateTime: Date.now()
   };
 
-  db.prepare(
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(
     `UPDATE records
      SET
        date = ?,
@@ -1562,9 +1638,10 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
        workload = ?,
        timeHours = ?,
        tags = ?,
+       workloadUnit = ?, coefficientSource = ?, coefficientStandardId = ?, coefficientStandardVersionId = ?, workloadFormulaVersion = ?,
        updateTime = ?
      WHERE id = ?`
-  ).run(
+    ).run(
     next.date,
     next.title,
     next.content,
@@ -1580,11 +1657,17 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
     next.workload,
     next.timeHours,
     next.tags,
+    next.workloadUnit, next.coefficientSource, next.coefficientStandardId, next.coefficientStandardVersionId, next.workloadFormulaVersion,
     next.updateTime,
     id
-  );
-
-  return next;
+    );
+    replaceAbilityAllocations(id, allocations);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getRecord(id);
 }
 
 export function deleteRecord(id: string): boolean {

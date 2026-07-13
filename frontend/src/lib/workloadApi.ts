@@ -97,6 +97,7 @@ export async function deleteWorkloadStandardApi(id: string): Promise<void> {
 }
 
 export async function matchWorkloadStandard(input: {
+  versionId?: string;
   businessCategory: string;
   workType: string;
   productSystem?: string;
@@ -108,9 +109,10 @@ export async function matchWorkloadStandard(input: {
     productSystem: input.productSystem ?? "",
     subtask: input.subtask ?? ""
   });
+  if (input.versionId) params.set("versionId", input.versionId);
   const response = await fetch(`${API_BASE}/api/workload-standards/match?${params.toString()}`);
-  const data = await readJson<{ match: WorkloadStandardMatch | null }>(response);
-  return data.match?.standard ?? null;
+  const data = await readJson<{ standard?: WorkloadStandard | null; match?: WorkloadStandardMatch | null }>(response);
+  return data.match?.standard ?? data.standard ?? null;
 }
 
 export async function matchWorkloadStandardWithProvenance(input: {
@@ -128,5 +130,5 @@ export async function matchWorkloadStandardWithProvenance(input: {
   });
   if (input.versionId) params.set("versionId", input.versionId);
   const response = await fetch(`${API_BASE}/api/workload-standards/match?${params.toString()}`);
-  return (await readJson<{ match: WorkloadStandardMatch | null }>(response)).match;
+  return (await readJson<{ standard?: WorkloadStandard | null; match?: WorkloadStandardMatch | null }>(response)).match ?? null;
 }
