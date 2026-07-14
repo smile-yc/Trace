@@ -21,6 +21,8 @@ function recordInput(overrides: Record<string, unknown> = {}) {
     workType: "工程调试",
     abilityDimension: "工程技术,项目管理与推进",
     projectName: "",
+    projectId: null,
+    projectRelation: "non_project",
     productSystem: "Trace",
     subtask: "接口开发",
     quantity: 2,

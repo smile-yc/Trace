@@ -8,6 +8,8 @@ export interface WorkRecord {
   workType: string;
   abilityDimension: string;
   projectName: string;
+  projectId: string | null;
+  projectRelation: ProjectRelation;
   productSystem: string;
   subtask: string;
   quantity: number | null;
@@ -314,7 +316,8 @@ export interface RecordInput {
   businessCategory?: string;
   workType?: string;
   abilityDimension?: string;
-  projectName?: string;
+  projectId: string | null;
+  projectRelation: Exclude<ProjectRelation, "unassigned">;
   productSystem?: string;
   subtask?: string;
   quantity?: number | null;

@@ -47,6 +47,8 @@ test("insertRecord does not persist negative numeric metrics", () => {
     workType: "工程调试",
     abilityDimension: "工程技术",
     projectName: "",
+    projectId: null,
+    projectRelation: "non_project",
     productSystem: "",
     subtask: "",
     quantity: -1,

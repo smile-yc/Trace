@@ -18,6 +18,7 @@ import type {
   MilestoneUpdateInput,
   Project,
   ProjectInput,
+  ProjectRelation,
   ProjectStatus,
   ProjectUpdateInput,
   RecordInput,
@@ -391,6 +392,8 @@ const selectSql = `
     workType,
     abilityDimension,
     projectName,
+    projectId,
+    projectRelation,
     productSystem,
     subtask,
     quantity,
@@ -1731,6 +1734,8 @@ function toRecord(row: unknown): WorkRecord {
     workType: String(record.workType || "其他项"),
     abilityDimension: String(record.abilityDimension || ""),
     projectName: String(record.projectName || ""),
+    projectId: record.projectId == null ? null : String(record.projectId),
+    projectRelation: String(record.projectRelation || "unassigned") as ProjectRelation,
     productSystem: String(record.productSystem || ""),
     subtask: String(record.subtask || ""),
     quantity: normalizeOptionalNonNegativeNumber(record.quantity),
@@ -1747,6 +1752,29 @@ function toRecord(row: unknown): WorkRecord {
     updateTime: Number(record.updateTime)
   };
   return { ...base, abilityAllocations: getAbilityAllocations(base) };
+}
+
+function resolveRecordProject(
+  input: Pick<RecordInput, "projectId" | "projectRelation">,
+  existing?: Pick<WorkRecord, "projectId" | "projectRelation" | "projectName">
+): Pick<WorkRecord, "projectId" | "projectRelation" | "projectName"> {
+  if (input.projectRelation === "non_project" && !input.projectId) {
+    return { projectId: null, projectRelation: "non_project", projectName: "" };
+  }
+  if (input.projectRelation !== "project" || !input.projectId) {
+    throw new Error("PROJECT_RELATION_INVALID");
+  }
+  const project = getProject(input.projectId);
+  if (!project) throw new Error("PROJECT_NOT_FOUND");
+  if (project.mergedIntoProjectId) throw new Error("PROJECT_NOT_SELECTABLE");
+  return {
+    projectId: project.id,
+    projectRelation: "project",
+    projectName:
+      existing?.projectRelation === "project" && existing.projectId === project.id
+        ? existing.projectName
+        : project.name
+  };
 }
 
 export function listRecords(): WorkRecord[] {
@@ -1772,6 +1800,7 @@ export function insertRecord(input: RecordInput): WorkRecord {
     subtask: normalizeText(input.subtask)
   };
   const provenance = resolveRecordStandard(input.coefficientStandardId, fields, input.coefficient, input.workloadUnit ?? "");
+  const project = resolveRecordProject(input);
   const record: WorkRecord = {
     id: createId(),
     date: input.date,
@@ -1781,7 +1810,9 @@ export function insertRecord(input: RecordInput): WorkRecord {
     businessCategory: fields.businessCategory,
     workType: fields.workType,
     abilityDimension: allocations.map((item) => item.abilityName).join(","),
-    projectName: normalizeText(input.projectName),
+    projectName: project.projectName,
+    projectId: project.projectId,
+    projectRelation: project.projectRelation,
     productSystem: fields.productSystem,
     subtask: fields.subtask,
     quantity,
@@ -1812,6 +1843,8 @@ export function insertRecord(input: RecordInput): WorkRecord {
        workType,
        abilityDimension,
        projectName,
+       projectId,
+       projectRelation,
        productSystem,
        subtask,
        quantity,
@@ -1823,7 +1856,7 @@ export function insertRecord(input: RecordInput): WorkRecord {
        createTime,
        updateTime
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
     record.id,
     record.date,
@@ -1834,6 +1867,8 @@ export function insertRecord(input: RecordInput): WorkRecord {
     record.workType,
     record.abilityDimension,
     record.projectName,
+    record.projectId,
+    record.projectRelation,
     record.productSystem,
     record.subtask,
     record.quantity,
@@ -1881,6 +1916,7 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
     ? normalizeAbilityAllocations(input.abilityAllocations, input.abilityDimension === undefined ? existing.abilityDimension : normalizeText(input.abilityDimension))
     : existing.abilityAllocations.map(({ abilityId, abilityName, percentage }) => ({ abilityId, abilityName, percentage }));
   const shouldRecalculateWorkload = input.workload !== undefined || input.quantity !== undefined || refreshProvenance;
+  const project = resolveRecordProject(input, existing);
   const next: WorkRecord = {
     ...existing,
     date: input.date,
@@ -1890,7 +1926,9 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
     businessCategory: fields.businessCategory,
     workType: fields.workType,
     abilityDimension: allocations.map((item) => item.abilityName).join(","),
-    projectName: input.projectName === undefined ? existing.projectName : normalizeText(input.projectName),
+    projectName: project.projectName,
+    projectId: project.projectId,
+    projectRelation: project.projectRelation,
     productSystem: fields.productSystem,
     subtask: fields.subtask,
     quantity,
@@ -1921,6 +1959,8 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
        workType = ?,
        abilityDimension = ?,
        projectName = ?,
+       projectId = ?,
+       projectRelation = ?,
        productSystem = ?,
        subtask = ?,
        quantity = ?,
@@ -1940,6 +1980,8 @@ export function updateRecord(id: string, input: RecordInput): WorkRecord | null 
     next.workType,
     next.abilityDimension,
     next.projectName,
+    next.projectId,
+    next.projectRelation,
     next.productSystem,
     next.subtask,
     next.quantity,
