@@ -2,31 +2,40 @@ import cors from "cors";
 import express from "express";
 import { z } from "zod";
 import {
+  archiveProject,
   clearRecords,
   deleteConfigOption,
   deleteRecord,
   deleteWorkloadStandard,
   getAppSettings,
   getDatabasePath,
+  getProject,
+  getProjectMergePreview,
+  getProjectSummary,
   insertKnowledgeAsset,
   insertWorkloadStandardVersion,
   activateWorkloadStandardVersion,
   insertRecord,
   insertConfigOption,
   insertMilestone,
+  insertProject,
   insertWorkloadStandard,
   listConfigOptions,
   listKnowledgeAssets,
   listMilestones,
+  listProjects,
   listRecords,
   listWorkloadStandards,
   listWorkloadStandardVersions,
   matchWorkloadStandard,
+  mergeProjects,
+  reactivateProject,
   reorderConfigOptions,
   updateAppSettings,
   updateConfigOption,
   updateKnowledgeAsset,
   updateMilestone,
+  updateProject,
   updateWorkloadStandard,
   updateRecord
 } from "./database.js";
@@ -45,6 +54,9 @@ import type {
   KnowledgeAssetUpdateInput,
   MilestoneInput,
   MilestoneUpdateInput,
+  ProjectInput,
+  ProjectStatus,
+  ProjectUpdateInput,
   RecordInput,
   WorkloadStandardInput,
   WorkloadStandardUpdateInput
@@ -181,6 +193,23 @@ const workloadStandardVersionInputSchema = z.object({
   sourceName: z.string().trim().max(200).optional()
 });
 
+const projectStatuses = ["planned", "active", "paused", "completed", "archived"] as const;
+const optionalProjectDateSchema = z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]);
+const projectInputSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  shortName: z.string().trim().max(80).optional(),
+  status: z.enum(projectStatuses).optional(),
+  startDate: optionalProjectDateSchema.optional(),
+  endDate: optionalProjectDateSchema.optional(),
+  personalRole: z.string().trim().max(160).optional(),
+  goal: z.string().trim().max(1200).optional(),
+  description: z.string().trim().max(2000).optional(),
+  completionSummary: z.string().trim().max(2000).optional(),
+  aliases: z.array(z.string().trim().min(1).max(160)).max(50).optional()
+});
+const projectUpdateSchema = projectInputSchema.partial();
+const projectMergeSchema = z.object({ targetId: z.string().trim().min(1) });
+
 const workloadMatchSchema = z.object({
   versionId: z.string().trim().min(1).optional(),
   businessCategory: z.string().trim().min(1).max(80),
@@ -299,6 +328,104 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/records", (_req, res) => {
   res.json({ records: listRecords() });
+});
+
+app.get("/api/projects", (req, res) => {
+  const query = typeof req.query.query === "string" ? req.query.query : undefined;
+  const statuses = typeof req.query.statuses === "string"
+    ? req.query.statuses.split(",").filter((status): status is ProjectStatus => projectStatuses.includes(status as ProjectStatus))
+    : undefined;
+  const includeArchived = req.query.includeArchived === "true";
+  res.json({ projects: listProjects({ query, statuses, includeArchived }) });
+});
+
+app.get("/api/projects/:id", (req, res) => {
+  const project = getProject(req.params.id);
+  if (!project) {
+    res.status(404).json({ message: "项目不存在。" });
+    return;
+  }
+  res.json({ project });
+});
+
+app.get("/api/projects/:id/summary", (req, res) => {
+  const summary = getProjectSummary(req.params.id);
+  if (!summary) {
+    res.status(404).json({ message: "项目不存在。" });
+    return;
+  }
+  res.json({ summary });
+});
+
+app.post("/api/projects", (req, res, next) => {
+  try {
+    const project = insertProject(projectInputSchema.parse(req.body) as ProjectInput);
+    res.status(201).json({ project });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/projects/:id", (req, res, next) => {
+  try {
+    const project = updateProject(req.params.id, projectUpdateSchema.parse(req.body) as ProjectUpdateInput);
+    if (!project) {
+      res.status(404).json({ message: "项目不存在。" });
+      return;
+    }
+    res.json({ project });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/projects/:id/archive", (req, res, next) => {
+  try {
+    const project = archiveProject(req.params.id);
+    if (!project) {
+      res.status(404).json({ message: "项目不存在。" });
+      return;
+    }
+    res.json({ project });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/projects/:id/reactivate", (req, res, next) => {
+  try {
+    const project = reactivateProject(req.params.id);
+    if (!project) {
+      res.status(404).json({ message: "项目不存在。" });
+      return;
+    }
+    res.json({ project });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/projects/:id/merge-preview", (req, res, next) => {
+  try {
+    const { targetId } = projectMergeSchema.parse(req.query);
+    const preview = getProjectMergePreview(req.params.id, targetId);
+    if (!preview) {
+      res.status(400).json({ message: "项目合并目标无效。" });
+      return;
+    }
+    res.json({ preview });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/projects/:id/merge", (req, res, next) => {
+  try {
+    const { targetId } = projectMergeSchema.parse(req.body);
+    res.json({ project: mergeProjects(req.params.id, targetId) });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/config-options", (req, res) => {
@@ -625,6 +752,24 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   if (error instanceof Error && error.message === "KNOWLEDGE_ASSET_INVALID") {
     res.status(400).json({ message: "知识资产缺少标题。" });
     return;
+  }
+
+  if (error instanceof Error) {
+    const projectErrors: Record<string, [number, string]> = {
+      PROJECT_NAME_CONFLICT: [409, "已存在同名项目。"],
+      PROJECT_ALIAS_CONFLICT: [409, "项目名称、简称或别名与其他项目冲突。"],
+      PROJECT_NOT_FOUND: [404, "项目不存在。"],
+      PROJECT_INVALID_STATUS: [400, "项目状态无效。"],
+      PROJECT_INVALID_DATE_RANGE: [400, "项目结束日期不能早于开始日期。"],
+      PROJECT_RELATION_INVALID: [400, "请选择项目或明确标记为非项目事项。"],
+      PROJECT_NOT_SELECTABLE: [409, "该项目已合并，不能继续关联新记录。"],
+      PROJECT_MERGE_TARGET_INVALID: [400, "项目合并目标无效。"]
+    };
+    const mapped = projectErrors[error.message];
+    if (mapped) {
+      res.status(mapped[0]).json({ message: mapped[1] });
+      return;
+    }
   }
 
   console.error(error);
