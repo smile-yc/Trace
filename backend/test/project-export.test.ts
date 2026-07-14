@@ -22,8 +22,9 @@ test("Excel raw records export project identity, relation label and immutable na
   assert.match(source, /projectId: record\.projectId/);
   assert.match(source, /projectRelation: projectRelationLabels\[record\.projectRelation\]/);
   assert.match(source, /projectName: record\.projectName/);
-  assert.equal(source.includes("adjustedWorkload"), false);
-  assert.equal(source.includes("discount"), false);
+  assert.match(source, /workloadAdjustmentPercent/);
+  assert.match(source, /createReportReviewSheet/);
+  assert.match(source, /record\.workload/);
 });
 
 test("Word and PDF reports keep snapshot and original totals", () => {
@@ -32,8 +33,9 @@ test("Word and PDF reports keep snapshot and original totals", () => {
     assert.match(source, /record\.projectName/);
     assert.match(source, /analysis\.totalWorkload/);
     assert.match(source, /analysis\.totalTimeHours/);
-    assert.equal(source.includes("adjustedWorkload"), false);
-    assert.equal(source.includes("discount"), false);
+    assert.match(source, /workloadAdjustmentPercent/);
+    assert.match(source, /payload\.reportReview/);
+    assert.match(source, /record\.workload/);
   }
 });
 

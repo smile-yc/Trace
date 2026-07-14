@@ -2114,6 +2114,231 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+.report-review-workspace .panel-heading > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.report-mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+}
+
+.report-mode-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.report-mode-switch button.active {
+  background: var(--paper-muted);
+  color: var(--ink);
+}
+
+.report-comparison-grid,
+.report-judgement-grid,
+.report-review-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.report-comparison-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.report-judgement-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.report-comparison-grid details,
+.report-judgement-grid details {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.report-comparison-grid summary,
+.report-judgement-grid summary {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.report-comparison-grid summary::-webkit-details-marker,
+.report-judgement-grid summary::-webkit-details-marker {
+  display: none;
+}
+
+.report-comparison-grid summary strong,
+.report-judgement-grid summary strong {
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.report-comparison-grid summary small,
+.report-judgement-grid summary small {
+  color: var(--muted);
+}
+
+.report-comparison-grid summary small.positive {
+  color: var(--green);
+}
+
+.report-comparison-grid summary small.negative {
+  color: var(--danger);
+}
+
+.report-comparison-grid details > p,
+.report-comparison-grid details > ul,
+.report-judgement-grid details > ul {
+  margin: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.report-comparison-grid details > ul,
+.report-judgement-grid details > ul {
+  max-height: 220px;
+  overflow: auto;
+  padding-left: 30px;
+}
+
+.report-reminders {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.report-reminders h3 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.report-reminders p {
+  margin: 5px 0;
+  color: var(--text);
+}
+
+.automatic-report-summary {
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.automatic-report-summary p {
+  margin: 7px 0;
+  white-space: pre-wrap;
+}
+
+.automatic-report-summary small {
+  color: var(--muted);
+}
+
+.report-review-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.report-review-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.report-review-fields textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.report-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.report-review-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.annual-adjustment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.annual-adjustment-grid > div,
+.annual-adjustment-grid label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.annual-adjustment-grid span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.annual-adjustment-grid strong {
+  color: var(--ink);
+  font-size: 22px;
+}
+
+.annual-adjustment-grid label > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.annual-adjustment-grid input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .report-comparison-grid,
+  .report-judgement-grid,
+  .report-review-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-adjustment-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .business-donut-card .business-donut-stage {
   min-height: 232px;
 }

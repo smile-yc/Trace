@@ -44,6 +44,9 @@ import type {
   ProjectUpdateInput,
   RecordDeleteImpact,
   RecordInput,
+  ReportReview,
+  ReportReviewInput,
+  ReportReviewType,
   AbilityAllocation,
   AbilityAllocationInput,
   CoefficientSource,
@@ -524,6 +527,31 @@ const foundationMigrations: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_milestone_stages_order ON milestone_stages(milestoneId, sortOrder);
         CREATE INDEX IF NOT EXISTS idx_milestone_corrections_time ON milestone_corrections(milestoneId, changedTime);
         CREATE INDEX IF NOT EXISTS idx_milestones_goal ON milestones(goalId, enabled, sortOrder);
+      `);
+    }
+  },
+  {
+    version: 2026071404,
+    name: "add persisted report reviews",
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS report_reviews (
+          id TEXT PRIMARY KEY,
+          reportType TEXT NOT NULL CHECK(reportType IN ('week', 'month', 'year')),
+          periodKey TEXT NOT NULL,
+          achievements TEXT NOT NULL DEFAULT '',
+          shortcomings TEXT NOT NULL DEFAULT '',
+          causes TEXT NOT NULL DEFAULT '',
+          improvements TEXT NOT NULL DEFAULT '',
+          growth TEXT NOT NULL DEFAULT '',
+          nextPlan TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'final')),
+          createTime INTEGER NOT NULL,
+          updateTime INTEGER NOT NULL,
+          UNIQUE(reportType, periodKey)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_report_reviews_period ON report_reviews(reportType, periodKey, updateTime);
       `);
     }
   }
@@ -1812,6 +1840,73 @@ export function updateAppSettings(input: AppSettingsInput): AppSettings {
   ).run("appSettings", JSON.stringify(next), Date.now());
 
   return getAppSettings();
+}
+
+const reportReviewTypes = new Set<ReportReviewType>(["week", "month", "year"]);
+
+function normalizeReportReviewType(value: unknown): ReportReviewType {
+  const type = String(value || "") as ReportReviewType;
+  if (!reportReviewTypes.has(type)) throw new Error("REPORT_REVIEW_INVALID");
+  return type;
+}
+
+function normalizeReportPeriodKey(type: ReportReviewType, value: unknown): string {
+  const key = normalizeText(value);
+  const valid = type === "week" ? /^\d{4}-\d{2}-\d{2}$/.test(key)
+    : type === "month" ? /^\d{4}-\d{2}$/.test(key)
+      : /^\d{4}$/.test(key);
+  if (!valid) throw new Error("REPORT_REVIEW_INVALID");
+  return key;
+}
+
+function toReportReview(row: unknown): ReportReview {
+  const review = row as Record<string, unknown>;
+  return {
+    id: String(review.id),
+    reportType: String(review.reportType) as ReportReviewType,
+    periodKey: String(review.periodKey),
+    achievements: String(review.achievements || ""),
+    shortcomings: String(review.shortcomings || ""),
+    causes: String(review.causes || ""),
+    improvements: String(review.improvements || ""),
+    growth: String(review.growth || ""),
+    nextPlan: String(review.nextPlan || ""),
+    status: review.status === "final" ? "final" : "draft",
+    createTime: Number(review.createTime),
+    updateTime: Number(review.updateTime)
+  };
+}
+
+export function getReportReview(reportType: ReportReviewType, periodKey: string): ReportReview | null {
+  const type = normalizeReportReviewType(reportType);
+  const key = normalizeReportPeriodKey(type, periodKey);
+  const row = db.prepare("SELECT * FROM report_reviews WHERE reportType = ? AND periodKey = ?").get(type, key);
+  return row ? toReportReview(row) : null;
+}
+
+export function listReportReviews(reportType: ReportReviewType, periodPrefix = ""): ReportReview[] {
+  const type = normalizeReportReviewType(reportType);
+  return db.prepare("SELECT * FROM report_reviews WHERE reportType = ? AND periodKey LIKE ? ORDER BY periodKey DESC")
+    .all(type, `${normalizeText(periodPrefix)}%`).map(toReportReview);
+}
+
+export function upsertReportReview(input: ReportReviewInput): ReportReview {
+  const type = normalizeReportReviewType(input.reportType);
+  const key = normalizeReportPeriodKey(type, input.periodKey);
+  const existing = getReportReview(type, key);
+  const now = Date.now();
+  const id = existing?.id ?? createId();
+  db.prepare(`INSERT INTO report_reviews
+    (id, reportType, periodKey, achievements, shortcomings, causes, improvements, growth, nextPlan, status, createTime, updateTime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(reportType, periodKey) DO UPDATE SET
+      achievements = excluded.achievements, shortcomings = excluded.shortcomings, causes = excluded.causes,
+      improvements = excluded.improvements, growth = excluded.growth, nextPlan = excluded.nextPlan,
+      status = excluded.status, updateTime = excluded.updateTime`)
+    .run(id, type, key, normalizeText(input.achievements), normalizeText(input.shortcomings), normalizeText(input.causes),
+      normalizeText(input.improvements), normalizeText(input.growth), normalizeText(input.nextPlan),
+      input.status === "final" ? "final" : "draft", existing?.createTime ?? now, now);
+  return getReportReview(type, key) as ReportReview;
 }
 
 const growthGoalScopes = new Set<GrowthGoalScope>(["career", "cultivation", "annual", "learning"]);

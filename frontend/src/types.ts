@@ -117,6 +117,36 @@ export interface AppSettingsInput {
   abilityTargets?: Record<string, number>;
 }
 
+export type ReportReviewType = "week" | "month" | "year";
+export type ReportReviewStatus = "draft" | "final";
+
+export interface ReportReview {
+  id: string;
+  reportType: ReportReviewType;
+  periodKey: string;
+  achievements: string;
+  shortcomings: string;
+  causes: string;
+  improvements: string;
+  growth: string;
+  nextPlan: string;
+  status: ReportReviewStatus;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface ReportReviewInput {
+  reportType: ReportReviewType;
+  periodKey: string;
+  achievements?: string;
+  shortcomings?: string;
+  causes?: string;
+  improvements?: string;
+  growth?: string;
+  nextPlan?: string;
+  status?: ReportReviewStatus;
+}
+
 export type GrowthGoalScope = "career" | "cultivation" | "annual" | "learning";
 export type GrowthGoalStatus = "planned" | "active" | "paused" | "completed" | "archived";
 
@@ -531,4 +561,5 @@ export interface ExportScope {
 
 export interface ExportOptions {
   scope?: ExportScope;
+  workloadAdjustmentPercent?: number;
 }

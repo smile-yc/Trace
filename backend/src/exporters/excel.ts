@@ -66,6 +66,11 @@ function createSummarySheet(workbook: ExcelJS.Workbook, payload: ExportPayload):
   sheet.addRow({ metric: "结束日期", value: analysis.dateEnd, remark: "" });
   sheet.addRow({ metric: "记录总数", value: analysis.totalRecords, remark: "当前导出范围内的工作记录数" });
   sheet.addRow({ metric: "工作当量", value: analysis.totalWorkload, remark: "按记录工作当量求和" });
+  if (payload.scope?.periodType === "year") {
+    const percent = payload.workloadAdjustmentPercent ?? 100;
+    sheet.addRow({ metric: "年度汇报折算比例", value: `${percent}%`, remark: "仅影响本次汇报，不修改原始记录" });
+    sheet.addRow({ metric: "年度汇报折算当量", value: Number((analysis.totalWorkload * percent / 100).toFixed(4)), remark: "原始工作当量仍保留在上一行和原始明细中" });
+  }
   sheet.addRow({ metric: "投入时间", value: analysis.totalTimeHours, remark: "按记录投入时间求和，单位小时" });
   sheet.addRow({ metric: "数量合计", value: analysis.totalQuantity, remark: "按记录数量求和" });
   sheet.addRow({ metric: "活跃天数", value: analysis.activeDays, remark: "有记录的日期数量" });
@@ -75,6 +80,22 @@ function createSummarySheet(workbook: ExcelJS.Workbook, payload: ExportPayload):
   sheet.addRow({ metric: "产品系统数", value: analysis.productCount, remark: "" });
   sheet.addRow({ metric: "成果数量", value: payload.outcomes?.length ?? 0, remark: "正式成果、问题解决、阶段进展和可复用资产" });
 
+  styleSheet(sheet);
+}
+
+function createReportReviewSheet(workbook: ExcelJS.Workbook, payload: ExportPayload): void {
+  if (!payload.reportReview) return;
+  const sheet = workbook.addWorksheet("手工复盘");
+  sheet.columns = [
+    { header: "复盘部分", key: "section", width: 22 },
+    { header: "内容", key: "content", width: 90 }
+  ];
+  const review = payload.reportReview;
+  [
+    ["成绩与贡献", review.achievements], ["不足", review.shortcomings], ["原因", review.causes],
+    ["改进措施", review.improvements], ["成长与能力", review.growth], ["下一周期规划", review.nextPlan]
+  ].forEach(([section, content]) => sheet.addRow({ section, content }));
+  sheet.addRow({ section: "状态", content: review.status === "final" ? "已定稿" : "草稿" });
   styleSheet(sheet);
 }
 
@@ -364,6 +385,7 @@ export async function buildExcel(payload: ExportPayload): Promise<Buffer> {
   workbook.created = new Date();
 
   createSummarySheet(workbook, payload);
+  createReportReviewSheet(workbook, payload);
   createRawSheet(workbook, payload);
   createDistributionSheet(workbook, "业务分类汇总", analysis.businessSummary);
   createDistributionSheet(workbook, "工作类型汇总", analysis.workTypeSummary);

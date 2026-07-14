@@ -6,6 +6,7 @@ import { ReportDashboard } from "../components/ReportDashboard";
 import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
+import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
 import type { AppSettings, Milestone, Outcome, WorkRecord } from "../types";
 import { formatMonthLabel, getMonthRange, shiftMonth, todayKey } from "../lib/date";
 import { buildMonthWeekTrend, sumWorkload } from "../lib/dashboard";
@@ -39,6 +40,11 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
   const monthlyRecords = useMemo(
     () => filterByRange(records, range.start, range.end),
     [records, range.start, range.end]
+  );
+  const previousRange = useMemo(() => getMonthRange(shiftMonth(date, -1)), [date]);
+  const previousRecords = useMemo(
+    () => filterByRange(records, previousRange.start, previousRange.end),
+    [records, previousRange.start, previousRange.end]
   );
   const detailRecords = useMemo(
     () => filterReportDetailRecords(monthlyRecords, range, "week", detailWeek, defaultDetailWeek),
@@ -141,6 +147,15 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
           <div className="field-hint">当前月份暂无能力目标预警。</div>
         )}
       </section>
+
+      <ReportReviewWorkspace
+        reportType="month"
+        periodKey={range.monthKey}
+        currentRecords={monthlyRecords}
+        previousRecords={previousRecords}
+        outcomes={monthlyOutcomes}
+        onNotify={onNotify}
+      />
 
       <ExportPanel
         records={monthlyRecords}

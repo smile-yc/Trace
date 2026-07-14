@@ -126,6 +126,10 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
       `参与项目：${analysis.projectCount} 个`,
       `业务分类：${analysis.businessCount} 类，工作类型：${analysis.workTypeCount} 类，产品系统：${analysis.productCount} 类`
     ];
+    if (payload.scope?.periodType === "year") {
+      const percent = payload.workloadAdjustmentPercent ?? 100;
+      summaryLines.splice(2, 0, `年度汇报折算当量：${formatMetric(analysis.totalWorkload * percent / 100)}（折算比例 ${percent}%，原始明细不变）`);
+    }
     summaryLines.forEach((line) => {
       doc.fillColor("#4f4a43").fontSize(10).text(line, { width });
     });
@@ -163,7 +167,20 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
         .text(`${index + 1}. ${outcome.title}：${outcome.reportSummary || outcome.completedWork || outcome.valueImpact || outcome.type}`, { width, indent: 12 });
     });
 
-    drawSectionTitle(doc, "四、记录明细", width);
+    if (payload.reportReview) {
+      drawSectionTitle(doc, "四、手工复盘", width);
+      const review = payload.reportReview;
+      [
+        ["成绩与贡献", review.achievements], ["不足", review.shortcomings], ["原因", review.causes],
+        ["改进措施", review.improvements], ["成长与能力", review.growth], ["下一周期规划", review.nextPlan]
+      ].filter(([, content]) => content).forEach(([label, content]) => {
+        ensureSpace(doc, 42);
+        doc.fillColor("#4f4a43").fontSize(9.5).text(`${label}：${content}`, { width, lineGap: 2 });
+        doc.moveDown(0.25);
+      });
+    }
+
+    drawSectionTitle(doc, payload.reportReview ? "五、记录明细" : "四、记录明细", width);
     if (!sortedRecords.length) {
       doc.fillColor("#786d62").fontSize(10).text("当前范围暂无记录。", { width });
     }

@@ -159,6 +159,26 @@ test("stage milestones calculate progress from completed steps", () => {
   assert.equal(progress?.progress, 50);
 });
 
+test("report reviews save drafts, finalize and reopen without touching source statistics", () => {
+  const draft = database.upsertReportReview({
+    reportType: "month",
+    periodKey: "2026-07",
+    achievements: "Delivered the milestone",
+    shortcomings: "Evidence capture was late",
+    causes: "Review cadence was irregular",
+    improvements: "Review every Friday",
+    growth: "Improved cross-team coordination",
+    nextPlan: "Complete the next release",
+    status: "draft"
+  });
+  const finalized = database.upsertReportReview({ ...draft, status: "final" });
+  const reopened = database.upsertReportReview({ ...finalized, status: "draft" });
+
+  assert.equal(database.getReportReview("month", "2026-07")?.achievements, "Delivered the milestone");
+  assert.equal(reopened.status, "draft");
+  assert.equal(database.listReportReviews("month", "2026").length, 1);
+});
+
 test("new records snapshot a matched standard and later standard edits leave history unchanged", () => {
   const version = database.getActiveWorkloadStandardVersion();
   assert.ok(version);

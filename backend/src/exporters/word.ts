@@ -66,6 +66,13 @@ export async function buildWord(payload: ExportPayload): Promise<Buffer> {
     })
   ];
 
+  if (payload.scope?.periodType === "year") {
+    const percent = payload.workloadAdjustmentPercent ?? 100;
+    children.splice(5, 0, new Paragraph({
+      children: [new TextRun(`年度汇报折算当量：${formatMetric(analysis.totalWorkload * percent / 100)}（折算比例 ${percent}%，原始明细不变）`)]
+    }));
+  }
+
   const sections: Array<[string, ExportSummaryItem[]]> = [
     ["业务分类汇总", analysis.businessSummary],
     ["工作类型汇总", analysis.workTypeSummary],
@@ -138,11 +145,26 @@ export async function buildWord(payload: ExportPayload): Promise<Buffer> {
     });
   }
 
+  if (payload.reportReview) {
+    const review = payload.reportReview;
+    children.push(new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 300, after: 100 },
+      children: [new TextRun({ text: "四、手工复盘", bold: true })]
+    }));
+    [
+      ["成绩与贡献", review.achievements], ["不足", review.shortcomings], ["原因", review.causes],
+      ["改进措施", review.improvements], ["成长与能力", review.growth], ["下一周期规划", review.nextPlan]
+    ].filter(([, content]) => content).forEach(([label, content]) => {
+      children.push(new Paragraph({ spacing: { after: 70 }, children: [new TextRun({ text: `${label}：`, bold: true }), new TextRun(content)] }));
+    });
+  }
+
   children.push(
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
       spacing: { before: 300, after: 100 },
-      children: [new TextRun({ text: "四、记录明细", bold: true })]
+      children: [new TextRun({ text: payload.reportReview ? "五、记录明细" : "四、记录明细", bold: true })]
     })
   );
 

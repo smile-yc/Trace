@@ -14,6 +14,7 @@ import {
   getOutcome,
   getProject,
   getRecordDeleteImpact,
+  getReportReview,
   getProjectMergePreview,
   getProjectSummary,
   insertKnowledgeAsset,
@@ -34,6 +35,7 @@ import {
   listMilestonesWithProgress,
   listProjects,
   listRecords,
+  listReportReviews,
   listWorkloadStandards,
   listWorkloadStandardVersions,
   matchWorkloadStandard,
@@ -53,7 +55,8 @@ import {
   updateMilestone,
   updateProject,
   updateWorkloadStandard,
-  updateRecord
+  updateRecord,
+  upsertReportReview
 } from "./database.js";
 import { buildExcel } from "./exporters/excel.js";
 import { buildPdf } from "./exporters/pdf.js";
@@ -80,9 +83,11 @@ import type {
   ProjectStatus,
   ProjectUpdateInput,
   RecordInput,
+  ReportReviewInput,
+  ReportReviewType,
   WorkloadStandardInput,
-  WorkloadStandardUpdateInput
-  ,WorkloadStandardVersionInput
+  WorkloadStandardUpdateInput,
+  WorkloadStandardVersionInput
 } from "./types.js";
 
 const app = express();
@@ -257,6 +262,18 @@ const appSettingsSchema = z.object({
   abilityTargets: z.record(z.string().trim().min(1).max(80), z.coerce.number().finite().min(0)).optional()
 });
 
+const reportReviewSchema = z.object({
+  reportType: z.enum(["week", "month", "year"]),
+  periodKey: z.string().trim().min(4).max(10),
+  achievements: z.string().trim().max(5000).optional().default(""),
+  shortcomings: z.string().trim().max(5000).optional().default(""),
+  causes: z.string().trim().max(5000).optional().default(""),
+  improvements: z.string().trim().max(5000).optional().default(""),
+  growth: z.string().trim().max(5000).optional().default(""),
+  nextPlan: z.string().trim().max(5000).optional().default(""),
+  status: z.enum(["draft", "final"]).optional().default("draft")
+});
+
 const milestoneInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(600).optional().default(""),
@@ -401,7 +418,8 @@ const exportScopeSchema = z
 const exportSchema = z.object({
   title: z.string().min(1).max(120),
   records: z.array(recordSchema).max(5000),
-  scope: exportScopeSchema
+  scope: exportScopeSchema,
+  workloadAdjustmentPercent: z.coerce.number().finite().min(0).max(1000).optional().default(100)
 });
 
 type ExportFormat = "docx" | "pdf" | "xlsx";
@@ -671,6 +689,30 @@ app.put("/api/settings", (req, res, next) => {
   }
 });
 
+app.get("/api/report-reviews", (req, res, next) => {
+  try {
+    const reportType = z.enum(["week", "month", "year"]).parse(req.query.reportType) as ReportReviewType;
+    const periodKey = typeof req.query.periodKey === "string" ? req.query.periodKey : "";
+    if (periodKey) {
+      res.json({ review: getReportReview(reportType, periodKey) });
+      return;
+    }
+    const periodPrefix = typeof req.query.periodPrefix === "string" ? req.query.periodPrefix : "";
+    res.json({ reviews: listReportReviews(reportType, periodPrefix) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/report-reviews", (req, res, next) => {
+  try {
+    const input: ReportReviewInput = reportReviewSchema.parse(req.body);
+    res.json({ review: upsertReportReview(input) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/growth-goals", (req, res) => {
   res.json({ goals: listGrowthGoals({ includeArchived: req.query.includeArchived === "true" }) });
 });
@@ -923,7 +965,16 @@ app.post("/api/export/:format", async (req, res, next) => {
       appSettings: getAppSettings(),
       milestones: listMilestonesWithProgress(),
       knowledgeAssets: listKnowledgeAssets(),
-      outcomes
+      outcomes,
+      workloadAdjustmentPercent: input.workloadAdjustmentPercent,
+      reportReview: input.scope?.periodType && input.scope.startDate
+        ? getReportReview(
+          input.scope.periodType,
+          input.scope.periodType === "week" ? input.scope.startDate
+            : input.scope.periodType === "month" ? input.scope.startDate.slice(0, 7)
+              : input.scope.startDate.slice(0, 4)
+        )
+        : null
     };
     const buffer = await buildExport(format, payload);
     const safeName = sanitizeFileName(payload.title);

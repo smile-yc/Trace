@@ -6,6 +6,7 @@ import { ReportDashboard } from "../components/ReportDashboard";
 import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
+import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
 import type { Milestone, Outcome, WorkRecord } from "../types";
 import { getYearRange, shiftYear, todayKey } from "../lib/date";
 import { buildYearMonthTrend, sumWorkload } from "../lib/dashboard";
@@ -31,6 +32,7 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
   const [date, setDate] = useState(todayKey());
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [outcomes, setOutcomes] = useState<Outcome[]>([]);
+  const [workloadAdjustmentPercent, setWorkloadAdjustmentPercent] = useState(100);
   const range = useMemo(() => getYearRange(date), [date]);
   const [detailMode, setDetailMode] = useState<ReportDetailMode>("week");
   const [detailPeriod, setDetailPeriod] = useState(() =>
@@ -43,6 +45,11 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
   const yearlyRecords = useMemo(
     () => filterByRange(records, range.start, range.end),
     [records, range.start, range.end]
+  );
+  const previousRange = useMemo(() => getYearRange(shiftYear(date, -1)), [date]);
+  const previousRecords = useMemo(
+    () => filterByRange(records, previousRange.start, previousRange.end),
+    [records, previousRange.start, previousRange.end]
   );
   const detailRecords = useMemo(
     () => filterReportDetailRecords(yearlyRecords, range, detailMode, detailPeriod, defaultDetailPeriod),
@@ -150,12 +157,32 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
         </div>
       </section>
 
+      <ReportReviewWorkspace
+        reportType="year"
+        periodKey={range.year}
+        currentRecords={yearlyRecords}
+        previousRecords={previousRecords}
+        outcomes={yearlyOutcomes}
+        onNotify={onNotify}
+      />
+
+      <section className="panel annual-adjustment-panel">
+        <div className="panel-heading"><h2>年度汇报折算预览</h2><span>仅影响本次预览与导出</span></div>
+        <div className="annual-adjustment-grid">
+          <div><span>原始工作当量</span><strong>{sumWorkload(yearlyRecords)}</strong></div>
+          <label><span>汇报折算比例</span><div><input min="0" max="1000" step="1" type="number" value={workloadAdjustmentPercent} onChange={(event) => setWorkloadAdjustmentPercent(Number(event.target.value) || 0)} /><span>%</span></div></label>
+          <div><span>本次汇报当量</span><strong>{Number((sumWorkload(yearlyRecords) * workloadAdjustmentPercent / 100).toFixed(2))}</strong></div>
+        </div>
+        <p className="field-hint">默认 100%。不会修改日报、项目、成果或数据库中的原始工作当量。</p>
+      </section>
+
       <ExportPanel
         records={yearlyRecords}
         title={title}
         periodType="year"
         startDate={range.start}
         endDate={range.end}
+        workloadAdjustmentPercent={workloadAdjustmentPercent}
         onNotify={onNotify}
       />
 

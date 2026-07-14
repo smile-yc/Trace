@@ -11,6 +11,7 @@ interface ExportPanelProps {
   startDate: string;
   endDate: string;
   onNotify: (message: string) => void;
+  workloadAdjustmentPercent?: number;
 }
 
 type ExportKind = "period" | "project" | "businessCategory";
@@ -35,7 +36,7 @@ function formatIcon(format: ExportFormat) {
   return <Download size={15} />;
 }
 
-export function ExportPanel({ records, title, periodType, startDate, endDate, onNotify }: ExportPanelProps) {
+export function ExportPanel({ records, title, periodType, startDate, endDate, onNotify, workloadAdjustmentPercent = 100 }: ExportPanelProps) {
   const [selectedProject, setSelectedProject] = useState("");
   const [selectedBusiness, setSelectedBusiness] = useState("");
   const [exporting, setExporting] = useState<string | null>(null);
@@ -106,7 +107,7 @@ export function ExportPanel({ records, title, periodType, startDate, endDate, on
     const exportingKey = `${kind}-${format}`;
     try {
       setExporting(exportingKey);
-      await exportOffice(format, exportTitle, targetRecords, { scope });
+      await exportOffice(format, exportTitle, targetRecords, { scope, workloadAdjustmentPercent });
       onNotify(`${formatName(format)} 导出完成`);
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "导出失败");
@@ -149,6 +150,7 @@ export function ExportPanel({ records, title, periodType, startDate, endDate, on
           <div>
             <strong>当前周期</strong>
             <span>{startDate} - {endDate}</span>
+            {periodType === "year" && <span>本次汇报折算：{workloadAdjustmentPercent}%（原始明细不变）</span>}
           </div>
           {renderButtons("period")}
         </article>

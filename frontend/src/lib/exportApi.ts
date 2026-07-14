@@ -13,7 +13,7 @@ export async function exportOffice(
   const response = await fetch(`${API_BASE}/api/export/${format}`, {
     method: "POST",
     headers: { "Content-Type": contentType },
-    body: JSON.stringify({ title, records, scope: options.scope })
+    body: JSON.stringify({ title, records, scope: options.scope, workloadAdjustmentPercent: options.workloadAdjustmentPercent })
   });
 
   if (!response.ok) {

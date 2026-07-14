@@ -6,6 +6,7 @@ import { ReportDashboard } from "../components/ReportDashboard";
 import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
+import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
 import type { Outcome, WorkRecord } from "../types";
 import { formatDate, getWeekNumber, getWeekRange, shiftDate, todayKey } from "../lib/date";
 import { buildDailyTrend, sumWorkload } from "../lib/dashboard";
@@ -26,6 +27,11 @@ export function WeeklyPage({ records, onGenerateReport, onNotify }: WeeklyPagePr
   const weeklyRecords = useMemo(
     () => filterByRange(records, range.start, range.end),
     [records, range.start, range.end]
+  );
+  const previousRange = useMemo(() => getWeekRange(shiftDate(date, -7)), [date]);
+  const previousRecords = useMemo(
+    () => filterByRange(records, previousRange.start, previousRange.end),
+    [records, previousRange.start, previousRange.end]
   );
   const groups = useMemo(() => groupByDate(weeklyRecords), [weeklyRecords]);
   const trend = useMemo(() => buildDailyTrend(weeklyRecords, range.start, range.end), [weeklyRecords, range.start, range.end]);
@@ -78,6 +84,15 @@ export function WeeklyPage({ records, onGenerateReport, onNotify }: WeeklyPagePr
       <ReportDashboard records={weeklyRecords} trend={trend} activeLabel={`${activeDays} 天`} />
 
       <OutcomePeriodSection outcomes={weeklyOutcomes} title="本周成果与进展" />
+
+      <ReportReviewWorkspace
+        reportType="week"
+        periodKey={range.start}
+        currentRecords={weeklyRecords}
+        previousRecords={previousRecords}
+        outcomes={weeklyOutcomes}
+        onNotify={onNotify}
+      />
 
       <ExportPanel
         records={weeklyRecords}
