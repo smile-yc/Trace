@@ -3,13 +3,15 @@ export interface SearchOption {
   label: string;
   keywords?: ReadonlyArray<string>;
   disabled?: boolean;
+  hiddenUntilSearch?: boolean;
 }
 
 export function filterSearchOptions<T extends SearchOption>(options: ReadonlyArray<T>, query: string): ReadonlyArray<T> {
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  if (!normalizedQuery) return options;
+  const candidates = normalizedQuery ? options : options.filter((option) => !option.hiddenUntilSearch);
+  if (!normalizedQuery) return candidates;
 
-  return options.filter((option) => {
+  return candidates.filter((option) => {
     const searchableText = [option.label, option.value, ...(option.keywords ?? [])].join(" ").toLocaleLowerCase();
     return searchableText.includes(normalizedQuery);
   });
