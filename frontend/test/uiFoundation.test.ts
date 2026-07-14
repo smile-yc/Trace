@@ -316,7 +316,7 @@ test("application keeps every legacy page reachable through registered ids", () 
   const app = readSource("../src/App.tsx");
   const pagePackage = readSource("../src/navigation/corePagePackage.tsx");
 
-  for (const pageId of ["daily", "all", "weekly", "monthly", "yearly", "growth", "knowledge", "settings"]) {
+  for (const pageId of ["daily", "all", "projects", "weekly", "monthly", "yearly", "growth", "knowledge", "settings"]) {
     assert.match(pagePackage, new RegExp(`id: ["']${pageId}["']`));
   }
   assert.match(app, /createPageRegistry/);

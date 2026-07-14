@@ -30,7 +30,7 @@ export interface TraceNavigationItem {
 export const TRACE_NAVIGATION: ReadonlyArray<TraceNavigationItem> = [
   { id: "daily", label: "今日工作台", group: "记录", pageId: "daily", icon: LayoutDashboard },
   { id: "ledger", label: "工作台账", group: "记录", pageId: "all", icon: ClipboardList },
-  { id: "projects", label: "项目管理", group: "工作", icon: FolderKanban, disabled: true },
+  { id: "projects", label: "项目管理", group: "工作", pageId: "projects", icon: FolderKanban },
   { id: "outcomes", label: "成果管理", group: "工作", pageId: "knowledge", icon: BriefcaseBusiness },
   { id: "growth", label: "成长与目标", group: "成长", pageId: "growth", icon: TrendingUp },
   {

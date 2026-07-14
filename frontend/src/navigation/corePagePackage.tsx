@@ -3,6 +3,7 @@ import { DailyPage } from "../pages/DailyPage";
 import { GrowthPage } from "../pages/GrowthPage";
 import { KnowledgePage } from "../pages/KnowledgePage";
 import { MonthlyPage } from "../pages/MonthlyPage";
+import { ProjectsPage } from "../pages/ProjectsPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { WeeklyPage } from "../pages/WeeklyPage";
 import { YearlyPage } from "../pages/YearlyPage";
@@ -40,6 +41,12 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
             onGenerateReport={context.onGenerateReport}
           />
         )
+      },
+      {
+        id: "projects",
+        label: "项目管理",
+        group: "work",
+        render: (context) => <ProjectsPage onNotify={context.onNotify} />
       },
       {
         id: "knowledge",

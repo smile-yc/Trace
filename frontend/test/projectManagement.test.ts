@@ -138,3 +138,63 @@ test("record form uses an explicit searchable project relation", () => {
   assert.match(formSource, /projectId: projectRelation === "project" \? selectedProjectId : null/);
   assert.equal(formSource.includes("setProjectName"), false);
 });
+
+test("project management workspace exposes filters, lifecycle actions and detail evidence", () => {
+  const pageSource = readSource("../src/pages/ProjectsPage.tsx");
+  const mergeSource = readSource("../src/components/ProjectMergeDialog.tsx");
+  const pagePackageSource = readSource("../src/navigation/corePagePackage.tsx");
+  const navigationSource = readSource("../src/navigation/traceNavigation.ts");
+
+  assert.match(pagePackageSource, /id: "projects"/);
+  assert.match(navigationSource, /id: "projects"[\s\S]*pageId: "projects"/);
+  assert.equal(
+    navigationSource.includes('id: "projects", label: "项目管理", group: "工作", icon: FolderKanban, disabled: true'),
+    false
+  );
+
+  for (const text of [
+    "项目",
+    "状态",
+    "个人角色",
+    "工时",
+    "原始工作当量",
+    "最近活跃",
+    "当前重点",
+    "关键词",
+    "新建项目",
+    "编辑",
+    "归档",
+    "恢复",
+    "合并",
+    "记录数",
+    "活跃天数",
+    "业务分类",
+    "产品系统",
+    "能力投入",
+    "工作时间线",
+    "尚无关联成果"
+  ]) {
+    assert.ok(pageSource.includes(text), `project page is missing ${text}`);
+  }
+
+  for (const apiName of [
+    "fetchProjects",
+    "fetchProjectSummary",
+    "createProject",
+    "updateProject",
+    "archiveProject",
+    "reactivateProject"
+  ]) {
+    assert.ok(pageSource.includes(apiName), `project page is missing ${apiName}`);
+  }
+
+  assert.match(pageSource, /\["planned", "active", "paused"\]/);
+  assert.match(pageSource, /setSelectedProject\(null\);\s*setEditorProject\(selectedProject\)/);
+  assert.match(pageSource, /setSelectedProject\(null\);\s*setMergeSourceId\(selectedProject\.id\)/);
+  assert.match(mergeSource, /fetchProjectMergePreview/);
+  assert.match(mergeSource, /mergeProjects/);
+  assert.match(
+    mergeSource,
+    /合并后，来源项目的工作记录将关联到目标项目，历史项目名称快照保持不变。确认继续吗？/
+  );
+});
