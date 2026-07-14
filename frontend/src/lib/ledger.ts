@@ -1,5 +1,5 @@
 import type { CoefficientSource } from "../types/domain/workload";
-import type { Outcome, OutcomeStatus, Project, ProjectRelation, WorkRecord } from "../types";
+import type { Outcome, OutcomeSeed, OutcomeStatus, Project, ProjectRelation, WorkRecord } from "../types";
 
 export type LedgerPeriodMode = "week" | "month" | "year" | "custom";
 export type LedgerOutcomeStatusFilter = "" | "none" | OutcomeStatus;
@@ -241,4 +241,18 @@ export function analyzeLedgerQuality(records: WorkRecord[], projects: Project[])
     duplicateCategories,
     duplicateProjects: findNormalizedDuplicateGroups(projects.filter((item) => item.mergedIntoProjectId === null).map((item) => item.name))
   };
+}
+
+export function reconcileLedgerSelection(selectedIds: ReadonlySet<string>, visibleRecords: WorkRecord[]): Set<string> {
+  const visibleIds = new Set(visibleRecords.map((record) => record.id));
+  return new Set(Array.from(selectedIds).filter((id) => visibleIds.has(id)));
+}
+
+export function buildLedgerOutcomeSeed(records: WorkRecord[]): Omit<OutcomeSeed, "nonce"> {
+  const recordIds = records.map((record) => record.id);
+  const projectIds = new Set(records.map((record) => record.projectId).filter((id): id is string => Boolean(id)));
+  const allProjectRecords = records.length > 0 && records.every((record) => record.projectRelation === "project" && Boolean(record.projectId));
+  return allProjectRecords && projectIds.size === 1
+    ? { recordIds, projectId: Array.from(projectIds)[0] }
+    : { recordIds };
 }

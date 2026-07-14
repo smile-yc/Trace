@@ -3,8 +3,10 @@ import test from "node:test";
 import type { Outcome, Project, WorkRecord } from "../src/types.ts";
 import {
   analyzeLedgerQuality,
+  buildLedgerOutcomeSeed,
   filterLedgerRecords,
   findNormalizedDuplicateGroups,
+  reconcileLedgerSelection,
   summarizeLedger,
   type LedgerFilters
 } from "../src/lib/ledger.ts";
@@ -231,4 +233,16 @@ test("normalized duplicate detection finds labels and active projects that diffe
 
   assert.deepEqual(result.duplicateCategories.businessCategory, [["数字 化业务", "数字化业务"]]);
   assert.deepEqual(result.duplicateProjects, [["Trace 2026", "Trace-2026"]]);
+});
+
+test("batch selection removes hidden records and only prefills one shared project", () => {
+  assert.deepEqual(reconcileLedgerSelection(new Set(["record-1", "hidden"]), [record({ id: "record-1" })]), new Set(["record-1"]));
+  assert.deepEqual(buildLedgerOutcomeSeed([record({ id: "record-1" }), record({ id: "record-2" })]), {
+    recordIds: ["record-1", "record-2"],
+    projectId: "project-1"
+  });
+  assert.deepEqual(buildLedgerOutcomeSeed([
+    record({ id: "record-1" }),
+    record({ id: "record-2", projectId: "project-2", projectName: "其他项目" })
+  ]), { recordIds: ["record-1", "record-2"] });
 });

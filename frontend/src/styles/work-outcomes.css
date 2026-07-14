@@ -84,6 +84,424 @@
   }
 }
 
+.ledger-page {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.ledger-filter-field,
+.ledger-filter-grid label {
+  display: grid;
+  min-width: 150px;
+  gap: 5px;
+}
+
+.ledger-filter-field > span,
+.ledger-filter-grid label > span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.ledger-filter-field input,
+.ledger-filter-field select,
+.ledger-filter-grid input,
+.ledger-filter-grid select,
+.ledger-custom-range input {
+  min-height: var(--control-height);
+}
+
+.ledger-range-field {
+  min-width: 132px;
+}
+
+.ledger-project-filter {
+  min-width: min(260px, 100%);
+}
+
+.ledger-custom-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ledger-custom-range span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.ledger-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.ledger-quality-band,
+.ledger-list-band {
+  min-width: 0;
+  border-block: 1px solid var(--color-border);
+}
+
+.ledger-quality-band {
+  padding: 14px 0;
+  background: var(--color-surface-muted);
+}
+
+.ledger-list-band {
+  padding-top: 14px;
+}
+
+.ledger-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-inline: 14px;
+}
+
+.ledger-section-heading h2,
+.ledger-section-heading p {
+  margin: 0;
+}
+
+.ledger-section-heading h2 {
+  color: var(--color-title);
+  font-size: var(--text-lg);
+}
+
+.ledger-section-heading p {
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.ledger-quality-actions {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 1px;
+  margin-top: 12px;
+  border-block: 1px solid var(--color-border);
+  background: var(--color-border);
+}
+
+.ledger-quality-actions button {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  text-align: left;
+}
+
+.ledger-quality-actions button:hover,
+.ledger-quality-actions button.is-active {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.ledger-quality-actions strong {
+  color: var(--color-title);
+  font-variant-numeric: var(--font-numeric);
+  white-space: nowrap;
+}
+
+.ledger-duplicate-notices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px 0;
+}
+
+.ledger-duplicate-notices button {
+  padding: 4px 8px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-control);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+}
+
+.ledger-list-tools,
+.ledger-batch-bar,
+.ledger-batch-bar > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ledger-batch-bar {
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border-block: 1px solid var(--color-border);
+  background: var(--color-brand-selected);
+  color: var(--color-brand);
+}
+
+.ledger-record-list {
+  min-width: 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.ledger-record-row {
+  min-width: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.ledger-record-row.is-selected {
+  box-shadow: inset 3px 0 0 var(--color-brand);
+}
+
+.ledger-record-summary {
+  display: grid;
+  grid-template-columns: auto 92px minmax(220px, 1.4fr) minmax(160px, 0.9fr) 74px 84px minmax(120px, 0.8fr) auto;
+  min-height: 58px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+}
+
+.ledger-record-select {
+  display: grid;
+  width: 32px;
+  min-height: var(--touch-target);
+  place-items: center;
+}
+
+.ledger-record-summary > time,
+.ledger-record-classification {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.ledger-record-summary > time {
+  font-variant-numeric: var(--font-numeric);
+  white-space: nowrap;
+}
+
+.ledger-record-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ledger-record-main strong,
+.ledger-record-main span,
+.ledger-record-classification {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-record-main strong {
+  color: var(--color-title);
+  font-size: var(--text-sm);
+}
+
+.ledger-record-main span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.ledger-record-number {
+  color: var(--color-title);
+  font-size: var(--text-sm);
+  font-variant-numeric: var(--font-numeric);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger-record-number small {
+  margin-left: 3px;
+  color: var(--color-text-faint);
+  font-size: 10px;
+}
+
+.ledger-record-quality {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ledger-record-quality span {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ledger-record-quality .is-complete {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.ledger-record-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ledger-record-actions button {
+  display: grid;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  padding: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.ledger-record-actions button:hover {
+  color: var(--color-brand);
+}
+
+.ledger-record-detail {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(420px, 2fr);
+  gap: 14px 22px;
+  padding: 14px 52px;
+  border-top: 1px dashed var(--color-border);
+  background: var(--color-page);
+}
+
+.ledger-record-content h4,
+.ledger-record-content p,
+.ledger-record-detail dl {
+  margin: 0;
+}
+
+.ledger-record-content h4 {
+  margin-bottom: 6px;
+  font-size: var(--text-sm);
+}
+
+.ledger-record-content p {
+  color: var(--color-text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ledger-record-detail dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.ledger-record-detail dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.ledger-record-detail dd {
+  margin: 3px 0 0;
+  color: var(--color-title);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.ledger-record-tags {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+@media (max-width: 1180px) {
+  .ledger-filter-grid,
+  .ledger-quality-actions {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .ledger-record-summary {
+    grid-template-columns: auto 84px minmax(220px, 1fr) 68px 76px minmax(110px, 0.8fr) auto;
+  }
+
+  .ledger-record-classification {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .ledger-page .ui-filter-controls,
+  .ledger-custom-range,
+  .ledger-section-heading,
+  .ledger-batch-bar {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ledger-filter-field,
+  .ledger-filter-grid label,
+  .ledger-project-filter {
+    width: 100%;
+  }
+
+  .ledger-filter-grid,
+  .ledger-quality-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ledger-quality-actions button {
+    min-height: var(--touch-target);
+  }
+
+  .ledger-list-tools,
+  .ledger-batch-bar > div {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .ledger-record-summary {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 5px 10px;
+    padding: 8px;
+  }
+
+  .ledger-record-summary > time,
+  .ledger-record-main,
+  .ledger-record-classification,
+  .ledger-record-number,
+  .ledger-record-quality,
+  .ledger-record-actions {
+    grid-column: 2;
+  }
+
+  .ledger-record-classification {
+    display: block;
+  }
+
+  .ledger-record-number {
+    text-align: left;
+  }
+
+  .ledger-record-actions {
+    justify-content: flex-end;
+  }
+
+  .ledger-record-detail {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .ledger-record-detail dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .projects-page {
   display: grid;
   gap: 16px;

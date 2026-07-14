@@ -6,6 +6,7 @@ import test from "node:test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const styles = readFileSync(resolve(__dirname, "../src/styles.css"), "utf8");
+const workOutcomesStyles = readFileSync(resolve(__dirname, "../src/styles/work-outcomes.css"), "utf8");
 const reportDashboard = readFileSync(resolve(__dirname, "../src/components/ReportDashboard.tsx"), "utf8");
 
 test("combo toggle styles do not leak into menu option buttons", () => {
@@ -184,4 +185,12 @@ test("desktop sidebar stays fixed while workspace scrolls", () => {
   assert.match(styles, /\.workspace \{[\s\S]*width: calc\(100% - 226px\);[\s\S]*margin-left: 226px;/);
   assert.match(styles, /@media \(max-width: 980px\) \{[\s\S]*\.sidebar \{[\s\S]*position: static;/);
   assert.match(styles, /@media \(max-width: 980px\) \{[\s\S]*\.workspace \{[\s\S]*width: 100%;[\s\S]*margin-left: 0;/);
+});
+
+test("work ledger keeps stable desktop columns and usable mobile actions", () => {
+  assert.match(workOutcomesStyles, /\.ledger-record-summary \{[\s\S]*grid-template-columns:[\s\S]*minmax\(220px, 1\.4fr\)/);
+  assert.match(workOutcomesStyles, /\.ledger-record-actions button \{[\s\S]*min-width: var\(--touch-target\);[\s\S]*min-height: var\(--touch-target\);/);
+  assert.match(workOutcomesStyles, /\.ledger-record-quality span \{[\s\S]*var\(--color-warning-soft\);[\s\S]*var\(--color-warning\);/);
+  assert.match(workOutcomesStyles, /\.ledger-record-quality \.is-complete \{[\s\S]*var\(--color-success-soft\);[\s\S]*var\(--color-success\);/);
+  assert.match(workOutcomesStyles, /@media \(max-width: 720px\) \{[\s\S]*\.ledger-record-summary \{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\);/);
 });

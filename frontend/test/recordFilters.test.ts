@@ -101,12 +101,13 @@ test("outcome page renders lifecycle dates and searchable multi-record links", (
   assert.equal(knowledgeSource.includes("recordIds"), true);
 });
 
-test("all records page exposes archive modes and filters report generation scope", () => {
+test("work ledger exposes period modes and filters report generation scope", () => {
   assert.equal(allRecordsSource.includes('type="week"'), true);
   assert.equal(allRecordsSource.includes('type="month"'), true);
-  assert.equal(allRecordsSource.includes("按年"), true);
-  assert.equal(allRecordsSource.includes("filterArchivedRecords"), true);
-  assert.match(allRecordsSource, /onGenerateReport\(visibleRecords/);
+  assert.equal(allRecordsSource.includes('type="date"'), true);
+  assert.equal(allRecordsSource.includes("指定年"), true);
+  assert.equal(allRecordsSource.includes("filterLedgerRecords"), true);
+  assert.match(allRecordsSource, /selectedRecords\.length \? selectedRecords : visibleRecords/);
 });
 
 test("monthly page archives only raw details by week", () => {

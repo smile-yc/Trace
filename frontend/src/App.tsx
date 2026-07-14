@@ -4,6 +4,7 @@ import { ReportModal } from "./components/ReportModal";
 import { AppShell } from "./components/layout";
 import { exportOffice } from "./lib/exportApi";
 import { generateTagReport } from "./lib/report";
+import { fetchRecordDeleteImpact, formatRecordDeleteImpact } from "./lib/recordImpactApi";
 import { useRecords } from "./lib/useRecords";
 import {
   CORE_PAGE_PACKAGES,
@@ -58,9 +59,9 @@ export function App() {
   }
 
   async function handleDelete(record: WorkRecord): Promise<void> {
-    if (!window.confirm(`确认删除「${record.title}」吗？`)) return;
-
     try {
+      const impact = await fetchRecordDeleteImpact(record.id);
+      if (!window.confirm(formatRecordDeleteImpact(impact))) return;
       await deleteRecord(record.id);
       showToast("记录已删除");
     } catch (requestError) {
