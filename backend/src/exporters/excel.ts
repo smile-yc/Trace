@@ -4,6 +4,12 @@ import type { AppSettings, ConfigOption, ExportPayload, KnowledgeAsset, Mileston
 
 type Worksheet = ExcelJS.Worksheet;
 
+const projectRelationLabels = {
+  project: "项目事项",
+  non_project: "非项目事项",
+  unassigned: "历史未关联"
+} as const;
+
 function formatDateTime(timestamp: number): string {
   return new Date(timestamp).toLocaleString("zh-CN");
 }
@@ -84,7 +90,9 @@ function createRawSheet(workbook: ExcelJS.Workbook, payload: ExportPayload): voi
     { header: "业务分类", key: "businessCategory", width: 16 },
     { header: "工作类型", key: "workType", width: 18 },
     { header: "能力维度", key: "abilityDimension", width: 18 },
-    { header: "项目名称", key: "projectName", width: 24 },
+    { header: "项目ID", key: "projectId", width: 24 },
+    { header: "项目关联状态", key: "projectRelation", width: 16 },
+    { header: "项目名称快照", key: "projectName", width: 24 },
     { header: "产品系统", key: "productSystem", width: 16 },
     { header: "子任务", key: "subtask", width: 22 },
     { header: "数量", key: "quantity", width: 10 },
@@ -105,6 +113,8 @@ function createRawSheet(workbook: ExcelJS.Workbook, payload: ExportPayload): voi
       businessCategory: record.businessCategory || "其他",
       workType: record.workType || "其他项",
       abilityDimension: record.abilityDimension,
+      projectId: record.projectId,
+      projectRelation: projectRelationLabels[record.projectRelation],
       projectName: record.projectName,
       productSystem: record.productSystem,
       subtask: record.subtask,

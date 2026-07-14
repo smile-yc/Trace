@@ -16,7 +16,7 @@
 React + Vite 前端
   ↓ /api
 Express 后端
-  ├─ SQLite：保存工作记录、配置、里程碑、知识资产
+  ├─ SQLite：保存工作记录、项目与别名、配置、里程碑、知识资产
   └─ 导出服务：生成 Word / PDF / Excel
 ```
 
@@ -59,6 +59,8 @@ trace-work-report-system/
       ├─ components/
       ├─ lib/
       │  ├─ recordsApi.ts        # 前端调用后端记录 API
+      │  ├─ projectApi.ts        # 项目生命周期、汇总和合并 API
+      │  ├─ projectPresentation.ts # 项目搜索选项和历史项展示规则
       │  ├─ settingsApi.ts       # 分析权重、预警规则 API
       │  ├─ milestoneApi.ts      # 成长里程碑 API
       │  ├─ knowledgeApi.ts      # 知识资产 API
@@ -71,6 +73,7 @@ trace-work-report-system/
       │  └─ storage.ts           # JSON 备份文本生成
       └─ pages/
          ├─ DailyPage.tsx
+         ├─ ProjectsPage.tsx
          ├─ WeeklyPage.tsx
          ├─ MonthlyPage.tsx
          ├─ YearlyPage.tsx
@@ -86,7 +89,9 @@ trace-work-report-system/
 - `frontend/src/components/Sidebar.tsx` 是当前侧边导航组件。
 - `frontend/src/components/EditModal.tsx` 承载记录编辑弹窗，内部复用 `RecordForm`。
 - `frontend/src/components/ReportDashboard.tsx` 承载周报、月报、年报中的核心数据展板。
-- `frontend/src/pages/` 下按业务页面拆分：日报、周报、月报、年报、成长地图、知识资产、全部记录、配置中心。
+- `frontend/src/pages/` 下按业务页面拆分：日报、项目管理、周报、月报、年报、成长地图、知识资产、全部记录、配置中心。
+- `frontend/src/components/ProjectSelectField.tsx` 负责日报中的项目/非项目关系选择和快速新建。
+- `frontend/src/components/ProjectEditor.tsx` 与 `ProjectMergeDialog.tsx` 复用项目编辑、合并预览和确认流程。
 
 已经确认并清理的历史遗留组件：`Layout.tsx`、`EditRecordModal.tsx`、`Toast.tsx`。后续新增全局布局或 toast 时，应直接改造当前 `App.tsx` 和实际在用组件，避免重新引入并行实现。
 
@@ -104,6 +109,7 @@ flowchart LR
 
   User --> UI
   UI -->|GET/POST/PUT/DELETE /api/records| API
+  UI -->|projects / summary / archive / merge| API
   UI -->|settings / milestones / knowledge-assets| API
   API <--> DB
   UI --> Report
@@ -119,6 +125,7 @@ flowchart LR
 - 渲染日报、周报、月报、年报、成长地图、知识资产库、全部记录页面
 - 提供新增、编辑、删除、清空记录交互
 - 通过 `/api/records` 与后端同步数据
+- 通过 `/api/projects` 维护项目实体、搜索别名、查看项目汇总并执行归档、恢复和合并
 - 按日期、周、月、年派生统计
 - 按配置权重计算工作重心排行，按能力目标生成查漏补缺预警
 - 维护成长里程碑和知识资产库
@@ -137,13 +144,16 @@ flowchart LR
 - 投入时间：使用 `timeHours` 汇总，空值按 0 处理。
 - 工作重心评分：默认按当量占比 50%、投入时间占比 30%、记录条数占比 20% 综合计算，权重来自配置中心。
 - 能力维度：支持一条记录选择多个能力维度，统计时会拆分后参与能力分布和业务能力关联。
+- 项目统计：按 `projectId` 建立稳定关系；`projectName` 作为不可变历史快照参与旧报表展示。
+- 非项目事项：`projectRelation = non_project` 且 `projectId = null`；旧数据无法保守匹配时使用 `unassigned`。
 - 业务与能力关联：业务分类来自 `businessCategory`，能力维度来自 `abilityDimension`。
 
 这部分属于系统统计口径，后续调整图表或指标时应同步更新本节，避免 UI 和文档口径不一致。
 
 ## 后端职责
 
-- 提供记录、配置、里程碑、知识资产 CRUD API
+- 提供记录、项目、配置、里程碑、知识资产 CRUD API
+- 提供项目搜索、汇总、归档、恢复、合并预览和事务合并 API
 - 使用 SQLite 保存记录和成长复盘相关数据
 - 标准化二级标签
 - 生成记录 ID、创建时间、更新时间
@@ -165,6 +175,10 @@ DATA_DIR   # 数据目录
 DB_PATH    # 完整数据库文件路径
 PORT       # 后端端口，默认 4100
 ```
+
+项目数据由 `projects` 和 `project_aliases` 两张表负责。`records.projectId` 保存稳定关系，`records.projectRelation` 区分项目事项、非项目事项和历史未关联，`records.projectName` 保存写入时的名称快照。
+
+迁移 `2026071401` 只对去除首尾空格后完全同名的历史项目名称做回填；空名称和无法精确匹配的内容保留为未关联，避免相似名称被错误合并。归档不会删除项目；恢复会回到进行中；合并在事务中迁移记录关联和别名，将来源项目标记为已归档并指向目标项目，同时不改写历史名称快照。
 
 ## 部署建议
 

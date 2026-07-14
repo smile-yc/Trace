@@ -78,6 +78,8 @@ pnpm run start      # 启动已构建的后端服务
 ## 核心功能
 
 - 日报记录：新增、编辑、删除、按日期查看。
+- 项目管理：维护项目状态、简称和别名，查看项目投入、当前重点与工作时间线，支持归档、恢复和合并。
+- 项目关联：日报明确区分项目事项与非项目事项；历史文本保留为名称快照，不会因项目改名或合并被覆盖。
 - 周报、月报、年报：按周期汇总记录、项目、当量和投入时间。
 - 数据展板：展示业务分类占比、能力维度占比、工作量趋势、项目排行、产品系统分布、工作中心排行等。
 - 配置中心：维护业务分类、工作类型、能力维度、产品系统、子任务、当量标准、分析权重和预警规则。
@@ -96,7 +98,7 @@ pnpm run start      # 启动已构建的后端服务
 backend/data/report.sqlite
 ```
 
-这个 SQLite 文件保存工作记录、配置项、当量标准、系统设置、里程碑和知识资产。备份这个文件，就等于备份系统的主要业务数据。
+这个 SQLite 文件保存工作记录、项目与别名、配置项、当量标准、系统设置、里程碑和知识资产。备份这个文件，就等于备份系统的主要业务数据。
 
 可以通过环境变量修改数据目录或数据库路径：
 
@@ -115,6 +117,16 @@ POST   /api/records
 PUT    /api/records/:id
 DELETE /api/records/:id
 DELETE /api/records
+
+GET    /api/projects
+GET    /api/projects/:id
+GET    /api/projects/:id/summary
+POST   /api/projects
+PATCH  /api/projects/:id
+POST   /api/projects/:id/archive
+POST   /api/projects/:id/reactivate
+GET    /api/projects/:id/merge-preview
+POST   /api/projects/:id/merge
 
 GET    /api/config-options
 POST   /api/config-options
@@ -156,6 +168,8 @@ interface WorkRecord {
   businessCategory: string;
   workType: string;
   abilityDimension: string;
+  projectId: string | null;
+  projectRelation: "project" | "non_project" | "unassigned";
   projectName: string;
   productSystem: string;
   subtask: string;
@@ -166,6 +180,25 @@ interface WorkRecord {
   tags: string;
   createTime: number;
   updateTime: number;
+}
+```
+
+`projectName` 是记录创建时的项目名称快照。项目改名或合并只更新关联 ID，不改写历史快照。新记录必须明确选择项目事项或非项目事项；迁移后仍未建立关系的旧记录标记为 `unassigned`。
+
+```ts
+interface Project {
+  id: string;
+  name: string;
+  shortName: string;
+  aliases: string[];
+  status: "planned" | "active" | "paused" | "completed" | "archived";
+  startDate: string;
+  endDate: string;
+  personalRole: string;
+  goal: string;
+  description: string;
+  completionSummary: string;
+  mergedIntoProjectId: string | null;
 }
 ```
 
