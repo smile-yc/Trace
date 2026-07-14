@@ -124,6 +124,13 @@ test("the drawer close control stays hidden on desktop and appears at the mobile
   assert.match(layout, /@media \(max-width: 800px\)[\s\S]*\.app-sidebar\s*\{[\s\S]*z-index: 60;/);
 });
 
+test("system navigation group stays close to the review group", () => {
+  const components = readSource("../src/styles/components.css");
+
+  assert.doesNotMatch(components, /\.nav-group-system\s*\{[^}]*margin-top:\s*auto\s*;/);
+  assert.match(components, /\.nav-group-system\s*\{[^}]*margin-top:\s*4px\s*;/);
+});
+
 test("all mobile navigation and compact action targets are at least 44px square", () => {
   const components = readSource("../src/styles/components.css");
   const mobileBlock = components.match(/@media \(max-width: 800px\) \{[\s\S]*?\n\}/)?.[0] ?? "";
