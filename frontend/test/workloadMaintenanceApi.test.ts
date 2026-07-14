@@ -25,3 +25,10 @@ test("settings page contains a data maintenance panel", () => {
   assert.match(source, /handlePreviewStandardImport/);
   assert.match(source, /handleCreateYearArchive/);
 });
+
+test("settings data maintenance is integrated into the primary tab group", () => {
+  const source = readFileSync(resolve(__dirname, "../src/pages/SettingsPage.tsx"), "utf8");
+
+  assert.equal((source.match(/className="settings-tabs"/g) ?? []).length, 1);
+  assert.match(source, /activePanel === "maintenance"[\s\S]*setActivePanel\("maintenance"\)/);
+});

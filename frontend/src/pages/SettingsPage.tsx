@@ -1281,11 +1281,7 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
           <Gauge size={16} />
           分析规则
         </button>
-        <span>{disabledCount + disabledStandardCount} 项停用</span>
-        <span>{defaultCount} 个默认项</span>
-      </div>
 
-      <div className="settings-tabs">
         <button
           className={activePanel === "maintenance" ? "active" : ""}
           onClick={() => setActivePanel("maintenance")}
@@ -1294,6 +1290,8 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
           <Archive size={16} />
           数据维护
         </button>
+        <span>{disabledCount + disabledStandardCount} 项停用</span>
+        <span>{defaultCount} 个默认项</span>
       </div>
 
       {renderActivePanel()}
