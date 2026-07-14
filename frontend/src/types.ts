@@ -217,12 +217,12 @@ export interface WorkRecord {
   workload: number | null;
   timeHours: number | null;
   tags: string;
-  workloadUnit?: string;
-  coefficientSource?: import("./types/domain/workload").CoefficientSource;
-  coefficientStandardId?: string | null;
-  coefficientStandardVersionId?: string | null;
-  workloadFormulaVersion?: "quantity_x_coefficient_v1";
-  abilityAllocations?: import("./types/domain/workload").AbilityAllocation[];
+  workloadUnit: string;
+  coefficientSource: import("./types/domain/workload").CoefficientSource;
+  coefficientStandardId: string | null;
+  coefficientStandardVersionId: string | null;
+  workloadFormulaVersion: "quantity_x_coefficient_v1";
+  abilityAllocations: import("./types/domain/workload").AbilityAllocation[];
   createTime: number;
   updateTime: number;
 }

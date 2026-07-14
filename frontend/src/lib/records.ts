@@ -1,4 +1,5 @@
 import type { AbilityDimension, BusinessCategory, Category, RecordInput, WorkRecord, WorkType } from "../types";
+import type { AbilityAllocation, CoefficientSource } from "../types/domain/workload";
 import { ABILITY_DIMENSIONS, BUSINESS_CATEGORIES, CATEGORIES, WORK_TYPES } from "../constants";
 import { inRange } from "./date";
 
@@ -41,6 +42,64 @@ function normalizeWorkload(quantity: number | null, coefficient: number | null, 
   return Number((quantity * coefficient).toFixed(4));
 }
 
+const COEFFICIENT_SOURCES = new Set<CoefficientSource>([
+  "none",
+  "legacy",
+  "manual",
+  "standard_exact",
+  "standard_general"
+]);
+
+function normalizeNullableText(input: unknown): string | null {
+  const value = String(input ?? "").trim();
+  return value || null;
+}
+
+function normalizeCoefficientSource(input: unknown, coefficient: number | null): CoefficientSource {
+  if (COEFFICIENT_SOURCES.has(input as CoefficientSource)) return input as CoefficientSource;
+  return coefficient === null ? "none" : "legacy";
+}
+
+function splitAbilityNames(value: string): string[] {
+  return Array.from(new Set(value.split(/[,\uFF0C\u3001\s]+/).map((item) => item.trim()).filter(Boolean)));
+}
+
+function normalizeAbilityAllocations(
+  input: Array<Partial<AbilityAllocation>> | undefined,
+  legacyAbilityDimension: string,
+  timeHours: number | null,
+  workload: number | null
+): AbilityAllocation[] {
+  const provided = input?.map((item) => ({
+    abilityId: String(item.abilityId ?? "").trim(),
+    abilityName: String(item.abilityName ?? "").trim(),
+    percentage: normalizeNumber(item.percentage)
+  })) ?? [];
+  const providedTotal = provided.reduce((sum, item) => sum + (item.percentage ?? 0), 0);
+  const providedIds = new Set(provided.map((item) => item.abilityId));
+  const useProvided = provided.length > 0
+    && providedIds.size === provided.length
+    && provided.every((item) => item.abilityId && item.abilityName && item.percentage !== null && item.percentage >= 0)
+    && Math.abs(providedTotal - 100) <= 0.000001;
+  const base = useProvided
+    ? provided.map((item) => ({
+        abilityId: item.abilityId,
+        abilityName: item.abilityName,
+        percentage: item.percentage as number
+      }))
+    : splitAbilityNames(legacyAbilityDimension).map((abilityName, index, names) => ({
+        abilityId: `legacy:${encodeURIComponent(abilityName)}`,
+        abilityName,
+        percentage: index === names.length - 1 ? 100 - (100 / names.length) * index : 100 / names.length
+      }));
+
+  return base.map((item) => ({
+    ...item,
+    allocatedTimeHours: timeHours === null ? null : Number((timeHours * item.percentage / 100).toFixed(4)),
+    allocatedWorkload: workload === null ? null : Number((workload * item.percentage / 100).toFixed(4))
+  }));
+}
+
 function inferBusinessCategory(input: RecordInput): BusinessCategory {
   if (input.businessCategory && BUSINESS_CATEGORIES.includes(input.businessCategory)) {
     return input.businessCategory;
@@ -71,6 +130,9 @@ export function createRecord(input: RecordInput): WorkRecord {
   const now = Date.now();
   const quantity = normalizeNumber(input.quantity);
   const coefficient = normalizeNumber(input.coefficient);
+  const workload = normalizeWorkload(quantity, coefficient, input.workload);
+  const timeHours = normalizeNumber(input.timeHours);
+  const coefficientStandardId = normalizeNullableText(input.coefficientStandardId);
 
   return {
     id: createId(),
@@ -86,9 +148,15 @@ export function createRecord(input: RecordInput): WorkRecord {
     subtask: String(input.subtask || "").trim(),
     quantity,
     coefficient,
-    workload: normalizeWorkload(quantity, coefficient, input.workload),
-    timeHours: normalizeNumber(input.timeHours),
+    workload,
+    timeHours,
     tags: normalizeTags(input.tags),
+    workloadUnit: String(input.workloadUnit || "").trim(),
+    coefficientSource: coefficientStandardId ? "standard_exact" : coefficient === null ? "none" : "manual",
+    coefficientStandardId,
+    coefficientStandardVersionId: null,
+    workloadFormulaVersion: "quantity_x_coefficient_v1",
+    abilityAllocations: normalizeAbilityAllocations(input.abilityAllocations, inferAbilityDimension(input), timeHours, workload),
     createTime: now,
     updateTime: now
   };
@@ -114,6 +182,8 @@ export function sanitizeRecord(record: Partial<WorkRecord>): WorkRecord | null {
         : "其他项";
   const quantity = normalizeNumber(record.quantity);
   const coefficient = normalizeNumber(record.coefficient);
+  const workload = normalizeWorkload(quantity, coefficient, record.workload);
+  const timeHours = normalizeNumber(record.timeHours);
   const abilityDimension = record.abilityDimension
     ? String(record.abilityDimension)
     : "";
@@ -132,9 +202,15 @@ export function sanitizeRecord(record: Partial<WorkRecord>): WorkRecord | null {
     subtask: String(record.subtask || ""),
     quantity,
     coefficient,
-    workload: normalizeWorkload(quantity, coefficient, record.workload),
-    timeHours: normalizeNumber(record.timeHours),
+    workload,
+    timeHours,
     tags: normalizeTags(String(record.tags || "")),
+    workloadUnit: String(record.workloadUnit || "").trim(),
+    coefficientSource: normalizeCoefficientSource(record.coefficientSource, coefficient),
+    coefficientStandardId: normalizeNullableText(record.coefficientStandardId),
+    coefficientStandardVersionId: normalizeNullableText(record.coefficientStandardVersionId),
+    workloadFormulaVersion: "quantity_x_coefficient_v1",
+    abilityAllocations: normalizeAbilityAllocations(record.abilityAllocations, abilityDimension, timeHours, workload),
     createTime: Number(record.createTime || Date.now()),
     updateTime: Number(record.updateTime || record.createTime || Date.now())
   };

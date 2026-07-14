@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRecords } from "../src/lib/analysis.ts";
+import type { WorkRecord } from "../src/types.ts";
 
-const baseRecord = {
+const baseRecord: WorkRecord = {
   id: "record",
   date: "2026-07-01",
   title: "record",
@@ -10,13 +11,21 @@ const baseRecord = {
   category: "其他",
   businessCategory: "传统业务",
   workType: "工程调试",
+  abilityDimension: "",
   projectName: "",
   productSystem: "",
   subtask: "",
   quantity: null,
   coefficient: null,
   workload: null,
+  timeHours: null,
   tags: "",
+  workloadUnit: "",
+  coefficientSource: "none",
+  coefficientStandardId: null,
+  coefficientStandardVersionId: null,
+  workloadFormulaVersion: "quantity_x_coefficient_v1",
+  abilityAllocations: [],
   createTime: 1,
   updateTime: 1
 };

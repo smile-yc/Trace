@@ -6,8 +6,9 @@ import {
   summarizeKnowledgeAssets,
   summarizeMilestones
 } from "../src/lib/growthReview.ts";
+import type { WorkRecord } from "../src/types.ts";
 
-const baseRecord = {
+const baseRecord: WorkRecord = {
   id: "record",
   date: "2026-07-01",
   title: "record",
@@ -24,6 +25,12 @@ const baseRecord = {
   workload: null,
   timeHours: null,
   tags: "",
+  workloadUnit: "",
+  coefficientSource: "none",
+  coefficientStandardId: null,
+  coefficientStandardVersionId: null,
+  workloadFormulaVersion: "quantity_x_coefficient_v1",
+  abilityAllocations: [],
   createTime: 1,
   updateTime: 1
 };

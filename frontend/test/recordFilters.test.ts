@@ -21,8 +21,11 @@ function record(id: string, date: string, tags = "", createTime = 1): WorkRecord
   return {
     id, date, tags, createTime, updateTime: createTime, title: id, content: "", category: "其他",
     businessCategory: "", workType: "", abilityDimension: "", projectName: "", productSystem: "",
-    subtask: "", quantity: null, coefficient: null, workload: null, timeHours: null
-  } as WorkRecord;
+    subtask: "", quantity: null, coefficient: null, workload: null, timeHours: null,
+    workloadUnit: "", coefficientSource: "none", coefficientStandardId: null,
+    coefficientStandardVersionId: null, workloadFormulaVersion: "quantity_x_coefficient_v1",
+    abilityAllocations: []
+  };
 }
 
 test("knowledge options default to latest 15 records", () => {
