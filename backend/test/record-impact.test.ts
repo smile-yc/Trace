@@ -100,4 +100,3 @@ test("record impact API explains project and outcome relationships before deleti
   const afterDelete = await request(`/api/records/${linkedRecord.body.record.id}/impact`);
   assert.equal(afterDelete.response.status, 404);
 });
-

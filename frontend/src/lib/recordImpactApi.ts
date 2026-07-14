@@ -22,4 +22,3 @@ export function formatRecordDeleteImpact(impact: RecordDeleteImpact): string {
   lines.push("此操作无法撤销。");
   return lines.join("\n");
 }
-
