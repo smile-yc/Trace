@@ -2087,12 +2087,23 @@ textarea:focus-visible {
   border-radius: 8px;
   padding: 24px;
   background: var(--paper-muted);
-  box-shadow: 0 22px 46px rgba(111, 78, 216, 0.22);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
 }
 
-.ability-focus-icon {
-  color: rgba(255, 255, 255, 0.82);
+.ability-radar-card .ability-focus-icon {
+  color: var(--navy);
   margin-bottom: 18px;
+}
+
+.ability-radar-card .ability-focus-card span,
+.ability-radar-card .ability-focus-card small {
+  color: var(--muted);
+}
+
+.ability-radar-card .ability-focus-card strong,
+.ability-radar-card .ability-focus-card em {
+  color: var(--ink);
 }
 
 .ability-radar-card .ability-focus-card strong {
@@ -2119,9 +2130,9 @@ textarea:focus-visible {
   opacity: 0.54;
 }
 
-.ability-focus-wave path {
+.ability-radar-card .ability-focus-wave path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.72);
+  stroke: var(--navy);
   stroke-width: 2;
 }
 
@@ -2464,7 +2475,7 @@ textarea:focus-visible {
 .relation-bubble {
   width: var(--bubble-size);
   height: var(--bubble-size);
-  border-radius: 8px;
+  border-radius: 50%;
   background: var(--bubble-color);
   box-shadow: 0 12px 24px rgba(78, 68, 120, 0.16);
   opacity: 0.86;

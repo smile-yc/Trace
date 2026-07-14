@@ -53,6 +53,13 @@ test("report dashboard proportion cards expose refined detail layouts", () => {
   assert.equal(styles.includes(".worktype-metric-list"), true);
 });
 
+test("ability focus summary stays readable on its neutral surface", () => {
+  assert.match(styles, /\.ability-radar-card \.ability-focus-card \{[\s\S]*background: var\(--paper-muted\);[\s\S]*color: var\(--ink\);[\s\S]*box-shadow: var\(--shadow-soft\);/);
+  assert.match(styles, /\.ability-radar-card \.ability-focus-icon \{[\s\S]*color: var\(--navy\);/);
+  assert.match(styles, /\.ability-radar-card \.ability-focus-card span,[\s\S]*\.ability-radar-card \.ability-focus-card small \{[\s\S]*color: var\(--muted\);/);
+  assert.match(styles, /\.ability-radar-card \.ability-focus-card strong,[\s\S]*\.ability-radar-card \.ability-focus-card em \{[\s\S]*color: var\(--ink\);/);
+});
+
 test("report dashboard follows BI visual requirements", () => {
   assert.equal(reportDashboard.includes("visibleItems = items.slice(0, maxVisibleItems)"), true);
   assert.equal(reportDashboard.includes("Top ${visibleItems.length}"), true);
@@ -82,6 +89,7 @@ test("report dashboard includes business ability relation insight matrix", () =>
   assert.equal(styles.includes(".business-ability-card"), true);
   assert.equal(styles.includes(".business-ability-matrix"), true);
   assert.equal(styles.includes(".relation-bubble"), true);
+  assert.match(styles, /\.relation-bubble \{[\s\S]*border-radius: 50%;/);
 });
 
 test("dashboard rows use stable equal-height ranges with internal overflow", () => {

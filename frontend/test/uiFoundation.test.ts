@@ -49,18 +49,26 @@ test("design tokens use the approved light Trace palette and compact geometry", 
   assert.equal(tokens.includes("prefers-color-scheme: dark"), false);
 });
 
-test("every loaded stylesheet is free of gradients, fake dark mode and radii above 8px", () => {
+test("loaded styles reserve round geometry for semantic data marks and indicators", () => {
   const stylesheets = getLoadedStylesheets();
+  const semanticRoundSelectors = new Set([".nav-item::before", ".relation-bubble"]);
 
   assert.ok(stylesheets.length >= 8, "foundation and three domain style entries must all be loaded");
   for (const stylesheet of stylesheets) {
     assert.ok(stylesheet.source.length > 0, `${stylesheet.path} must resolve to a stylesheet`);
     assert.equal(/(?:linear|radial|conic)-gradient\s*\(/i.test(stylesheet.source), false, `${stylesheet.path} contains a gradient`);
     assert.equal(/prefers-color-scheme\s*:\s*dark/i.test(stylesheet.source), false, `${stylesheet.path} contains fake dark mode`);
-    const oversizedRadii = [...stylesheet.source.matchAll(/border-radius\s*:\s*(\d+)px/gi)]
-      .map((match) => Number(match[1]))
-      .filter((radius) => radius > 8);
-    assert.deepEqual(oversizedRadii, [], `${stylesheet.path} contains radii above 8px`);
+    for (const block of stylesheet.source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = block[1].trim();
+      const radiusDeclarations = [...block[2].matchAll(/border-radius\s*:\s*([^;]+)/gi)];
+      for (const declaration of radiusDeclarations) {
+        const fixedRadii = [...declaration[1].matchAll(/(\d+)px/gi)].map((match) => Number(match[1]));
+        const usesSemanticRoundGeometry = declaration[1].includes("50%") || fixedRadii.some((radius) => radius > 8);
+        if (usesSemanticRoundGeometry) {
+          assert.equal(semanticRoundSelectors.has(selector), true, `${stylesheet.path} uses round geometry on ${selector}`);
+        }
+      }
+    }
   }
 });
 
@@ -350,4 +358,12 @@ test("form field aria state links labels, descriptions, errors and required cont
       required: true
     }
   );
+});
+
+test("form field accepts exactly one aria-capable React element", () => {
+  const formField = readSource("../src/components/ui/FormField.tsx");
+
+  assert.match(formField, /children: ReactElement<FieldControlProps>;/);
+  assert.equal(formField.includes("children: ReactNode;"), false);
+  assert.equal(formField.includes("isValidElement"), false);
 });

@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
 import { buildFieldAria } from "./formFieldAria";
 
 export interface FormFieldProps {
@@ -7,7 +7,7 @@ export interface FormFieldProps {
   hint?: ReactNode;
   error?: ReactNode;
   required?: boolean;
-  children: ReactNode;
+  children: ReactElement<FieldControlProps>;
   className?: string;
 }
 
@@ -21,21 +21,19 @@ type FieldControlProps = {
 
 export function FormField({ label, htmlFor, hint, error, required = false, children, className = "" }: FormFieldProps) {
   const generatedId = useId().replace(/:/g, "");
-  const control = isValidElement(children) ? children as ReactElement<FieldControlProps> : null;
-  const controlId = htmlFor ?? (typeof control?.props.id === "string" ? control.props.id : `field-${generatedId}`);
+  const control = children;
+  const controlId = htmlFor ?? (typeof control.props.id === "string" ? control.props.id : `field-${generatedId}`);
   const hintId = `${controlId}-hint`;
   const errorId = `${controlId}-error`;
-  const fieldControl = control
-    ? cloneElement(control, buildFieldAria({
-        controlId,
-        hintId,
-        errorId,
-        hasHint: Boolean(hint),
-        hasError: Boolean(error),
-        required,
-        describedBy: typeof control.props["aria-describedby"] === "string" ? control.props["aria-describedby"] : undefined
-      }))
-    : children;
+  const fieldControl = cloneElement(control, buildFieldAria({
+    controlId,
+    hintId,
+    errorId,
+    hasHint: Boolean(hint),
+    hasError: Boolean(error),
+    required,
+    describedBy: typeof control.props["aria-describedby"] === "string" ? control.props["aria-describedby"] : undefined
+  }));
 
   return (
     <div className={`ui-field ${error ? "has-error" : ""} ${className}`.trim()}>
