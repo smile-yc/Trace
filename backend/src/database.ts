@@ -16,6 +16,10 @@ import type {
   Milestone,
   MilestoneInput,
   MilestoneUpdateInput,
+  Project,
+  ProjectInput,
+  ProjectStatus,
+  ProjectUpdateInput,
   RecordInput,
   AbilityAllocation,
   AbilityAllocationInput,
@@ -837,6 +841,219 @@ export function updateConfigOption(id: string, input: ConfigOptionUpdateInput): 
 export function deleteConfigOption(id: string): boolean {
   const result = db.prepare("DELETE FROM config_options WHERE id = ?").run(id);
   return result.changes > 0;
+}
+
+const projectStatuses = new Set<ProjectStatus>(["planned", "active", "paused", "completed", "archived"]);
+
+function normalizeProjectName(value: string | undefined): string {
+  return String(value || "").trim();
+}
+
+function assertProjectDates(startDate = "", endDate = ""): void {
+  if (startDate && endDate && endDate < startDate) throw new Error("PROJECT_INVALID_DATE_RANGE");
+}
+
+function getProjectAliases(projectId: string): string[] {
+  return db.prepare("SELECT alias FROM project_aliases WHERE projectId = ? ORDER BY createTime, alias")
+    .all(projectId)
+    .map((row) => String((row as { alias: unknown }).alias));
+}
+
+function toProject(row: unknown): Project {
+  const item = row as Record<string, unknown>;
+  const id = String(item.id);
+  return {
+    id,
+    name: String(item.name),
+    normalizedName: String(item.normalizedName),
+    shortName: String(item.shortName || ""),
+    status: String(item.status) as ProjectStatus,
+    startDate: String(item.startDate || ""),
+    endDate: String(item.endDate || ""),
+    personalRole: String(item.personalRole || ""),
+    goal: String(item.goal || ""),
+    description: String(item.description || ""),
+    completionSummary: String(item.completionSummary || ""),
+    aliases: getProjectAliases(id),
+    mergedIntoProjectId: item.mergedIntoProjectId == null ? null : String(item.mergedIntoProjectId),
+    archiveTime: item.archiveTime == null ? null : Number(item.archiveTime),
+    createTime: Number(item.createTime),
+    updateTime: Number(item.updateTime)
+  };
+}
+
+function assertProjectIdentityAvailable(input: {
+  name: string;
+  shortName: string;
+  aliases: string[];
+}, excludeProjectId = ""): void {
+  const normalizedName = normalizeProjectName(input.name);
+  if (!normalizedName) throw new Error("PROJECT_NAME_CONFLICT");
+  const candidateIdentities = new Set(
+    [normalizedName, normalizeProjectName(input.shortName), ...input.aliases.map(normalizeProjectName)].filter(Boolean)
+  );
+  const projects = db.prepare("SELECT id, normalizedName, shortName FROM projects WHERE id <> ?").all(excludeProjectId) as Array<{
+    id: string;
+    normalizedName: string;
+    shortName: string;
+  }>;
+  const aliases = db.prepare(`SELECT projectId, normalizedAlias FROM project_aliases WHERE projectId <> ?`).all(excludeProjectId) as Array<{
+    projectId: string;
+    normalizedAlias: string;
+  }>;
+
+  if (projects.some((project) => project.normalizedName === normalizedName)) {
+    throw new Error("PROJECT_NAME_CONFLICT");
+  }
+
+  const occupied = new Set<string>();
+  projects.forEach((project) => {
+    occupied.add(project.normalizedName);
+    const shortName = normalizeProjectName(project.shortName);
+    if (shortName) occupied.add(shortName);
+  });
+  aliases.forEach((alias) => occupied.add(alias.normalizedAlias));
+  if ([...candidateIdentities].some((identity) => occupied.has(identity))) {
+    throw new Error("PROJECT_ALIAS_CONFLICT");
+  }
+}
+
+function replaceProjectAliases(projectId: string, aliases: string[]): void {
+  db.prepare("DELETE FROM project_aliases WHERE projectId = ?").run(projectId);
+  const seen = new Set<string>();
+  const insert = db.prepare(`INSERT INTO project_aliases (id, projectId, alias, normalizedAlias, createTime)
+    VALUES (?, ?, ?, ?, ?)`);
+  for (const value of aliases) {
+    const alias = normalizeProjectName(value);
+    if (!alias || seen.has(alias)) continue;
+    seen.add(alias);
+    insert.run(createId(), projectId, alias, alias, Date.now());
+  }
+}
+
+export function listProjects(filter: {
+  query?: string;
+  statuses?: ProjectStatus[];
+  includeArchived?: boolean;
+} = {}): Project[] {
+  const query = normalizeProjectName(filter.query).toLocaleLowerCase();
+  const statuses = filter.statuses?.length ? new Set(filter.statuses) : null;
+  const statusRank: Record<ProjectStatus, number> = { active: 0, planned: 1, paused: 2, completed: 3, archived: 4 };
+  return (db.prepare("SELECT * FROM projects ORDER BY updateTime DESC").all().map(toProject) as Project[])
+    .filter((project) => project.mergedIntoProjectId === null)
+    .filter((project) => statuses ? statuses.has(project.status) : true)
+    .filter((project) => query || filter.includeArchived ? true : project.status !== "archived")
+    .filter((project) => {
+      if (!query) return true;
+      return [project.name, project.shortName, ...project.aliases]
+        .some((value) => value.toLocaleLowerCase().includes(query));
+    })
+    .sort((left, right) => statusRank[left.status] - statusRank[right.status] || right.updateTime - left.updateTime);
+}
+
+export function getProject(id: string): Project | null {
+  const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
+  return row ? toProject(row) : null;
+}
+
+export function insertProject(input: ProjectInput): Project {
+  const name = normalizeProjectName(input.name);
+  const shortName = normalizeProjectName(input.shortName);
+  const aliases = (input.aliases ?? []).map(normalizeProjectName).filter(Boolean);
+  const status = input.status ?? "active";
+  const startDate = normalizeProjectName(input.startDate);
+  const endDate = normalizeProjectName(input.endDate);
+  if (!projectStatuses.has(status)) throw new Error("PROJECT_INVALID_STATUS");
+  assertProjectDates(startDate, endDate);
+  assertProjectIdentityAvailable({ name, shortName, aliases });
+
+  const now = Date.now();
+  const id = createId();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`INSERT INTO projects
+      (id, name, normalizedName, shortName, status, startDate, endDate, personalRole, goal, description, completionSummary, mergedIntoProjectId, archiveTime, createTime, updateTime)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`)
+      .run(
+        id,
+        name,
+        name,
+        shortName,
+        status,
+        startDate,
+        endDate,
+        normalizeProjectName(input.personalRole),
+        normalizeProjectName(input.goal),
+        normalizeProjectName(input.description),
+        normalizeProjectName(input.completionSummary),
+        status === "archived" ? now : null,
+        now,
+        now
+      );
+    replaceProjectAliases(id, aliases.filter((alias) => alias !== name && alias !== shortName));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getProject(id) as Project;
+}
+
+export function updateProject(id: string, input: ProjectUpdateInput): Project | null {
+  const existing = getProject(id);
+  if (!existing) return null;
+  const name = input.name === undefined ? existing.name : normalizeProjectName(input.name);
+  const shortName = input.shortName === undefined ? existing.shortName : normalizeProjectName(input.shortName);
+  const status = input.status ?? existing.status;
+  const startDate = input.startDate === undefined ? existing.startDate : normalizeProjectName(input.startDate);
+  const endDate = input.endDate === undefined ? existing.endDate : normalizeProjectName(input.endDate);
+  const aliases = input.aliases === undefined ? existing.aliases.slice() : input.aliases.map(normalizeProjectName).filter(Boolean);
+  if (name !== existing.name) aliases.push(existing.name);
+  if (!projectStatuses.has(status)) throw new Error("PROJECT_INVALID_STATUS");
+  assertProjectDates(startDate, endDate);
+  assertProjectIdentityAvailable({ name, shortName, aliases }, id);
+
+  const now = Date.now();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`UPDATE projects SET
+      name = ?, normalizedName = ?, shortName = ?, status = ?, startDate = ?, endDate = ?, personalRole = ?, goal = ?,
+      description = ?, completionSummary = ?, archiveTime = ?, updateTime = ? WHERE id = ?`)
+      .run(
+        name,
+        name,
+        shortName,
+        status,
+        startDate,
+        endDate,
+        input.personalRole === undefined ? existing.personalRole : normalizeProjectName(input.personalRole),
+        input.goal === undefined ? existing.goal : normalizeProjectName(input.goal),
+        input.description === undefined ? existing.description : normalizeProjectName(input.description),
+        input.completionSummary === undefined ? existing.completionSummary : normalizeProjectName(input.completionSummary),
+        status === "archived" ? existing.archiveTime ?? now : null,
+        now,
+        id
+      );
+    replaceProjectAliases(id, aliases.filter((alias) => alias !== name && alias !== shortName));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getProject(id);
+}
+
+export function archiveProject(id: string): Project | null {
+  const project = getProject(id);
+  if (!project) return null;
+  return updateProject(id, { status: "archived" });
+}
+
+export function reactivateProject(id: string): Project | null {
+  const project = getProject(id);
+  if (!project) return null;
+  if (project.mergedIntoProjectId) throw new Error("PROJECT_NOT_SELECTABLE");
+  return updateProject(id, { status: "active" });
 }
 
 export function reorderConfigOptions(type: ConfigOptionType, orderedIds: string[]): ConfigOption[] {
