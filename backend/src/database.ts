@@ -248,6 +248,77 @@ const foundationMigrations: Migration[] = [
       database.exec(`UPDATE records SET coefficientSource = CASE WHEN coefficient IS NULL THEN 'none' ELSE 'legacy' END
         WHERE coefficientSource = 'none'`);
     }
+  },
+  {
+    version: 2026071401,
+    name: "materialize projects",
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          normalizedName TEXT NOT NULL UNIQUE,
+          shortName TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL CHECK(status IN ('planned', 'active', 'paused', 'completed', 'archived')),
+          startDate TEXT NOT NULL DEFAULT '',
+          endDate TEXT NOT NULL DEFAULT '',
+          personalRole TEXT NOT NULL DEFAULT '',
+          goal TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          completionSummary TEXT NOT NULL DEFAULT '',
+          mergedIntoProjectId TEXT DEFAULT NULL,
+          archiveTime INTEGER DEFAULT NULL,
+          createTime INTEGER NOT NULL,
+          updateTime INTEGER NOT NULL,
+          FOREIGN KEY(mergedIntoProjectId) REFERENCES projects(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS project_aliases (
+          id TEXT PRIMARY KEY,
+          projectId TEXT NOT NULL,
+          alias TEXT NOT NULL,
+          normalizedAlias TEXT NOT NULL UNIQUE,
+          createTime INTEGER NOT NULL,
+          FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status, updateTime);
+        CREATE INDEX IF NOT EXISTS idx_project_aliases_project ON project_aliases(projectId);
+      `);
+
+      const columns = new Set(database.prepare("PRAGMA table_info(records)").all()
+        .map((row) => String((row as { name: unknown }).name)));
+      if (!columns.has("projectId")) {
+        database.exec("ALTER TABLE records ADD COLUMN projectId TEXT DEFAULT NULL REFERENCES projects(id) ON DELETE RESTRICT");
+      }
+      if (!columns.has("projectRelation")) {
+        database.exec("ALTER TABLE records ADD COLUMN projectRelation TEXT NOT NULL DEFAULT 'unassigned' CHECK(projectRelation IN ('project', 'non_project', 'unassigned'))");
+      }
+
+      const names = database.prepare(
+        "SELECT DISTINCT trim(projectName) AS name FROM records WHERE trim(projectName) <> ''"
+      ).all() as Array<{ name: string }>;
+      const now = Date.now();
+      for (const row of names) {
+        const normalizedName = row.name.trim();
+        database.prepare(`INSERT OR IGNORE INTO projects
+          (id, name, normalizedName, status, createTime, updateTime)
+          VALUES (?, ?, ?, 'active', ?, ?)`)
+          .run(createId(), row.name, normalizedName, now, now);
+      }
+
+      database.exec(`
+        UPDATE records
+        SET projectId = (SELECT id FROM projects WHERE normalizedName = trim(records.projectName)),
+            projectRelation = 'project'
+        WHERE trim(projectName) <> '';
+
+        UPDATE records
+        SET projectId = NULL,
+            projectRelation = 'unassigned'
+        WHERE trim(projectName) = '';
+      `);
+    }
   }
 ];
 

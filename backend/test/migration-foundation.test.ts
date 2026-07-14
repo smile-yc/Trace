@@ -37,7 +37,8 @@ test("legacy database migration preserves stored workload across two independent
   };
   assert.equal(record.workload, 7);
   assert.equal(record.coefficientSource, "legacy");
-  assert.equal(Number((verify.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get() as { count: number }).count), 2);
+  assert.equal(Number((verify.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get() as { count: number }).count), 3);
   assert.equal(Number((verify.prepare("SELECT COUNT(*) AS count FROM workload_standard_versions").get() as { count: number }).count), 1);
+  assert.equal(String((verify.prepare("SELECT projectRelation FROM records WHERE id = ?").get("legacy-record") as { projectRelation: string }).projectRelation), "unassigned");
   verify.close();
 });
