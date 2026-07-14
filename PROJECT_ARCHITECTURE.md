@@ -57,6 +57,7 @@ trace-work-report-system/
       ├─ constants.ts
       ├─ types.ts
       ├─ components/
+      │  ├─ LedgerRecordList.tsx # 紧凑台账、展开详情和多选交互
       ├─ lib/
       │  ├─ recordsApi.ts        # 前端调用后端记录 API
       │  ├─ projectApi.ts        # 项目生命周期、汇总和合并 API
@@ -65,6 +66,8 @@ trace-work-report-system/
       │  ├─ milestoneApi.ts      # 成长里程碑 API
       │  ├─ knowledgeApi.ts      # 旧知识资产只读兼容 API
       │  ├─ outcomeApi.ts        # 统一成果 API
+      │  ├─ ledger.ts            # 台账组合筛选、范围统计与质量诊断纯函数
+      │  ├─ recordImpactApi.ts   # 删除记录前读取项目与成果关联影响
       │  ├─ growthReview.ts      # 复盘文本、预警和成长统计
       │  ├─ exportApi.ts         # 前端调用后端导出 API
       │  ├─ useRecords.ts        # 记录状态与服务端同步
@@ -126,6 +129,8 @@ flowchart LR
 - 渲染日报、项目、成果、周报、月报、年报、成长目标和全部记录页面
 - 提供新增、编辑、删除、清空记录交互
 - 通过 `/api/records` 与后端同步数据
+- 在工作台账中按时间、项目、业务、类型、产品、子任务、能力、系数来源、成果状态和质量问题组合筛选
+- 从记录事实派生缺失字段、手动系数比例和疑似重复名称提醒；提醒不自动修改源数据
 - 通过 `/api/projects` 维护项目实体、搜索别名、查看项目汇总并执行归档、恢复和合并
 - 按日期、周、月、年派生统计
 - 按配置权重计算工作重心排行，按能力目标生成查漏补缺预警
@@ -154,6 +159,7 @@ flowchart LR
 ## 后端职责
 
 - 提供记录、项目、成果、配置和里程碑 CRUD API
+- 提供记录删除影响预览，返回关联项目和成果，供前端二次确认
 - 提供项目搜索、汇总、归档、恢复、合并预览和事务合并 API
 - 使用 SQLite 保存记录和成长复盘相关数据
 - 标准化二级标签
