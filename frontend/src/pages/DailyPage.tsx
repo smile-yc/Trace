@@ -6,7 +6,7 @@ import { RecordList } from "../components/RecordList";
 import { StatCards } from "../components/StatCards";
 import { formatDate, getMonthRange, shiftDate, todayKey } from "../lib/date";
 import { countUniqueTags, filterByDate, filterByRange } from "../lib/records";
-import type { RecordInput, WorkRecord } from "../types";
+import type { OutcomeSeed, RecordInput, WorkRecord } from "../types";
 
 interface DailyPageProps {
   records: WorkRecord[];
@@ -14,9 +14,10 @@ interface DailyPageProps {
   onEdit: (record: WorkRecord) => void;
   onDelete: (record: WorkRecord) => void | Promise<void>;
   onNotify: (message: string) => void;
+  onCreateOutcome: (seed: Omit<OutcomeSeed, "nonce">) => void;
 }
 
-export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify }: DailyPageProps) {
+export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify, onCreateOutcome }: DailyPageProps) {
   const [date, setDate] = useState(todayKey());
   const dailyRecords = useMemo(() => filterByDate(records, date), [records, date]);
   const stats = useMemo(() => {
@@ -79,7 +80,7 @@ export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify }: DailyP
           <h2>当日记录</h2>
           <span>{dailyRecords.length} 条</span>
         </div>
-        <RecordList records={dailyRecords} emptyText="这一天还没有记录。" onEdit={onEdit} onDelete={onDelete} />
+        <RecordList records={dailyRecords} emptyText="这一天还没有记录。" onEdit={onEdit} onDelete={onDelete} onCreateOutcome={(record) => onCreateOutcome({ recordIds: [record.id], projectId: record.projectId ?? undefined })} />
       </section>
     </>
   );

@@ -4,7 +4,7 @@ import { PageHeader } from "../components/PageHeader";
 import { RecordList } from "../components/RecordList";
 import { StatCards } from "../components/StatCards";
 import { TagPill } from "../components/TagPill";
-import type { WorkRecord } from "../types";
+import type { OutcomeSeed, WorkRecord } from "../types";
 import { buildJsonBackup } from "../lib/storage";
 import { downloadText } from "../lib/download";
 import { todayKey } from "../lib/date";
@@ -17,6 +17,7 @@ interface AllRecordsPageProps {
   onDelete: (record: WorkRecord) => void | Promise<void>;
   onClear: () => void | Promise<void>;
   onGenerateReport: (records: WorkRecord[], title: string) => void;
+  onCreateOutcome: (seed: Omit<OutcomeSeed, "nonce">) => void;
 }
 
 export function AllRecordsPage({
@@ -24,7 +25,8 @@ export function AllRecordsPage({
   onEdit,
   onDelete,
   onClear,
-  onGenerateReport
+  onGenerateReport,
+  onCreateOutcome
 }: AllRecordsPageProps) {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [archiveMode, setArchiveMode] = useState<ArchiveMode>(null);
@@ -160,6 +162,7 @@ export function AllRecordsPage({
           emptyText={selectedTag || archiveMode ? "当前筛选条件下暂无记录。" : "当前周暂无记录。"}
           onEdit={onEdit}
           onDelete={onDelete}
+          onCreateOutcome={(record) => onCreateOutcome({ recordIds: [record.id], projectId: record.projectId ?? undefined })}
         />
       </section>
     </>

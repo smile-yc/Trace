@@ -16,6 +16,13 @@ import type {
   Milestone,
   MilestoneInput,
   MilestoneUpdateInput,
+  Outcome,
+  OutcomeAbility,
+  OutcomeInput,
+  OutcomeStatus,
+  OutcomeSummary,
+  OutcomeType,
+  OutcomeUpdateInput,
   Project,
   ProjectInput,
   ProjectMergePreview,
@@ -324,6 +331,117 @@ const foundationMigrations: Migration[] = [
         SET projectId = NULL,
             projectRelation = 'unassigned'
         WHERE trim(projectName) = '';
+      `);
+    }
+  },
+  {
+    version: 2026071402,
+    name: "unify work outcomes",
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS outcomes (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL CHECK(type IN ('deliverable', 'problem_resolution', 'stage_progress', 'reusable_asset')),
+          status TEXT NOT NULL CHECK(status IN ('planned', 'in_progress', 'stage_result', 'completed')),
+          title TEXT NOT NULL,
+          projectId TEXT DEFAULT NULL,
+          projectName TEXT NOT NULL DEFAULT '',
+          startDate TEXT NOT NULL DEFAULT '',
+          updateDate TEXT NOT NULL DEFAULT '',
+          completedDate TEXT NOT NULL DEFAULT '',
+          backgroundGoal TEXT NOT NULL DEFAULT '',
+          completedWork TEXT NOT NULL DEFAULT '',
+          valueImpact TEXT NOT NULL DEFAULT '',
+          personalRole TEXT NOT NULL DEFAULT '',
+          contribution TEXT NOT NULL DEFAULT '',
+          reportSummary TEXT NOT NULL DEFAULT '',
+          productSystem TEXT NOT NULL DEFAULT '',
+          tags TEXT NOT NULL DEFAULT '',
+          remark TEXT NOT NULL DEFAULT '',
+          archived INTEGER NOT NULL DEFAULT 0,
+          archiveTime INTEGER DEFAULT NULL,
+          createTime INTEGER NOT NULL,
+          updateTime INTEGER NOT NULL,
+          FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS outcome_records (
+          outcomeId TEXT NOT NULL,
+          recordId TEXT NOT NULL,
+          PRIMARY KEY (outcomeId, recordId),
+          FOREIGN KEY(outcomeId) REFERENCES outcomes(id) ON DELETE CASCADE,
+          FOREIGN KEY(recordId) REFERENCES records(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS outcome_abilities (
+          outcomeId TEXT NOT NULL,
+          abilityId TEXT NOT NULL,
+          abilityName TEXT NOT NULL,
+          PRIMARY KEY (outcomeId, abilityId),
+          FOREIGN KEY(outcomeId) REFERENCES outcomes(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS outcome_milestones (
+          outcomeId TEXT NOT NULL,
+          milestoneId TEXT NOT NULL,
+          PRIMARY KEY (outcomeId, milestoneId),
+          FOREIGN KEY(outcomeId) REFERENCES outcomes(id) ON DELETE CASCADE,
+          FOREIGN KEY(milestoneId) REFERENCES milestones(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS outcome_status_history (
+          id TEXT PRIMARY KEY,
+          outcomeId TEXT NOT NULL,
+          fromStatus TEXT DEFAULT NULL,
+          toStatus TEXT NOT NULL CHECK(toStatus IN ('planned', 'in_progress', 'stage_result', 'completed')),
+          note TEXT NOT NULL DEFAULT '',
+          changedTime INTEGER NOT NULL,
+          FOREIGN KEY(outcomeId) REFERENCES outcomes(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_outcomes_project ON outcomes(projectId, archived, updateTime);
+        CREATE INDEX IF NOT EXISTS idx_outcomes_filter ON outcomes(type, status, archived, updateTime);
+        CREATE INDEX IF NOT EXISTS idx_outcome_records_record ON outcome_records(recordId, outcomeId);
+        CREATE INDEX IF NOT EXISTS idx_outcome_history_outcome ON outcome_status_history(outcomeId, changedTime);
+      `);
+
+      database.exec(`
+        INSERT OR IGNORE INTO outcomes (
+          id, type, status, title, projectId, projectName, startDate, updateDate, completedDate, completedWork, reportSummary,
+          productSystem, tags, remark, archived, archiveTime, createTime, updateTime
+        )
+        SELECT
+          asset.id,
+          'reusable_asset',
+          CASE WHEN asset.status IN ('published', 'archived') THEN 'completed' ELSE 'planned' END,
+          asset.title,
+          (SELECT project.id FROM projects project WHERE project.normalizedName = trim(asset.projectName) LIMIT 1),
+          asset.projectName,
+          date(asset.createTime / 1000, 'unixepoch', 'localtime'),
+          date(asset.updateTime / 1000, 'unixepoch', 'localtime'),
+          CASE WHEN asset.status IN ('published', 'archived') THEN date(asset.updateTime / 1000, 'unixepoch', 'localtime') ELSE '' END,
+          asset.summary,
+          asset.summary,
+          asset.productSystem,
+          asset.tags,
+          asset.remark,
+          CASE WHEN asset.status = 'archived' THEN 1 ELSE 0 END,
+          CASE WHEN asset.status = 'archived' THEN asset.updateTime ELSE NULL END,
+          asset.createTime,
+          asset.updateTime
+        FROM knowledge_assets asset;
+
+        INSERT OR IGNORE INTO outcome_records (outcomeId, recordId)
+        SELECT asset.id, asset.sourceRecordId
+        FROM knowledge_assets asset
+        WHERE trim(asset.sourceRecordId) <> ''
+          AND EXISTS (SELECT 1 FROM records record WHERE record.id = asset.sourceRecordId);
+
+        INSERT OR IGNORE INTO outcome_status_history (id, outcomeId, fromStatus, toStatus, note, changedTime)
+        SELECT 'legacy-' || asset.id, asset.id, NULL,
+          CASE WHEN asset.status IN ('published', 'archived') THEN 'completed' ELSE 'planned' END,
+          '由知识资产迁移', asset.createTime
+        FROM knowledge_assets asset;
       `);
     }
   }
@@ -1129,6 +1247,7 @@ export function getProjectSummary(projectId: string): ProjectSummary | null {
         ? labels.map((label) => ({ label, share: 1 / labels.length }))
         : [{ label: "未填写能力", share: 1 }];
     }),
+    outcomes: listOutcomes({ projectId }),
     records
   };
 }
@@ -1173,6 +1292,7 @@ export function mergeProjects(sourceId: string, targetId: string): Project {
       aliases.filter((alias) => alias !== targetProject.name && alias !== targetProject.shortName)
     );
     db.prepare("UPDATE records SET projectId = ? WHERE projectId = ?").run(targetProject.id, sourceProject.id);
+    db.prepare("UPDATE outcomes SET projectId = ?, updateTime = ? WHERE projectId = ?").run(targetProject.id, now, sourceProject.id);
     db.prepare(`UPDATE projects
       SET status = 'archived', mergedIntoProjectId = ?, archiveTime = ?, updateTime = ?
       WHERE id = ?`).run(targetProject.id, now, now, sourceProject.id);
@@ -1666,6 +1786,260 @@ export function updateMilestone(id: string, input: MilestoneUpdateInput): Milest
   );
 
   return getMilestone(id);
+}
+
+const outcomeTypes = new Set<OutcomeType>(["deliverable", "problem_resolution", "stage_progress", "reusable_asset"]);
+const outcomeStatuses = new Set<OutcomeStatus>(["planned", "in_progress", "stage_result", "completed"]);
+
+function normalizeOutcomeDate(input: unknown): string {
+  const value = normalizeText(input);
+  if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("OUTCOME_INVALID_DATE");
+  return value;
+}
+
+function assertOutcomeDates(startDate: string, updateDate: string, completedDate: string): void {
+  if (startDate && updateDate && updateDate < startDate) throw new Error("OUTCOME_INVALID_DATE");
+  if (startDate && completedDate && completedDate < startDate) throw new Error("OUTCOME_INVALID_DATE");
+}
+
+function normalizeOutcomeRelations(input: Pick<OutcomeInput, "recordIds" | "abilities" | "milestoneIds">) {
+  const recordIds = Array.from(new Set((input.recordIds ?? []).map(normalizeText).filter(Boolean)));
+  const abilities = (input.abilities ?? []).map((ability) => ({
+    abilityId: normalizeText(ability.abilityId),
+    abilityName: normalizeText(ability.abilityName)
+  }));
+  const milestoneIds = Array.from(new Set((input.milestoneIds ?? []).map(normalizeText).filter(Boolean)));
+  if (recordIds.some((id) => !getRecord(id)) || milestoneIds.some((id) => !getMilestone(id))) {
+    throw new Error("OUTCOME_RELATION_INVALID");
+  }
+  if (abilities.some((ability) => !ability.abilityId || !ability.abilityName)
+    || new Set(abilities.map((ability) => ability.abilityId)).size !== abilities.length) {
+    throw new Error("OUTCOME_RELATION_INVALID");
+  }
+  return { recordIds, abilities, milestoneIds };
+}
+
+function replaceOutcomeRelations(
+  outcomeId: string,
+  relations: { recordIds: string[]; abilities: OutcomeAbility[]; milestoneIds: string[] }
+): void {
+  db.prepare("DELETE FROM outcome_records WHERE outcomeId = ?").run(outcomeId);
+  db.prepare("DELETE FROM outcome_abilities WHERE outcomeId = ?").run(outcomeId);
+  db.prepare("DELETE FROM outcome_milestones WHERE outcomeId = ?").run(outcomeId);
+  const recordInsert = db.prepare("INSERT INTO outcome_records (outcomeId, recordId) VALUES (?, ?)");
+  relations.recordIds.forEach((recordId) => recordInsert.run(outcomeId, recordId));
+  const abilityInsert = db.prepare("INSERT INTO outcome_abilities (outcomeId, abilityId, abilityName) VALUES (?, ?, ?)");
+  relations.abilities.forEach((ability) => abilityInsert.run(outcomeId, ability.abilityId, ability.abilityName));
+  const milestoneInsert = db.prepare("INSERT INTO outcome_milestones (outcomeId, milestoneId) VALUES (?, ?)");
+  relations.milestoneIds.forEach((milestoneId) => milestoneInsert.run(outcomeId, milestoneId));
+}
+
+function toOutcome(row: unknown): Outcome {
+  const item = row as Record<string, unknown>;
+  const id = String(item.id);
+  const recordIds = (db.prepare("SELECT recordId FROM outcome_records WHERE outcomeId = ? ORDER BY rowid").all(id) as Array<{ recordId: string }>)
+    .map((entry) => String(entry.recordId));
+  const records = recordIds.map(getRecord).filter((record): record is WorkRecord => Boolean(record));
+  const abilities = (db.prepare("SELECT abilityId, abilityName FROM outcome_abilities WHERE outcomeId = ? ORDER BY abilityName").all(id) as unknown as OutcomeAbility[])
+    .map((ability) => ({ abilityId: String(ability.abilityId), abilityName: String(ability.abilityName) }));
+  const milestoneIds = (db.prepare("SELECT milestoneId FROM outcome_milestones WHERE outcomeId = ? ORDER BY rowid").all(id) as Array<{ milestoneId: string }>)
+    .map((entry) => String(entry.milestoneId));
+  const milestones = milestoneIds.map(getMilestone).filter((milestone): milestone is Milestone => Boolean(milestone));
+  const statusHistory = (db.prepare("SELECT * FROM outcome_status_history WHERE outcomeId = ? ORDER BY changedTime, rowid").all(id) as Array<Record<string, unknown>>)
+    .map((history) => ({
+      id: String(history.id),
+      fromStatus: history.fromStatus === null ? null : String(history.fromStatus) as OutcomeStatus,
+      toStatus: String(history.toStatus) as OutcomeStatus,
+      note: String(history.note || ""),
+      changedTime: Number(history.changedTime)
+    }));
+  return {
+    id,
+    type: String(item.type) as OutcomeType,
+    status: String(item.status) as OutcomeStatus,
+    title: String(item.title),
+    projectId: item.projectId === null ? null : String(item.projectId),
+    projectName: String(item.projectName || ""),
+    startDate: String(item.startDate || ""),
+    updateDate: String(item.updateDate || ""),
+    completedDate: String(item.completedDate || ""),
+    backgroundGoal: String(item.backgroundGoal || ""),
+    completedWork: String(item.completedWork || ""),
+    valueImpact: String(item.valueImpact || ""),
+    personalRole: String(item.personalRole || ""),
+    contribution: String(item.contribution || ""),
+    reportSummary: String(item.reportSummary || ""),
+    productSystem: String(item.productSystem || ""),
+    tags: String(item.tags || ""),
+    remark: String(item.remark || ""),
+    archived: Boolean(item.archived),
+    archiveTime: item.archiveTime === null ? null : Number(item.archiveTime),
+    recordIds,
+    records,
+    abilities,
+    milestoneIds,
+    milestones,
+    recordCount: records.length,
+    timeHours: records.reduce((sum, record) => sum + (record.timeHours ?? 0), 0),
+    workload: records.reduce((sum, record) => sum + (record.workload ?? 0), 0),
+    statusHistory,
+    createTime: Number(item.createTime),
+    updateTime: Number(item.updateTime)
+  };
+}
+
+export function getOutcome(id: string): Outcome | null {
+  const row = db.prepare("SELECT * FROM outcomes WHERE id = ?").get(id);
+  return row ? toOutcome(row) : null;
+}
+
+export function listOutcomes(filter: {
+  type?: OutcomeType;
+  status?: OutcomeStatus;
+  projectId?: string;
+  abilityId?: string;
+  year?: string;
+  query?: string;
+  includeArchived?: boolean;
+} = {}): Outcome[] {
+  const query = normalizeText(filter.query).toLocaleLowerCase();
+  return db.prepare("SELECT * FROM outcomes ORDER BY COALESCE(NULLIF(completedDate, ''), NULLIF(updateDate, ''), NULLIF(startDate, '')) DESC, updateTime DESC")
+    .all()
+    .map(toOutcome)
+    .filter((outcome) => filter.includeArchived ? true : !outcome.archived)
+    .filter((outcome) => filter.type ? outcome.type === filter.type : true)
+    .filter((outcome) => filter.status ? outcome.status === filter.status : true)
+    .filter((outcome) => filter.projectId ? outcome.projectId === filter.projectId : true)
+    .filter((outcome) => filter.abilityId ? outcome.abilities.some((ability) => ability.abilityId === filter.abilityId) : true)
+    .filter((outcome) => {
+      if (!filter.year) return true;
+      const date = outcome.completedDate || outcome.updateDate || outcome.startDate || new Date(outcome.createTime).toISOString().slice(0, 10);
+      return date.startsWith(filter.year);
+    })
+    .filter((outcome) => !query || [
+      outcome.title, outcome.backgroundGoal, outcome.completedWork, outcome.valueImpact,
+      outcome.contribution, outcome.reportSummary, outcome.projectName, outcome.tags
+    ].some((value) => value.toLocaleLowerCase().includes(query)));
+}
+
+export function summarizeOutcomes(outcomes: Outcome[]): OutcomeSummary {
+  const recordIds = Array.from(new Set(outcomes.flatMap((outcome) => outcome.recordIds)));
+  const records = recordIds.map(getRecord).filter((record): record is WorkRecord => Boolean(record));
+  const byType: OutcomeSummary["byType"] = { deliverable: 0, problem_resolution: 0, stage_progress: 0, reusable_asset: 0 };
+  const byStatus: OutcomeSummary["byStatus"] = { planned: 0, in_progress: 0, stage_result: 0, completed: 0 };
+  outcomes.forEach((outcome) => { byType[outcome.type] += 1; byStatus[outcome.status] += 1; });
+  return {
+    outcomeCount: outcomes.length,
+    recordCount: records.length,
+    timeHours: records.reduce((sum, record) => sum + (record.timeHours ?? 0), 0),
+    workload: records.reduce((sum, record) => sum + (record.workload ?? 0), 0),
+    byType,
+    byStatus
+  };
+}
+
+export function insertOutcome(input: OutcomeInput): Outcome {
+  const type = input.type;
+  const status = input.status ?? "planned";
+  const title = normalizeText(input.title);
+  if (!outcomeTypes.has(type) || !outcomeStatuses.has(status) || !title) throw new Error("OUTCOME_INVALID");
+  const project = input.projectId ? getProject(input.projectId) : null;
+  if (input.projectId && (!project || project.mergedIntoProjectId)) throw new Error("OUTCOME_RELATION_INVALID");
+  const startDate = normalizeOutcomeDate(input.startDate);
+  const updateDate = normalizeOutcomeDate(input.updateDate);
+  const completedDate = normalizeOutcomeDate(input.completedDate);
+  assertOutcomeDates(startDate, updateDate, completedDate);
+  const relations = normalizeOutcomeRelations(input);
+  const id = createId();
+  const now = Date.now();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`INSERT INTO outcomes (
+      id, type, status, title, projectId, projectName, startDate, updateDate, completedDate,
+      backgroundGoal, completedWork, valueImpact, personalRole, contribution, reportSummary,
+      productSystem, tags, remark, archived, archiveTime, createTime, updateTime
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)`)
+      .run(
+        id, type, status, title, project?.id ?? null, project?.name ?? "", startDate, updateDate, completedDate,
+        normalizeText(input.backgroundGoal), normalizeText(input.completedWork), normalizeText(input.valueImpact),
+        normalizeText(input.personalRole), normalizeText(input.contribution), normalizeText(input.reportSummary),
+        normalizeText(input.productSystem), normalizeTags(input.tags || ""), normalizeText(input.remark), now, now
+      );
+    replaceOutcomeRelations(id, relations);
+    db.prepare("INSERT INTO outcome_status_history (id, outcomeId, fromStatus, toStatus, note, changedTime) VALUES (?, ?, NULL, ?, ?, ?)")
+      .run(createId(), id, status, normalizeText(input.statusNote), now);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getOutcome(id) as Outcome;
+}
+
+export function updateOutcome(id: string, input: OutcomeUpdateInput): Outcome | null {
+  const existing = getOutcome(id);
+  if (!existing) return null;
+  const type = input.type ?? existing.type;
+  const status = input.status ?? existing.status;
+  const title = input.title === undefined ? existing.title : normalizeText(input.title);
+  if (!outcomeTypes.has(type) || !outcomeStatuses.has(status) || !title) throw new Error("OUTCOME_INVALID");
+  const projectId = input.projectId === undefined ? existing.projectId : input.projectId;
+  const project = projectId ? getProject(projectId) : null;
+  if (projectId && (!project || project.mergedIntoProjectId)) throw new Error("OUTCOME_RELATION_INVALID");
+  const startDate = input.startDate === undefined ? existing.startDate : normalizeOutcomeDate(input.startDate);
+  const updateDate = input.updateDate === undefined ? existing.updateDate : normalizeOutcomeDate(input.updateDate);
+  const completedDate = input.completedDate === undefined ? existing.completedDate : normalizeOutcomeDate(input.completedDate);
+  assertOutcomeDates(startDate, updateDate, completedDate);
+  const relations = normalizeOutcomeRelations({
+    recordIds: input.recordIds ?? existing.recordIds,
+    abilities: input.abilities ?? existing.abilities,
+    milestoneIds: input.milestoneIds ?? existing.milestoneIds
+  });
+  const now = Date.now();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`UPDATE outcomes SET
+      type = ?, status = ?, title = ?, projectId = ?, projectName = ?, startDate = ?, updateDate = ?, completedDate = ?,
+      backgroundGoal = ?, completedWork = ?, valueImpact = ?, personalRole = ?, contribution = ?, reportSummary = ?,
+      productSystem = ?, tags = ?, remark = ?, updateTime = ? WHERE id = ?`)
+      .run(
+        type, status, title, project?.id ?? null,
+        projectId === existing.projectId ? existing.projectName : project?.name ?? "",
+        startDate, updateDate, completedDate,
+        input.backgroundGoal === undefined ? existing.backgroundGoal : normalizeText(input.backgroundGoal),
+        input.completedWork === undefined ? existing.completedWork : normalizeText(input.completedWork),
+        input.valueImpact === undefined ? existing.valueImpact : normalizeText(input.valueImpact),
+        input.personalRole === undefined ? existing.personalRole : normalizeText(input.personalRole),
+        input.contribution === undefined ? existing.contribution : normalizeText(input.contribution),
+        input.reportSummary === undefined ? existing.reportSummary : normalizeText(input.reportSummary),
+        input.productSystem === undefined ? existing.productSystem : normalizeText(input.productSystem),
+        input.tags === undefined ? existing.tags : normalizeTags(input.tags),
+        input.remark === undefined ? existing.remark : normalizeText(input.remark), now, id
+      );
+    replaceOutcomeRelations(id, relations);
+    if (status !== existing.status) {
+      db.prepare("INSERT INTO outcome_status_history (id, outcomeId, fromStatus, toStatus, note, changedTime) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(createId(), id, existing.status, status, normalizeText(input.statusNote), now);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getOutcome(id);
+}
+
+export function archiveOutcome(id: string): Outcome | null {
+  if (!getOutcome(id)) return null;
+  const now = Date.now();
+  db.prepare("UPDATE outcomes SET archived = 1, archiveTime = ?, updateTime = ? WHERE id = ?").run(now, now, id);
+  return getOutcome(id);
+}
+
+export function reactivateOutcome(id: string): Outcome | null {
+  if (!getOutcome(id)) return null;
+  db.prepare("UPDATE outcomes SET archived = 0, archiveTime = NULL, updateTime = ? WHERE id = ?").run(Date.now(), id);
+  return getOutcome(id);
 }
 
 export function listKnowledgeAssets(): KnowledgeAsset[] {

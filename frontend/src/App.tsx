@@ -15,7 +15,7 @@ import {
   TRACE_NAVIGATION,
   type AppPageContext
 } from "./navigation";
-import type { ExportFormat, RecordInput, ReportBundle, WorkRecord } from "./types";
+import type { ExportFormat, OutcomeSeed, RecordInput, ReportBundle, WorkRecord } from "./types";
 
 export function App() {
   const { records, loading, error, addRecord, updateRecord, deleteRecord, clearRecords } = useRecords();
@@ -24,6 +24,7 @@ export function App() {
   const [report, setReport] = useState<ReportBundle | null>(null);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [outcomeSeed, setOutcomeSeed] = useState<OutcomeSeed | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
   function showToast(message: string): void {
@@ -85,6 +86,11 @@ export function App() {
     setReport(generateTagReport(targetRecords, title));
   }
 
+  function handleCreateOutcome(seed: Omit<OutcomeSeed, "nonce">): void {
+    setOutcomeSeed({ ...seed, nonce: Date.now() });
+    setPageNavigation((current) => navigateToPage(current, "knowledge", window.scrollY));
+  }
+
   async function handleCopyReport(): Promise<void> {
     if (!report) return;
 
@@ -133,6 +139,9 @@ export function App() {
     onDeleteRecord: handleDelete,
     onClearRecords: handleClear,
     onGenerateReport: handleGenerateReport,
+    onCreateOutcome: handleCreateOutcome,
+    outcomeSeed,
+    onOutcomeSeedConsumed: () => setOutcomeSeed(null),
     onNotify: showToast
   };
 

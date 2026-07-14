@@ -93,12 +93,12 @@ test("report detail filtering clips periods to report boundaries and falls back 
   );
 });
 
-test("knowledge page renders date bounds and an empty linked-record state", () => {
+test("outcome page renders lifecycle dates and searchable multi-record links", () => {
   assert.equal(knowledgeSource.includes('type="date"'), true);
   assert.equal(knowledgeSource.includes("开始日期"), true);
-  assert.equal(knowledgeSource.includes("结束日期"), true);
-  assert.equal(knowledgeSource.includes("无匹配日报"), true);
-  assert.equal(knowledgeSource.includes("defaultLimit: 15"), true);
+  assert.equal(knowledgeSource.includes("完成日期"), true);
+  assert.equal(knowledgeSource.includes("搜索并添加日报"), true);
+  assert.equal(knowledgeSource.includes("recordIds"), true);
 });
 
 test("all records page exposes archive modes and filters report generation scope", () => {

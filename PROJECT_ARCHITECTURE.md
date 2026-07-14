@@ -16,14 +16,14 @@
 React + Vite 前端
   ↓ /api
 Express 后端
-  ├─ SQLite：保存工作记录、项目与别名、配置、里程碑、知识资产
+  ├─ SQLite：保存工作记录、项目与别名、成果关系、配置和里程碑
   └─ 导出服务：生成 Word / PDF / Excel
 ```
 
 这是一个前后端分离系统：
 
 - 前端负责页面、交互、报表展示、报告预览
-- 后端负责记录、配置、里程碑、知识资产持久化，以及导出文件生成
+- 后端负责记录、项目、成果、配置和里程碑持久化，以及导出文件生成
 - 数据库使用 SQLite，默认是一个文件：`backend/data/report.sqlite`
 
 ## 目录结构
@@ -63,7 +63,8 @@ trace-work-report-system/
       │  ├─ projectPresentation.ts # 项目搜索选项和历史项展示规则
       │  ├─ settingsApi.ts       # 分析权重、预警规则 API
       │  ├─ milestoneApi.ts      # 成长里程碑 API
-      │  ├─ knowledgeApi.ts      # 知识资产 API
+      │  ├─ knowledgeApi.ts      # 旧知识资产只读兼容 API
+      │  ├─ outcomeApi.ts        # 统一成果 API
       │  ├─ growthReview.ts      # 复盘文本、预警和成长统计
       │  ├─ exportApi.ts         # 前端调用后端导出 API
       │  ├─ useRecords.ts        # 记录状态与服务端同步
@@ -89,7 +90,7 @@ trace-work-report-system/
 - `frontend/src/components/Sidebar.tsx` 是当前侧边导航组件。
 - `frontend/src/components/EditModal.tsx` 承载记录编辑弹窗，内部复用 `RecordForm`。
 - `frontend/src/components/ReportDashboard.tsx` 承载周报、月报、年报中的核心数据展板。
-- `frontend/src/pages/` 下按业务页面拆分：日报、项目管理、周报、月报、年报、成长地图、知识资产、全部记录、配置中心。
+- `frontend/src/pages/` 下按业务页面拆分：日报、项目管理、成果管理、周报、月报、年报、成长目标、全部记录、配置中心。
 - `frontend/src/components/ProjectSelectField.tsx` 负责日报中的项目/非项目关系选择和快速新建。
 - `frontend/src/components/ProjectEditor.tsx` 与 `ProjectMergeDialog.tsx` 复用项目编辑、合并预览和确认流程。
 
@@ -110,7 +111,7 @@ flowchart LR
   User --> UI
   UI -->|GET/POST/PUT/DELETE /api/records| API
   UI -->|projects / summary / archive / merge| API
-  UI -->|settings / milestones / knowledge-assets| API
+  UI -->|settings / milestones / outcomes| API
   API <--> DB
   UI --> Report
   Report --> UI
@@ -122,13 +123,13 @@ flowchart LR
 
 ## 前端职责
 
-- 渲染日报、周报、月报、年报、成长地图、知识资产库、全部记录页面
+- 渲染日报、项目、成果、周报、月报、年报、成长目标和全部记录页面
 - 提供新增、编辑、删除、清空记录交互
 - 通过 `/api/records` 与后端同步数据
 - 通过 `/api/projects` 维护项目实体、搜索别名、查看项目汇总并执行归档、恢复和合并
 - 按日期、周、月、年派生统计
 - 按配置权重计算工作重心排行，按能力目标生成查漏补缺预警
-- 维护成长里程碑和知识资产库
+- 维护成长里程碑和统一成果证据
 - 按二级标签生成报告预览
 - 调用后端导出 Word、PDF、Excel
 - 导出 JSON 备份文件
@@ -152,13 +153,13 @@ flowchart LR
 
 ## 后端职责
 
-- 提供记录、项目、配置、里程碑、知识资产 CRUD API
+- 提供记录、项目、成果、配置和里程碑 CRUD API
 - 提供项目搜索、汇总、归档、恢复、合并预览和事务合并 API
 - 使用 SQLite 保存记录和成长复盘相关数据
 - 标准化二级标签
 - 生成记录 ID、创建时间、更新时间
 - 校验请求数据
-- 生成 Word、PDF、Excel 下载文件，并附带分析规则、里程碑和知识资产复盘内容
+- 生成 Word、PDF、Excel 下载文件，并附带分析规则、里程碑和成果清单
 
 ## 数据存储
 

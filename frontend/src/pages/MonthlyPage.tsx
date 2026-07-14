@@ -5,11 +5,13 @@ import { PageHeader } from "../components/PageHeader";
 import { ReportDashboard } from "../components/ReportDashboard";
 import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
-import type { AppSettings, KnowledgeAsset, Milestone, WorkRecord } from "../types";
+import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
+import type { AppSettings, Milestone, Outcome, WorkRecord } from "../types";
 import { formatMonthLabel, getMonthRange, shiftMonth, todayKey } from "../lib/date";
 import { buildMonthWeekTrend, sumWorkload } from "../lib/dashboard";
 import { buildGrowthWarnings, buildMonthlyReview } from "../lib/growthReview";
-import { fetchKnowledgeAssets } from "../lib/knowledgeApi";
+import { fetchOutcomes } from "../lib/outcomeApi";
+import { filterOutcomesByRange } from "../lib/outcomes";
 import { fetchMilestones } from "../lib/milestoneApi";
 import { countActiveDays, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
 import { filterReportDetailRecords, getArchiveRange, getDefaultReportDetailPeriod } from "../lib/recordFilters";
@@ -25,7 +27,7 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
   const [date, setDate] = useState(todayKey());
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [assets, setAssets] = useState<KnowledgeAsset[]>([]);
+  const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const range = useMemo(() => getMonthRange(date), [date]);
   const defaultDetailWeek = useMemo(
     () => getDefaultReportDetailPeriod("month", range.monthKey, "week", todayKey()),
@@ -46,7 +48,8 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
   const trend = useMemo(() => buildMonthWeekTrend(monthlyRecords, range.monthKey), [monthlyRecords, range.monthKey]);
   const title = `${formatMonthLabel(range.monthKey)}月报`;
   const activeDays = countActiveDays(monthlyRecords);
-  const review = useMemo(() => buildMonthlyReview(monthlyRecords, milestones, assets), [monthlyRecords, milestones, assets]);
+  const review = useMemo(() => buildMonthlyReview(monthlyRecords, milestones), [monthlyRecords, milestones]);
+  const monthlyOutcomes = useMemo(() => filterOutcomesByRange(outcomes, range.start, range.end), [outcomes, range.start, range.end]);
   const warnings = useMemo(() => buildGrowthWarnings(monthlyRecords, settings, range.end), [monthlyRecords, settings, range.end]);
   const lastDetailWeek = useMemo(
     () => getDefaultReportDetailPeriod("month", range.monthKey, "week", range.end),
@@ -63,12 +66,12 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
   useEffect(() => {
     let ignore = false;
 
-    Promise.all([fetchSettings(), fetchMilestones(), fetchKnowledgeAssets()])
-      .then(([nextSettings, nextMilestones, nextAssets]) => {
+    Promise.all([fetchSettings(), fetchMilestones(), fetchOutcomes()])
+      .then(([nextSettings, nextMilestones, nextOutcomes]) => {
         if (ignore) return;
         setSettings(nextSettings);
         setMilestones(nextMilestones);
-        setAssets(nextAssets);
+        setOutcomes(nextOutcomes.outcomes);
       })
       .catch((error) => {
         if (!ignore) onNotify(error instanceof Error ? error.message : "月报复盘数据读取失败");
@@ -117,6 +120,8 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
       />
 
       <ReportDashboard records={monthlyRecords} trend={trend} activeLabel={`${activeDays} 天`} />
+
+      <OutcomePeriodSection outcomes={monthlyOutcomes} title="本月成果、问题与进展" />
 
       <section className="panel review-panel">
         <div className="panel-heading">

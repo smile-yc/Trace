@@ -25,6 +25,7 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
             onEdit={context.onEditRecord}
             onDelete={context.onDeleteRecord}
             onNotify={context.onNotify}
+            onCreateOutcome={context.onCreateOutcome}
           />
         )
       },
@@ -39,6 +40,7 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
             onDelete={context.onDeleteRecord}
             onClear={context.onClearRecords}
             onGenerateReport={context.onGenerateReport}
+            onCreateOutcome={context.onCreateOutcome}
           />
         )
       },
@@ -46,13 +48,13 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
         id: "projects",
         label: "项目管理",
         group: "work",
-        render: (context) => <ProjectsPage onNotify={context.onNotify} />
+        render: (context) => <ProjectsPage onNotify={context.onNotify} onCreateOutcome={context.onCreateOutcome} />
       },
       {
         id: "knowledge",
         label: "成果管理",
         group: "work",
-        render: (context) => <KnowledgePage records={context.records} onNotify={context.onNotify} />
+        render: (context) => <KnowledgePage records={context.records} initialSeed={context.outcomeSeed} onSeedConsumed={context.onOutcomeSeedConsumed} onNotify={context.onNotify} />
       }
     ]
   },

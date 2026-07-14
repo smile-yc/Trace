@@ -211,6 +211,7 @@ export interface ProjectSummary {
   businessCategories: ProjectBreakdownItem[];
   products: ProjectBreakdownItem[];
   abilities: ProjectBreakdownItem[];
+  outcomes: Outcome[];
   records: WorkRecord[];
 }
 
@@ -220,6 +221,96 @@ export interface ProjectMergePreview {
   recordCount: number;
   timeHours: number;
   workload: number;
+}
+
+export type OutcomeType = "deliverable" | "problem_resolution" | "stage_progress" | "reusable_asset";
+export type OutcomeStatus = "planned" | "in_progress" | "stage_result" | "completed";
+
+export interface OutcomeAbility {
+  abilityId: string;
+  abilityName: string;
+}
+
+export interface OutcomeStatusHistory {
+  id: string;
+  fromStatus: OutcomeStatus | null;
+  toStatus: OutcomeStatus;
+  note: string;
+  changedTime: number;
+}
+
+export interface Outcome {
+  id: string;
+  type: OutcomeType;
+  status: OutcomeStatus;
+  title: string;
+  projectId: string | null;
+  projectName: string;
+  startDate: string;
+  updateDate: string;
+  completedDate: string;
+  backgroundGoal: string;
+  completedWork: string;
+  valueImpact: string;
+  personalRole: string;
+  contribution: string;
+  reportSummary: string;
+  productSystem: string;
+  tags: string;
+  remark: string;
+  archived: boolean;
+  archiveTime: number | null;
+  recordIds: string[];
+  records: WorkRecord[];
+  abilities: OutcomeAbility[];
+  milestoneIds: string[];
+  milestones: Milestone[];
+  recordCount: number;
+  timeHours: number;
+  workload: number;
+  statusHistory: OutcomeStatusHistory[];
+  createTime: number;
+  updateTime: number;
+}
+
+export interface OutcomeInput {
+  type: OutcomeType;
+  status?: OutcomeStatus;
+  title: string;
+  projectId?: string | null;
+  startDate?: string;
+  updateDate?: string;
+  completedDate?: string;
+  backgroundGoal?: string;
+  completedWork?: string;
+  valueImpact?: string;
+  personalRole?: string;
+  contribution?: string;
+  reportSummary?: string;
+  productSystem?: string;
+  tags?: string;
+  remark?: string;
+  recordIds?: string[];
+  abilities?: OutcomeAbility[];
+  milestoneIds?: string[];
+  statusNote?: string;
+}
+
+export type OutcomeUpdateInput = Partial<OutcomeInput>;
+
+export interface OutcomeSeed {
+  nonce: number;
+  recordIds?: string[];
+  projectId?: string;
+}
+
+export interface OutcomeSummary {
+  outcomeCount: number;
+  recordCount: number;
+  timeHours: number;
+  workload: number;
+  byType: Record<OutcomeType, number>;
+  byStatus: Record<OutcomeStatus, number>;
 }
 
 export type KnowledgeAssetStatus = "draft" | "published" | "archived";

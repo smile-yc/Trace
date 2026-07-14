@@ -1,306 +1,234 @@
-import { Archive, BookOpen, Link as LinkIcon, Plus, RefreshCw, Save } from "lucide-react";
+import { Archive, CheckCircle2, Plus, RefreshCw, RotateCcw, Save, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { StatCards } from "../components/StatCards";
-import { createKnowledgeAsset, fetchKnowledgeAssets, updateKnowledgeAssetApi } from "../lib/knowledgeApi";
-import { summarizeKnowledgeAssets } from "../lib/growthReview";
-import { filterKnowledgeRecordOptions } from "../lib/recordFilters";
-import type { KnowledgeAsset, KnowledgeAssetStatus, WorkRecord } from "../types";
+import { SearchSelect, StatusBadge } from "../components/ui";
+import { fetchConfigOptions } from "../lib/configApi";
+import { fetchMilestones } from "../lib/milestoneApi";
+import { archiveOutcome, createOutcome, fetchOutcomes, reactivateOutcome, updateOutcomeApi } from "../lib/outcomeApi";
+import { outcomeStatusLabels, outcomeTypeLabels, prefillOutcomeFromRecords } from "../lib/outcomes";
+import { fetchProjects } from "../lib/projectApi";
+import type {
+  ConfigOption, Milestone, Outcome, OutcomeAbility, OutcomeInput, OutcomeSeed, OutcomeStatus,
+  OutcomeSummary, OutcomeType, Project, WorkRecord
+} from "../types";
 
 interface KnowledgePageProps {
   records: WorkRecord[];
+  initialSeed?: OutcomeSeed | null;
+  onSeedConsumed?: () => void;
   onNotify: (message: string) => void;
 }
 
-interface KnowledgeDraft {
-  type: string;
-  title: string;
-  summary: string;
-  sourceRecordId: string;
-  projectName: string;
-  productSystem: string;
-  tags: string;
-  status: KnowledgeAssetStatus;
-  link: string;
-  remark: string;
+interface OutcomeDraft extends Required<Omit<OutcomeInput, "projectId" | "statusNote">> {
+  projectId: string;
+  statusNote: string;
 }
 
-const emptyDraft: KnowledgeDraft = {
-  type: "复盘",
-  title: "",
-  summary: "",
-  sourceRecordId: "",
-  projectName: "",
-  productSystem: "",
-  tags: "",
-  status: "draft",
-  link: "",
-  remark: ""
+const emptyDraft = (): OutcomeDraft => ({
+  type: "deliverable", status: "planned", title: "", projectId: "", startDate: "", updateDate: "",
+  completedDate: "", backgroundGoal: "", completedWork: "", valueImpact: "", personalRole: "",
+  contribution: "", reportSummary: "", productSystem: "", tags: "", remark: "", recordIds: [],
+  abilities: [], milestoneIds: [], statusNote: ""
+});
+
+const emptySummary: OutcomeSummary = {
+  outcomeCount: 0, recordCount: 0, timeHours: 0, workload: 0,
+  byType: { deliverable: 0, problem_resolution: 0, stage_progress: 0, reusable_asset: 0 },
+  byStatus: { planned: 0, in_progress: 0, stage_result: 0, completed: 0 }
 };
 
-const statusLabels: Record<KnowledgeAssetStatus, string> = {
-  draft: "草稿",
-  published: "已发布",
-  archived: "已归档"
-};
+function outcomeToDraft(outcome: Outcome): OutcomeDraft {
+  return {
+    type: outcome.type, status: outcome.status, title: outcome.title, projectId: outcome.projectId ?? "",
+    startDate: outcome.startDate, updateDate: outcome.updateDate, completedDate: outcome.completedDate,
+    backgroundGoal: outcome.backgroundGoal, completedWork: outcome.completedWork, valueImpact: outcome.valueImpact,
+    personalRole: outcome.personalRole, contribution: outcome.contribution, reportSummary: outcome.reportSummary,
+    productSystem: outcome.productSystem, tags: outcome.tags, remark: outcome.remark,
+    recordIds: outcome.recordIds, abilities: outcome.abilities, milestoneIds: outcome.milestoneIds, statusNote: ""
+  };
+}
 
-export function KnowledgePage({ records, onNotify }: KnowledgePageProps) {
-  const [assets, setAssets] = useState<KnowledgeAsset[]>([]);
-  const [draft, setDraft] = useState<KnowledgeDraft>(emptyDraft);
-  const [assetDrafts, setAssetDrafts] = useState<Record<string, Pick<KnowledgeAsset, "status" | "remark">>>({});
+export function KnowledgePage({ records, initialSeed, onSeedConsumed, onNotify }: KnowledgePageProps) {
+  const [outcomes, setOutcomes] = useState<Outcome[]>([]);
+  const [summary, setSummary] = useState<OutcomeSummary>(emptySummary);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [abilities, setAbilities] = useState<ConfigOption[]>([]);
+  const [draft, setDraft] = useState<OutcomeDraft>(emptyDraft);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [recordStartDate, setRecordStartDate] = useState("");
-  const [recordEndDate, setRecordEndDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [recordPicker, setRecordPicker] = useState("");
+  const [abilityPicker, setAbilityPicker] = useState("");
+  const [milestonePicker, setMilestonePicker] = useState("");
+  const [filters, setFilters] = useState({ query: "", type: "", status: "", projectId: "", abilityId: "", year: String(new Date().getFullYear()), includeArchived: false });
 
-  async function loadAssets(): Promise<void> {
+  async function loadOutcomes() {
     try {
       setLoading(true);
-      const nextAssets = await fetchKnowledgeAssets();
-      setAssets(nextAssets);
-      setAssetDrafts(
-        nextAssets.reduce<Record<string, Pick<KnowledgeAsset, "status" | "remark">>>((drafts, asset) => {
-          drafts[asset.id] = { status: asset.status, remark: asset.remark };
-          return drafts;
-        }, {})
-      );
+      const result = await fetchOutcomes({
+        query: filters.query, type: filters.type as OutcomeType || undefined,
+        status: filters.status as OutcomeStatus || undefined, projectId: filters.projectId, abilityId: filters.abilityId,
+        year: filters.year, includeArchived: filters.includeArchived
+      });
+      setOutcomes(result.outcomes);
+      setSummary(result.summary);
     } catch (error) {
-      onNotify(error instanceof Error ? error.message : "知识资产读取失败");
+      onNotify(error instanceof Error ? error.message : "成果读取失败");
     } finally {
       setLoading(false);
     }
   }
 
+  useEffect(() => { void loadOutcomes(); }, []);
   useEffect(() => {
-    void loadAssets();
-  }, []);
+    Promise.all([fetchProjects({ includeArchived: true }), fetchMilestones(), fetchConfigOptions("abilityDimension")])
+      .then(([nextProjects, nextMilestones, nextAbilities]) => {
+        setProjects(nextProjects); setMilestones(nextMilestones); setAbilities(nextAbilities);
+      })
+      .catch((error) => onNotify(error instanceof Error ? error.message : "成果关联选项读取失败"));
+  }, [onNotify]);
 
-  const assetSummary = useMemo(() => summarizeKnowledgeAssets(assets), [assets]);
-  const recordOptions = useMemo(
-    () => filterKnowledgeRecordOptions(records, { startDate: recordStartDate, endDate: recordEndDate, defaultLimit: 15 }),
-    [records, recordStartDate, recordEndDate]
-  );
+  useEffect(() => {
+    if (!initialSeed) return;
+    const selected = records.filter((record) => initialSeed.recordIds?.includes(record.id));
+    const seed = prefillOutcomeFromRecords(selected);
+    setEditingId(null);
+    setDraft((current) => ({ ...emptyDraft(), ...current, ...seed, projectId: initialSeed.projectId || seed.projectId || "" } as OutcomeDraft));
+    onSeedConsumed?.();
+  }, [initialSeed?.nonce]);
 
-  function selectSourceRecord(recordId: string): void {
-    const record = records.find((item) => item.id === recordId);
-    setDraft((current) => ({
-      ...current,
-      sourceRecordId: recordId,
-      projectName: record?.projectName || current.projectName,
-      productSystem: record?.productSystem || current.productSystem,
-      tags: record?.tags || current.tags
-    }));
+  const projectOptions = useMemo(() => [
+    { value: "", label: "非项目成果" },
+    ...projects.filter((project) => !project.mergedIntoProjectId).map((project) => ({
+      value: project.id, label: project.name, keywords: [project.shortName, ...project.aliases]
+    }))
+  ], [projects]);
+  const projectFilterOptions = useMemo(() => [
+    { value: "", label: "全部项目" },
+    ...projects.filter((project) => !project.mergedIntoProjectId).map((project) => ({ value: project.id, label: project.name, keywords: [project.shortName, ...project.aliases] }))
+  ], [projects]);
+  const abilityFilterOptions = useMemo(() => [
+    { value: "", label: "全部能力" },
+    ...abilities.filter((ability) => ability.enabled).map((ability) => ({ value: ability.id, label: ability.label }))
+  ], [abilities]);
+  const recordOptions = useMemo(() => records
+    .filter((record) => !draft.recordIds.includes(record.id))
+    .map((record) => ({ value: record.id, label: `${record.date} · ${record.title}`, keywords: [record.projectName, record.content, record.tags] })), [records, draft.recordIds]);
+  const abilityOptions = useMemo(() => abilities.filter((ability) => ability.enabled && !draft.abilities.some((item) => item.abilityId === ability.id))
+    .map((ability) => ({ value: ability.id, label: ability.label })), [abilities, draft.abilities]);
+  const milestoneOptions = useMemo(() => milestones.filter((milestone) => milestone.enabled && !draft.milestoneIds.includes(milestone.id))
+    .map((milestone) => ({ value: milestone.id, label: milestone.name })), [milestones, draft.milestoneIds]);
+
+  function addRecord(id: string) {
+    const selected = records.filter((record) => [...draft.recordIds, id].includes(record.id));
+    const seed = prefillOutcomeFromRecords(selected);
+    setDraft((current) => ({ ...current, ...seed, title: current.title || seed.title || "", projectId: current.projectId || seed.projectId || "" } as OutcomeDraft));
+    setRecordPicker("");
   }
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>): Promise<void> {
+  function addAbility(id: string) {
+    const option = abilities.find((ability) => ability.id === id);
+    if (option) setDraft((current) => ({ ...current, abilities: [...current.abilities, { abilityId: option.id, abilityName: option.label }] }));
+    setAbilityPicker("");
+  }
+
+  function addMilestone(id: string) {
+    if (id) setDraft((current) => ({ ...current, milestoneIds: [...current.milestoneIds, id] }));
+    setMilestonePicker("");
+  }
+
+  function resetForm() { setDraft(emptyDraft()); setEditingId(null); }
+
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!draft.title.trim()) return;
-
     try {
-      const asset = await createKnowledgeAsset(draft);
-      setAssets((current) => [asset, ...current]);
-      setAssetDrafts((current) => ({ ...current, [asset.id]: { status: asset.status, remark: asset.remark } }));
-      setDraft(emptyDraft);
-      onNotify("知识资产已新增");
+      setSaving(true);
+      const payload: OutcomeInput = { ...draft, projectId: draft.projectId || null };
+      if (editingId) await updateOutcomeApi(editingId, payload);
+      else await createOutcome(payload);
+      onNotify(editingId ? "成果已更新" : "成果已创建");
+      resetForm();
+      await loadOutcomes();
     } catch (error) {
-      onNotify(error instanceof Error ? error.message : "新增知识资产失败");
-    }
+      onNotify(error instanceof Error ? error.message : "成果保存失败");
+    } finally { setSaving(false); }
   }
 
-  async function handleSave(asset: KnowledgeAsset): Promise<void> {
-    const nextDraft = assetDrafts[asset.id];
-    if (!nextDraft) return;
-
+  async function toggleArchive(outcome: Outcome) {
     try {
-      setSavingId(asset.id);
-      const nextAsset = await updateKnowledgeAssetApi(asset.id, nextDraft);
-      setAssets((current) => current.map((item) => (item.id === asset.id ? nextAsset : item)));
-      setAssetDrafts((current) => ({ ...current, [asset.id]: { status: nextAsset.status, remark: nextAsset.remark } }));
-      onNotify("知识资产已更新");
-    } catch (error) {
-      onNotify(error instanceof Error ? error.message : "保存知识资产失败");
-    } finally {
-      setSavingId(null);
-    }
+      if (outcome.archived) await reactivateOutcome(outcome.id); else await archiveOutcome(outcome.id);
+      onNotify(outcome.archived ? "成果已恢复" : "成果已归档");
+      await loadOutcomes();
+    } catch (error) { onNotify(error instanceof Error ? error.message : "成果状态更新失败"); }
   }
 
   return (
     <>
-      <PageHeader
-        eyebrow="Knowledge"
-        title="知识资产库"
-        description="沉淀可复用的方案、复盘、模板和交付物。"
-        actions={
-          <button className="ghost-button" disabled={loading} onClick={loadAssets} type="button">
-            <RefreshCw size={16} />
-            刷新
-          </button>
-        }
-      />
+      <PageHeader eyebrow="Outcomes" title="成果管理" description="沉淀正式成果、重要问题解决、阶段进展和可复用资产。"
+        actions={<button className="ghost-button" disabled={loading} onClick={loadOutcomes} type="button"><RefreshCw size={16} />刷新</button>} />
+      <StatCards items={[
+        { label: "成果数", value: summary.outcomeCount }, { label: "已完成", value: summary.byStatus.completed },
+        { label: "关联日报", value: summary.recordCount }, { label: "关联工作当量", value: summary.workload }
+      ]} />
 
-      <StatCards
-        items={[
-          { label: "资产总数", value: assetSummary.total },
-          { label: "已发布", value: assetSummary.byStatus.published },
-          { label: "草稿", value: assetSummary.byStatus.draft },
-          { label: "已归档", value: assetSummary.byStatus.archived }
-        ]}
-      />
-
-      <section className="panel knowledge-form-panel">
-        <div className="panel-heading">
-          <h2>新增知识资产</h2>
-          <BookOpen size={18} />
+      <section className="panel outcome-filter-panel">
+        <div className="outcome-filter-grid">
+          <input placeholder="搜索标题、项目、价值或标签" value={filters.query} onChange={(event) => setFilters({ ...filters, query: event.target.value })} />
+          <select value={filters.type} onChange={(event) => setFilters({ ...filters, type: event.target.value })}><option value="">全部类型</option>{Object.entries(outcomeTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">全部状态</option>{Object.entries(outcomeStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <SearchSelect ariaLabel="按项目筛选成果" options={projectFilterOptions} value={filters.projectId} onChange={(projectId) => setFilters({ ...filters, projectId })} />
+          <SearchSelect ariaLabel="按能力筛选成果" options={abilityFilterOptions} value={filters.abilityId} onChange={(abilityId) => setFilters({ ...filters, abilityId })} />
+          <input aria-label="成果年份" min="2000" max="2100" type="number" value={filters.year} onChange={(event) => setFilters({ ...filters, year: event.target.value })} />
+          <label className="outcome-archive-toggle"><input type="checkbox" checked={filters.includeArchived} onChange={(event) => setFilters({ ...filters, includeArchived: event.target.checked })} />包含归档</label>
+          <button className="primary-button" onClick={loadOutcomes} type="button">应用筛选</button>
         </div>
-        <form className="knowledge-form" onSubmit={handleCreate}>
-          <label>
-            <span>资产类型</span>
-            <input value={draft.type} onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value }))} />
-          </label>
-          <label className="wide">
-            <span>标题</span>
-            <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
-          </label>
-          <label>
-            <span>状态</span>
-            <select
-              value={draft.status}
-              onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as KnowledgeAssetStatus }))}
-            >
-              {Object.entries(statusLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>开始日期</span>
-            <input type="date" value={recordStartDate} onChange={(event) => setRecordStartDate(event.target.value)} />
-          </label>
-          <label>
-            <span>结束日期</span>
-            <input type="date" value={recordEndDate} onChange={(event) => setRecordEndDate(event.target.value)} />
-          </label>
-          <label>
-            <span>关联日报</span>
-            <select disabled={!recordOptions.length} value={draft.sourceRecordId} onChange={(event) => selectSourceRecord(event.target.value)}>
-              <option value="">{recordOptions.length ? "不关联" : "无匹配日报"}</option>
-              {recordOptions.map((record) => (
-                <option key={record.id} value={record.id}>
-                  {record.date} {record.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>项目</span>
-            <input
-              value={draft.projectName}
-              onChange={(event) => setDraft((current) => ({ ...current, projectName: event.target.value }))}
-            />
-          </label>
-          <label>
-            <span>产品系统</span>
-            <input
-              value={draft.productSystem}
-              onChange={(event) => setDraft((current) => ({ ...current, productSystem: event.target.value }))}
-            />
-          </label>
-          <label>
-            <span>标签</span>
-            <input value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} />
-          </label>
-          <label className="wide">
-            <span>链接</span>
-            <input value={draft.link} onChange={(event) => setDraft((current) => ({ ...current, link: event.target.value }))} />
-          </label>
-          <label className="wide">
-            <span>摘要</span>
-            <textarea
-              value={draft.summary}
-              onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))}
-            />
-          </label>
-          <button className="primary-button" type="submit">
-            <Plus size={16} />
-            新增资产
-          </button>
+      </section>
+
+      <section className="panel knowledge-form-panel" id="outcome-form">
+        <div className="panel-heading"><h2>{editingId ? "编辑成果" : "新增成果"}</h2>{editingId && <button className="inline-clear" onClick={resetForm} type="button"><RotateCcw size={14} />取消编辑</button>}</div>
+        <form className="knowledge-form outcome-form" onSubmit={handleSubmit}>
+          <label><span>成果类型</span><select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as OutcomeType })}>{Object.entries(outcomeTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label><span>状态</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as OutcomeStatus })}>{Object.entries(outcomeStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="wide"><span>标题</span><input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+          <label><span>关联项目</span><SearchSelect ariaLabel="搜索关联项目" options={projectOptions} value={draft.projectId} onChange={(projectId) => setDraft({ ...draft, projectId })} /></label>
+          <label><span>开始日期</span><input type="date" value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value })} /></label>
+          <label><span>更新日期</span><input type="date" value={draft.updateDate} onChange={(event) => setDraft({ ...draft, updateDate: event.target.value })} /></label>
+          <label><span>完成日期</span><input type="date" value={draft.completedDate} onChange={(event) => setDraft({ ...draft, completedDate: event.target.value })} /></label>
+          <label><span>产品系统</span><input value={draft.productSystem} onChange={(event) => setDraft({ ...draft, productSystem: event.target.value })} /></label>
+          <label><span>个人角色</span><input value={draft.personalRole} onChange={(event) => setDraft({ ...draft, personalRole: event.target.value })} /></label>
+          <label><span>标签</span><input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} /></label>
+          <label className="wide"><span>背景与目标</span><textarea value={draft.backgroundGoal} onChange={(event) => setDraft({ ...draft, backgroundGoal: event.target.value })} /></label>
+          <label className="wide"><span>完成内容或解决的问题</span><textarea value={draft.completedWork} onChange={(event) => setDraft({ ...draft, completedWork: event.target.value })} /></label>
+          <label className="wide"><span>价值与影响</span><textarea value={draft.valueImpact} onChange={(event) => setDraft({ ...draft, valueImpact: event.target.value })} /></label>
+          <label className="wide"><span>个人具体贡献</span><textarea value={draft.contribution} onChange={(event) => setDraft({ ...draft, contribution: event.target.value })} /></label>
+          <label className="wide"><span>用于汇报的简明表述</span><textarea value={draft.reportSummary} onChange={(event) => setDraft({ ...draft, reportSummary: event.target.value })} /></label>
+
+          <div className="outcome-relation-field wide"><span>关联日报</span><SearchSelect ariaLabel="搜索并添加日报" options={recordOptions} value={recordPicker} placeholder="搜索日期、标题、项目或内容" onChange={addRecord} />
+            <div className="outcome-relation-chips">{draft.recordIds.map((id) => { const item = records.find((record) => record.id === id); return <button key={id} onClick={() => setDraft({ ...draft, recordIds: draft.recordIds.filter((value) => value !== id) })} type="button">{item?.date} {item?.title || id}<X size={13} /></button>; })}</div></div>
+          <div className="outcome-relation-field"><span>关联能力</span><SearchSelect ariaLabel="搜索并添加能力" options={abilityOptions} value={abilityPicker} onChange={addAbility} />
+            <div className="outcome-relation-chips">{draft.abilities.map((ability) => <button key={ability.abilityId} onClick={() => setDraft({ ...draft, abilities: draft.abilities.filter((item) => item.abilityId !== ability.abilityId) })} type="button">{ability.abilityName}<X size={13} /></button>)}</div></div>
+          <div className="outcome-relation-field"><span>关联里程碑</span><SearchSelect ariaLabel="搜索并添加里程碑" options={milestoneOptions} value={milestonePicker} onChange={addMilestone} />
+            <div className="outcome-relation-chips">{draft.milestoneIds.map((id) => <button key={id} onClick={() => setDraft({ ...draft, milestoneIds: draft.milestoneIds.filter((value) => value !== id) })} type="button">{milestones.find((item) => item.id === id)?.name || id}<X size={13} /></button>)}</div></div>
+          <label className="wide"><span>状态变更说明</span><input value={draft.statusNote} onChange={(event) => setDraft({ ...draft, statusNote: event.target.value })} /></label>
+          <label className="wide"><span>备注</span><textarea value={draft.remark} onChange={(event) => setDraft({ ...draft, remark: event.target.value })} /></label>
+          <button className="primary-button" disabled={saving} type="submit">{editingId ? <Save size={16} /> : <Plus size={16} />}{saving ? "保存中" : editingId ? "保存成果" : "新增成果"}</button>
         </form>
       </section>
 
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>资产列表</h2>
-          <span>{assets.length} 项</span>
-        </div>
-        <div className="knowledge-list">
-          {assets.length ? (
-            assets.map((asset) => {
-              const draftValue = assetDrafts[asset.id] ?? { status: asset.status, remark: asset.remark };
-              const isBusy = savingId === asset.id;
-
-              return (
-                <article className="knowledge-card" key={asset.id}>
-                  <div className="knowledge-card-top">
-                    <div>
-                      <strong>{asset.title}</strong>
-                      <span>
-                        {asset.type || "未分类"} / {statusLabels[asset.status]}
-                        {asset.projectName ? ` / ${asset.projectName}` : ""}
-                      </span>
-                    </div>
-                    {asset.status === "archived" && <Archive size={18} />}
-                  </div>
-                  {asset.summary && <p>{asset.summary}</p>}
-                  <div className="record-meta">
-                    {asset.productSystem && <span className="detail-chip">{asset.productSystem}</span>}
-                    {asset.tags && <span className="tag-pill">{asset.tags}</span>}
-                    {asset.link && (
-                      <a className="detail-chip knowledge-link" href={asset.link} target="_blank" rel="noreferrer">
-                        <LinkIcon size={13} />
-                        链接
-                      </a>
-                    )}
-                  </div>
-                  <div className="knowledge-actions">
-                    <select
-                      value={draftValue.status}
-                      onChange={(event) =>
-                        setAssetDrafts((current) => ({
-                          ...current,
-                          [asset.id]: { ...draftValue, status: event.target.value as KnowledgeAssetStatus }
-                        }))
-                      }
-                    >
-                      {Object.entries(statusLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      placeholder="备注"
-                      value={draftValue.remark}
-                      onChange={(event) =>
-                        setAssetDrafts((current) => ({
-                          ...current,
-                          [asset.id]: { ...draftValue, remark: event.target.value }
-                        }))
-                      }
-                    />
-                    <button disabled={isBusy} onClick={() => handleSave(asset)} type="button">
-                      <Save size={15} />
-                      保存
-                    </button>
-                  </div>
-                </article>
-              );
-            })
-          ) : (
-            <div className="empty-state">暂无知识资产。</div>
-          )}
-        </div>
+      <section className="panel"><div className="panel-heading"><h2>成果清单</h2><span>{outcomes.length} 项</span></div>
+        <div className="knowledge-list outcome-list">{outcomes.length ? outcomes.map((outcome) => (
+          <article className="knowledge-card outcome-card" key={outcome.id}>
+            <div className="knowledge-card-top"><div><strong>{outcome.title}</strong><span>{outcomeTypeLabels[outcome.type]} · {outcome.projectName || "非项目成果"}</span></div><StatusBadge tone={outcome.status === "completed" ? "success" : outcome.status === "stage_result" ? "info" : "neutral"}>{outcomeStatusLabels[outcome.status]}</StatusBadge></div>
+            {(outcome.reportSummary || outcome.completedWork) && <p>{outcome.reportSummary || outcome.completedWork}</p>}
+            <div className="record-meta"><span className="detail-chip">{outcome.recordCount} 条日报</span><span className="detail-chip">{outcome.timeHours} h</span><span className="workload-chip">{outcome.workload} 当量</span>{outcome.valueImpact && <span className="detail-chip">价值：{outcome.valueImpact}</span>}</div>
+            {(outcome.records.length > 0 || outcome.milestones.length > 0) && <details className="outcome-history"><summary>证据来源（{outcome.records.length + outcome.milestones.length}）</summary><ol>{outcome.records.map((record) => <li key={record.id}><time>{record.date}</time><span>{record.title}</span></li>)}{outcome.milestones.map((milestone) => <li key={milestone.id}><time>里程碑</time><span>{milestone.name}</span></li>)}</ol></details>}
+            <details className="outcome-history"><summary>状态轨迹（{outcome.statusHistory.length}）</summary><ol>{outcome.statusHistory.map((history) => <li key={history.id}><time>{new Date(history.changedTime).toLocaleDateString("zh-CN")}</time><span>{history.fromStatus ? outcomeStatusLabels[history.fromStatus] : "创建"} → {outcomeStatusLabels[history.toStatus]}{history.note ? `：${history.note}` : ""}</span></li>)}</ol></details>
+            <div className="outcome-card-actions"><button onClick={() => { setEditingId(outcome.id); setDraft(outcomeToDraft(outcome)); document.getElementById("outcome-form")?.scrollIntoView({ behavior: "smooth" }); }} type="button"><Save size={15} />编辑</button><button onClick={() => toggleArchive(outcome)} type="button">{outcome.archived ? <CheckCircle2 size={15} /> : <Archive size={15} />}{outcome.archived ? "恢复" : "归档"}</button></div>
+          </article>
+        )) : <div className="empty-state">当前条件下暂无成果。</div>}</div>
       </section>
     </>
   );

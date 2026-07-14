@@ -1,14 +1,17 @@
 import { ChevronLeft, ChevronRight, Tags, RotateCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExportPanel } from "../components/ExportPanel";
 import { PageHeader } from "../components/PageHeader";
 import { ReportDashboard } from "../components/ReportDashboard";
 import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
-import type { WorkRecord } from "../types";
+import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
+import type { Outcome, WorkRecord } from "../types";
 import { formatDate, getWeekNumber, getWeekRange, shiftDate, todayKey } from "../lib/date";
 import { buildDailyTrend, sumWorkload } from "../lib/dashboard";
 import { countActiveDays, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
+import { fetchOutcomes } from "../lib/outcomeApi";
+import { filterOutcomesByRange } from "../lib/outcomes";
 
 interface WeeklyPageProps {
   records: WorkRecord[];
@@ -18,6 +21,7 @@ interface WeeklyPageProps {
 
 export function WeeklyPage({ records, onGenerateReport, onNotify }: WeeklyPageProps) {
   const [date, setDate] = useState(todayKey());
+  const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const range = useMemo(() => getWeekRange(date), [date]);
   const weeklyRecords = useMemo(
     () => filterByRange(records, range.start, range.end),
@@ -27,6 +31,12 @@ export function WeeklyPage({ records, onGenerateReport, onNotify }: WeeklyPagePr
   const trend = useMemo(() => buildDailyTrend(weeklyRecords, range.start, range.end), [weeklyRecords, range.start, range.end]);
   const title = `${formatDate(range.start)} 至 ${formatDate(range.end)} 周报`;
   const activeDays = countActiveDays(weeklyRecords);
+  const weeklyOutcomes = useMemo(() => filterOutcomesByRange(outcomes, range.start, range.end), [outcomes, range.start, range.end]);
+
+  useEffect(() => {
+    fetchOutcomes().then((result) => setOutcomes(result.outcomes))
+      .catch((error) => onNotify(error instanceof Error ? error.message : "周报成果读取失败"));
+  }, [range.start, onNotify]);
 
   return (
     <>
@@ -66,6 +76,8 @@ export function WeeklyPage({ records, onGenerateReport, onNotify }: WeeklyPagePr
       />
 
       <ReportDashboard records={weeklyRecords} trend={trend} activeLabel={`${activeDays} 天`} />
+
+      <OutcomePeriodSection outcomes={weeklyOutcomes} title="本周成果与进展" />
 
       <ExportPanel
         records={weeklyRecords}

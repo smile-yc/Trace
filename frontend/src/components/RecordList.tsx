@@ -1,4 +1,4 @@
-import { Edit3, Trash2 } from "lucide-react";
+import { Edit3, PackagePlus, Trash2 } from "lucide-react";
 import type { WorkRecord } from "../types";
 import { parseAbilityDimensions } from "../lib/abilityDimensions";
 import { formatDate } from "../lib/date";
@@ -10,9 +10,10 @@ interface RecordListProps {
   emptyText: string;
   onEdit?: (record: WorkRecord) => void;
   onDelete?: (record: WorkRecord) => void;
+  onCreateOutcome?: (record: WorkRecord) => void;
 }
 
-export function RecordList({ records, emptyText, onEdit, onDelete }: RecordListProps) {
+export function RecordList({ records, emptyText, onEdit, onDelete, onCreateOutcome }: RecordListProps) {
   if (!records.length) {
     return <div className="empty-state">{emptyText}</div>;
   }
@@ -26,8 +27,13 @@ export function RecordList({ records, emptyText, onEdit, onDelete }: RecordListP
               <h3>{record.title}</h3>
               <p>{formatDate(record.date)}</p>
             </div>
-            {(onEdit || onDelete) && (
+            {(onEdit || onDelete || onCreateOutcome) && (
               <div className="record-actions no-print">
+                {onCreateOutcome && (
+                  <button aria-label="提炼为成果" onClick={() => onCreateOutcome(record)} title="提炼为成果" type="button">
+                    <PackagePlus size={16} />
+                  </button>
+                )}
                 {onEdit && (
                   <button aria-label="编辑记录" onClick={() => onEdit(record)} type="button">
                     <Edit3 size={16} />

@@ -5,11 +5,13 @@ import { PageHeader } from "../components/PageHeader";
 import { ReportDashboard } from "../components/ReportDashboard";
 import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
-import type { KnowledgeAsset, Milestone, WorkRecord } from "../types";
+import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
+import type { Milestone, Outcome, WorkRecord } from "../types";
 import { getYearRange, shiftYear, todayKey } from "../lib/date";
 import { buildYearMonthTrend, sumWorkload } from "../lib/dashboard";
-import { buildMonthlyReview, summarizeKnowledgeAssets, summarizeMilestones } from "../lib/growthReview";
-import { fetchKnowledgeAssets } from "../lib/knowledgeApi";
+import { buildMonthlyReview, summarizeMilestones } from "../lib/growthReview";
+import { fetchOutcomes } from "../lib/outcomeApi";
+import { filterOutcomesByRange } from "../lib/outcomes";
 import { fetchMilestones } from "../lib/milestoneApi";
 import { countActiveMonths, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
 import {
@@ -28,7 +30,7 @@ interface YearlyPageProps {
 export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPageProps) {
   const [date, setDate] = useState(todayKey());
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [assets, setAssets] = useState<KnowledgeAsset[]>([]);
+  const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const range = useMemo(() => getYearRange(date), [date]);
   const [detailMode, setDetailMode] = useState<ReportDetailMode>("week");
   const [detailPeriod, setDetailPeriod] = useState(() =>
@@ -50,9 +52,9 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
   const trend = useMemo(() => buildYearMonthTrend(yearlyRecords, range.year), [yearlyRecords, range.year]);
   const title = `${range.year}年年报`;
   const activeMonths = countActiveMonths(yearlyRecords);
-  const yearlyReview = useMemo(() => buildMonthlyReview(yearlyRecords, milestones, assets), [yearlyRecords, milestones, assets]);
+  const yearlyReview = useMemo(() => buildMonthlyReview(yearlyRecords, milestones), [yearlyRecords, milestones]);
+  const yearlyOutcomes = useMemo(() => filterOutcomesByRange(outcomes, range.start, range.end), [outcomes, range.start, range.end]);
   const milestoneSummaries = useMemo(() => summarizeMilestones(milestones), [milestones]);
-  const assetSummary = useMemo(() => summarizeKnowledgeAssets(assets), [assets]);
   const detailRange = getArchiveRange(detailMode, detailPeriod || defaultDetailPeriod);
   const detailStart = detailRange && detailRange.start > range.start ? detailRange.start : range.start;
   const detailEnd = detailRange && detailRange.end < range.end ? detailRange.end : range.end;
@@ -70,11 +72,11 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
   useEffect(() => {
     let ignore = false;
 
-    Promise.all([fetchMilestones(), fetchKnowledgeAssets()])
-      .then(([nextMilestones, nextAssets]) => {
+    Promise.all([fetchMilestones(), fetchOutcomes()])
+      .then(([nextMilestones, nextOutcomes]) => {
         if (ignore) return;
         setMilestones(nextMilestones);
-        setAssets(nextAssets);
+        setOutcomes(nextOutcomes.outcomes);
       })
       .catch((error) => {
         if (!ignore) onNotify(error instanceof Error ? error.message : "年报复盘数据读取失败");
@@ -124,10 +126,12 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
 
       <ReportDashboard records={yearlyRecords} trend={trend} activeLabel={`${activeMonths} 月`} />
 
+      <OutcomePeriodSection outcomes={yearlyOutcomes} title="年度代表性成果与进展" />
+
       <section className="panel review-panel">
         <div className="panel-heading">
           <h2>年报复盘增强</h2>
-          <span>{assetSummary.total} 项知识资产</span>
+          <span>{yearlyOutcomes.length} 项成果</span>
         </div>
         <div className="review-text">{yearlyReview.text}</div>
         <div className="year-review-grid">
@@ -136,12 +140,12 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
             <span>完成里程碑</span>
           </article>
           <article>
-            <strong>{assetSummary.byStatus.published}</strong>
-            <span>已发布资产</span>
+            <strong>{yearlyOutcomes.filter((outcome) => outcome.status === "completed").length}</strong>
+            <span>已完成成果</span>
           </article>
           <article>
-            <strong>{assetSummary.byStatus.draft}</strong>
-            <span>草稿资产</span>
+            <strong>{yearlyOutcomes.filter((outcome) => outcome.type === "problem_resolution").length}</strong>
+            <span>重要问题解决</span>
           </article>
         </div>
       </section>

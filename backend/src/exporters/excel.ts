@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { analyzeExport, sortRecordsForExport, type ExportSummaryItem } from "./analysis.js";
-import type { AppSettings, ConfigOption, ExportPayload, KnowledgeAsset, Milestone, WorkloadStandard } from "../types.js";
+import type { AppSettings, ConfigOption, ExportPayload, Milestone, Outcome, WorkloadStandard } from "../types.js";
 
 type Worksheet = ExcelJS.Worksheet;
 
@@ -73,6 +73,7 @@ function createSummarySheet(workbook: ExcelJS.Workbook, payload: ExportPayload):
   sheet.addRow({ metric: "业务分类数", value: analysis.businessCount, remark: "" });
   sheet.addRow({ metric: "工作类型数", value: analysis.workTypeCount, remark: "" });
   sheet.addRow({ metric: "产品系统数", value: analysis.productCount, remark: "" });
+  sheet.addRow({ metric: "成果数量", value: payload.outcomes?.length ?? 0, remark: "正式成果、问题解决、阶段进展和可复用资产" });
 
   styleSheet(sheet);
 }
@@ -295,8 +296,8 @@ function createMilestonesSheet(workbook: ExcelJS.Workbook, milestones: Milestone
   styleSheet(sheet);
 }
 
-function createKnowledgeAssetsSheet(workbook: ExcelJS.Workbook, assets: KnowledgeAsset[] = []): void {
-  const sheet = workbook.addWorksheet("知识资产库", {
+function createOutcomesSheet(workbook: ExcelJS.Workbook, outcomes: Outcome[] = []): void {
+  const sheet = workbook.addWorksheet("成果清单", {
     views: [{ state: "frozen", ySplit: 1 }]
   });
 
@@ -304,27 +305,51 @@ function createKnowledgeAssetsSheet(workbook: ExcelJS.Workbook, assets: Knowledg
     { header: "类型", key: "type", width: 16 },
     { header: "标题", key: "title", width: 30 },
     { header: "状态", key: "status", width: 12 },
-    { header: "项目", key: "projectName", width: 24 },
+    { header: "项目ID", key: "projectId", width: 24 },
+    { header: "项目名称快照", key: "projectName", width: 24 },
+    { header: "开始日期", key: "startDate", width: 14 },
+    { header: "更新日期", key: "updateDate", width: 14 },
+    { header: "完成日期", key: "completedDate", width: 14 },
     { header: "产品系统", key: "productSystem", width: 16 },
     { header: "标签", key: "tags", width: 24 },
-    { header: "链接", key: "link", width: 34 },
-    { header: "摘要", key: "summary", width: 48 },
+    { header: "背景与目标", key: "backgroundGoal", width: 42 },
+    { header: "完成内容", key: "completedWork", width: 48 },
+    { header: "价值与影响", key: "valueImpact", width: 42 },
+    { header: "个人角色", key: "personalRole", width: 20 },
+    { header: "具体贡献", key: "contribution", width: 42 },
+    { header: "汇报表述", key: "reportSummary", width: 42 },
+    { header: "关联日报数", key: "recordCount", width: 14 },
+    { header: "关联工时", key: "timeHours", width: 14 },
+    { header: "关联工作当量", key: "workload", width: 16 },
+    { header: "关联能力", key: "abilities", width: 28 },
     { header: "备注", key: "remark", width: 32 },
     { header: "更新时间", key: "updateTime", width: 22 }
   ];
 
-  assets.forEach((asset) => {
+  outcomes.forEach((outcome) => {
     sheet.addRow({
-      type: asset.type,
-      title: asset.title,
-      status: asset.status,
-      projectName: asset.projectName,
-      productSystem: asset.productSystem,
-      tags: asset.tags,
-      link: asset.link,
-      summary: asset.summary,
-      remark: asset.remark,
-      updateTime: formatDateTime(asset.updateTime)
+      type: outcome.type,
+      title: outcome.title,
+      status: outcome.status,
+      projectId: outcome.projectId,
+      projectName: outcome.projectName,
+      startDate: outcome.startDate,
+      updateDate: outcome.updateDate,
+      completedDate: outcome.completedDate,
+      productSystem: outcome.productSystem,
+      tags: outcome.tags,
+      backgroundGoal: outcome.backgroundGoal,
+      completedWork: outcome.completedWork,
+      valueImpact: outcome.valueImpact,
+      personalRole: outcome.personalRole,
+      contribution: outcome.contribution,
+      reportSummary: outcome.reportSummary,
+      recordCount: outcome.recordCount,
+      timeHours: outcome.timeHours,
+      workload: outcome.workload,
+      abilities: outcome.abilities.map((ability) => ability.abilityName).join("、"),
+      remark: outcome.remark,
+      updateTime: formatDateTime(outcome.updateTime)
     });
   });
 
@@ -350,7 +375,7 @@ export async function buildExcel(payload: ExportPayload): Promise<Buffer> {
   createWorkloadStandardsSheet(workbook, payload.workloadStandards);
   createAppSettingsSheet(workbook, payload.appSettings);
   createMilestonesSheet(workbook, payload.milestones);
-  createKnowledgeAssetsSheet(workbook, payload.knowledgeAssets);
+  createOutcomesSheet(workbook, payload.outcomes);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);

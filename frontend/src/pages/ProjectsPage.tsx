@@ -11,7 +11,7 @@ import {
   reactivateProject,
   updateProject
 } from "../lib/projectApi";
-import type { Project, ProjectInput, ProjectStatus, ProjectSummary } from "../types";
+import type { OutcomeSeed, Project, ProjectInput, ProjectStatus, ProjectSummary } from "../types";
 import {
   Button,
   DataTable,
@@ -27,6 +27,7 @@ import {
 
 interface ProjectsPageProps {
   onNotify: (message: string) => void;
+  onCreateOutcome: (seed: Omit<OutcomeSeed, "nonce">) => void;
 }
 
 type StatusFilter = "current" | "all" | ProjectStatus;
@@ -51,7 +52,7 @@ function metric(value: number, digits = 0): string {
   return value.toLocaleString("zh-CN", { maximumFractionDigits: digits, minimumFractionDigits: digits });
 }
 
-export function ProjectsPage({ onNotify }: ProjectsPageProps) {
+export function ProjectsPage({ onNotify, onCreateOutcome }: ProjectsPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [summaries, setSummaries] = useState<Record<string, ProjectSummary>>({});
   const [query, setQuery] = useState("");
@@ -229,7 +230,7 @@ export function ProjectsPage({ onNotify }: ProjectsPageProps) {
           </div>
         )}
       >
-        {selectedProject && <ProjectDetail project={selectedProject} summary={selectedSummary} />}
+        {selectedProject && <ProjectDetail project={selectedProject} summary={selectedSummary} onCreateOutcome={onCreateOutcome} />}
       </DetailPanel>
 
       <ModalDialog open={editorProject !== undefined} title={editorProject ? "编辑项目" : "新建项目"} size="large" onClose={() => setEditorProject(undefined)}>
@@ -251,7 +252,11 @@ export function ProjectsPage({ onNotify }: ProjectsPageProps) {
   );
 }
 
-function ProjectDetail({ project, summary }: { project: Project; summary: ProjectSummary | null }) {
+function ProjectDetail({ project, summary, onCreateOutcome }: {
+  project: Project;
+  summary: ProjectSummary | null;
+  onCreateOutcome: (seed: Omit<OutcomeSeed, "nonce">) => void;
+}) {
   if (!summary) return <EmptyState compact title="正在读取项目详情" />;
 
   return (
@@ -278,8 +283,23 @@ function ProjectDetail({ project, summary }: { project: Project; summary: Projec
         <ProjectBreakdown title="能力投入" rows={summary.abilities} />
       </div>
       <section className="project-detail-section">
-        <h3>关联成果</h3>
-        <EmptyState compact title="尚无关联成果" />
+        <div className="panel-heading">
+          <h3>关联成果</h3>
+          <button className="ghost-button" onClick={() => onCreateOutcome({ projectId: project.id })} type="button">
+            <Plus size={15} />
+            新增成果
+          </button>
+        </div>
+        {summary.outcomes.length ? (
+          <ul className="project-outcome-list">
+            {summary.outcomes.map((outcome) => (
+              <li key={outcome.id}>
+                <strong>{outcome.title}</strong>
+                <span>{outcome.recordCount} 条日报 / {metric(outcome.workload, 2)} 当量</span>
+              </li>
+            ))}
+          </ul>
+        ) : <EmptyState compact title="尚无关联成果" />}
       </section>
       <section className="project-detail-section">
         <h3>工作时间线</h3>

@@ -137,9 +137,9 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
     drawSummaryRows(doc, "项目汇总", analysis.projectSummary, width);
     drawSummaryRows(doc, "产品系统汇总", analysis.productSummary, width);
 
-    drawSectionTitle(doc, "三、成长复盘与知识资产", width);
+    drawSectionTitle(doc, "三、成果与成长", width);
     const milestones = payload.milestones ?? [];
-    const knowledgeAssets = payload.knowledgeAssets ?? [];
+    const outcomes = payload.outcomes ?? [];
     const doneMilestones = milestones.filter((milestone) => milestone.enabled && milestone.targetValue > 0 && milestone.currentValue >= milestone.targetValue);
     doc.fillColor("#4f4a43").fontSize(10).text(`里程碑：${milestones.length} 项，其中已完成 ${doneMilestones.length} 项。`, { width });
     milestones.slice(0, 6).forEach((milestone, index) => {
@@ -154,13 +154,13 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
         );
     });
     doc.moveDown(0.4);
-    doc.fillColor("#4f4a43").fontSize(10).text(`知识资产：${knowledgeAssets.length} 项。`, { width });
-    knowledgeAssets.slice(0, 6).forEach((asset, index) => {
+    doc.fillColor("#4f4a43").fontSize(10).text(`成果：${outcomes.length} 项。`, { width });
+    outcomes.slice(0, 10).forEach((outcome, index) => {
       ensureSpace(doc, 28);
       doc
         .fillColor("#4f4a43")
         .fontSize(9.5)
-        .text(`${index + 1}. ${asset.title}：${asset.type || "未分类"} / ${asset.status}`, { width, indent: 12 });
+        .text(`${index + 1}. ${outcome.title}：${outcome.reportSummary || outcome.completedWork || outcome.valueImpact || outcome.type}`, { width, indent: 12 });
     });
 
     drawSectionTitle(doc, "四、记录明细", width);

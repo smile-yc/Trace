@@ -36,3 +36,16 @@ test("Word and PDF reports keep snapshot and original totals", () => {
     assert.equal(source.includes("discount"), false);
   }
 });
+
+test("all export formats include unified outcomes without legacy links", () => {
+  const excel = readExporter("excel.ts");
+  assert.match(excel, /addWorksheet\("成果清单"/);
+  assert.match(excel, /outcome\.recordCount/);
+  assert.match(excel, /outcome\.workload/);
+  assert.equal(excel.includes("asset.link"), false);
+  for (const file of ["word.ts", "pdf.ts"]) {
+    const source = readExporter(file);
+    assert.match(source, /payload\.outcomes/);
+    assert.match(source, /outcome\.reportSummary/);
+  }
+});

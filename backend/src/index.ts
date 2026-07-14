@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { z } from "zod";
 import {
+  archiveOutcome,
   archiveProject,
   clearRecords,
   deleteConfigOption,
@@ -9,10 +10,12 @@ import {
   deleteWorkloadStandard,
   getAppSettings,
   getDatabasePath,
+  getOutcome,
   getProject,
   getProjectMergePreview,
   getProjectSummary,
   insertKnowledgeAsset,
+  insertOutcome,
   insertWorkloadStandardVersion,
   activateWorkloadStandardVersion,
   insertRecord,
@@ -22,6 +25,7 @@ import {
   insertWorkloadStandard,
   listConfigOptions,
   listKnowledgeAssets,
+  listOutcomes,
   listMilestones,
   listProjects,
   listRecords,
@@ -30,10 +34,13 @@ import {
   matchWorkloadStandard,
   mergeProjects,
   reactivateProject,
+  reactivateOutcome,
   reorderConfigOptions,
+  summarizeOutcomes,
   updateAppSettings,
   updateConfigOption,
   updateKnowledgeAsset,
+  updateOutcome,
   updateMilestone,
   updateProject,
   updateWorkloadStandard,
@@ -54,6 +61,10 @@ import type {
   KnowledgeAssetUpdateInput,
   MilestoneInput,
   MilestoneUpdateInput,
+  OutcomeInput,
+  OutcomeStatus,
+  OutcomeType,
+  OutcomeUpdateInput,
   ProjectInput,
   ProjectStatus,
   ProjectUpdateInput,
@@ -285,6 +296,42 @@ const knowledgeAssetUpdateSchema = z.object({
   status: z.enum(knowledgeAssetStatuses).optional(),
   link: z.string().trim().max(500).optional(),
   remark: z.string().trim().max(600).optional()
+});
+
+const outcomeTypes = ["deliverable", "problem_resolution", "stage_progress", "reusable_asset"] as const;
+const outcomeStatuses = ["planned", "in_progress", "stage_result", "completed"] as const;
+const outcomeDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal(""));
+const outcomeAbilitySchema = z.object({
+  abilityId: z.string().trim().min(1).max(120),
+  abilityName: z.string().trim().min(1).max(120)
+});
+const outcomeFields = {
+  type: z.enum(outcomeTypes),
+  status: z.enum(outcomeStatuses).optional(),
+  title: z.string().trim().min(1).max(160),
+  projectId: z.string().trim().max(120).nullable().optional(),
+  startDate: outcomeDateSchema,
+  updateDate: outcomeDateSchema,
+  completedDate: outcomeDateSchema,
+  backgroundGoal: z.string().trim().max(2000).optional(),
+  completedWork: z.string().trim().max(4000).optional(),
+  valueImpact: z.string().trim().max(2000).optional(),
+  personalRole: z.string().trim().max(300).optional(),
+  contribution: z.string().trim().max(2000).optional(),
+  reportSummary: z.string().trim().max(1200).optional(),
+  productSystem: z.string().trim().max(160).optional(),
+  tags: z.string().trim().max(500).optional(),
+  remark: z.string().trim().max(1200).optional(),
+  recordIds: z.array(z.string().trim().min(1).max(120)).max(500).optional(),
+  abilities: z.array(outcomeAbilitySchema).max(100).optional(),
+  milestoneIds: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
+  statusNote: z.string().trim().max(600).optional()
+};
+const outcomeInputSchema = z.object(outcomeFields);
+const outcomeUpdateSchema = z.object({
+  ...outcomeFields,
+  type: outcomeFields.type.optional(),
+  title: outcomeFields.title.optional()
 });
 
 const exportScopeSchema = z
@@ -606,29 +653,76 @@ app.get("/api/knowledge-assets", (_req, res) => {
 });
 
 app.post("/api/knowledge-assets", (req, res, next) => {
+  res.status(410).json({ message: "知识资产已迁移到成果管理，请使用成果接口。" });
+});
+
+app.put("/api/knowledge-assets/:id", (req, res, next) => {
+  res.status(410).json({ message: "知识资产已迁移到成果管理，请使用成果接口。" });
+});
+
+app.get("/api/outcomes", (req, res, next) => {
   try {
-    const input: KnowledgeAssetInput = knowledgeAssetInputSchema.parse(req.body);
-    const asset = insertKnowledgeAsset(input);
-    res.status(201).json({ asset });
+    const type = typeof req.query.type === "string" ? z.enum(outcomeTypes).parse(req.query.type) : undefined;
+    const status = typeof req.query.status === "string" ? z.enum(outcomeStatuses).parse(req.query.status) : undefined;
+    const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+    const abilityId = typeof req.query.abilityId === "string" ? req.query.abilityId : undefined;
+    const year = typeof req.query.year === "string" ? z.string().regex(/^\d{4}$/).parse(req.query.year) : undefined;
+    const query = typeof req.query.query === "string" ? req.query.query : undefined;
+    const includeArchived = req.query.includeArchived === "true";
+    const outcomes = listOutcomes({ type: type as OutcomeType | undefined, status: status as OutcomeStatus | undefined, projectId, abilityId, year, query, includeArchived });
+    res.json({ outcomes, summary: summarizeOutcomes(outcomes) });
   } catch (error) {
     next(error);
   }
 });
 
-app.put("/api/knowledge-assets/:id", (req, res, next) => {
+app.get("/api/outcomes/:id", (req, res) => {
+  const outcome = getOutcome(req.params.id);
+  if (!outcome) {
+    res.status(404).json({ message: "Outcome not found." });
+    return;
+  }
+  res.json({ outcome });
+});
+
+app.post("/api/outcomes", (req, res, next) => {
   try {
-    const input: KnowledgeAssetUpdateInput = knowledgeAssetUpdateSchema.parse(req.body);
-    const asset = updateKnowledgeAsset(req.params.id, input);
-
-    if (!asset) {
-      res.status(404).json({ message: "Knowledge asset not found." });
-      return;
-    }
-
-    res.json({ asset });
+    const outcome = insertOutcome(outcomeInputSchema.parse(req.body) as OutcomeInput);
+    res.status(201).json({ outcome });
   } catch (error) {
     next(error);
   }
+});
+
+app.put("/api/outcomes/:id", (req, res, next) => {
+  try {
+    const outcome = updateOutcome(req.params.id, outcomeUpdateSchema.parse(req.body) as OutcomeUpdateInput);
+    if (!outcome) {
+      res.status(404).json({ message: "Outcome not found." });
+      return;
+    }
+    res.json({ outcome });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/outcomes/:id/archive", (req, res) => {
+  const outcome = archiveOutcome(req.params.id);
+  if (!outcome) {
+    res.status(404).json({ message: "Outcome not found." });
+    return;
+  }
+  res.json({ outcome });
+});
+
+app.post("/api/outcomes/:id/reactivate", (req, res) => {
+  const outcome = reactivateOutcome(req.params.id);
+  if (!outcome) {
+    res.status(404).json({ message: "Outcome not found." });
+    return;
+  }
+  res.json({ outcome });
 });
 
 app.post("/api/records", (req, res, next) => {
@@ -680,13 +774,24 @@ app.post("/api/export/:format", async (req, res, next) => {
     }
 
     const input = exportSchema.parse(req.body);
+    const selectedRecordIds = new Set(input.records.map((record) => record.id));
+    const allOutcomes = listOutcomes({ includeArchived: false });
+    const outcomes = allOutcomes.filter((outcome) => {
+      if (input.scope?.type === "project" && input.scope.filterValue) return outcome.projectName === input.scope.filterValue;
+      if (outcome.recordIds.some((recordId) => selectedRecordIds.has(recordId))) return true;
+      const date = outcome.completedDate || outcome.updateDate || outcome.startDate || new Date(outcome.createTime).toISOString().slice(0, 10);
+      if (input.scope?.startDate && date && date < input.scope.startDate) return false;
+      if (input.scope?.endDate && date && date > input.scope.endDate) return false;
+      return Boolean(date && (input.scope?.startDate || input.scope?.endDate));
+    });
     const payload: ExportPayload = {
       ...input,
       configOptions: listConfigOptions(),
       workloadStandards: listWorkloadStandards(),
       appSettings: getAppSettings(),
       milestones: listMilestones(),
-      knowledgeAssets: listKnowledgeAssets()
+      knowledgeAssets: listKnowledgeAssets(),
+      outcomes
     };
     const buffer = await buildExport(format, payload);
     const safeName = sanitizeFileName(payload.title);
@@ -751,6 +856,16 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 
   if (error instanceof Error && error.message === "KNOWLEDGE_ASSET_INVALID") {
     res.status(400).json({ message: "知识资产缺少标题。" });
+    return;
+  }
+
+  if (error instanceof Error && ["OUTCOME_INVALID", "OUTCOME_INVALID_DATE", "OUTCOME_RELATION_INVALID"].includes(error.message)) {
+    const messages: Record<string, string> = {
+      OUTCOME_INVALID: "成果类型、状态或标题无效。",
+      OUTCOME_INVALID_DATE: "成果日期范围无效。",
+      OUTCOME_RELATION_INVALID: "成果关联的项目、记录、能力或里程碑无效。"
+    };
+    res.status(400).json({ message: messages[error.message] });
     return;
   }
 
