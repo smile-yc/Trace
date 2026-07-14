@@ -25,6 +25,72 @@ export interface WorkRecord {
   updateTime: number;
 }
 
+export type ProjectStatus = "planned" | "active" | "paused" | "completed" | "archived";
+
+export type ProjectRelation = "project" | "non_project" | "unassigned";
+
+export interface Project {
+  id: string;
+  name: string;
+  normalizedName: string;
+  shortName: string;
+  status: ProjectStatus;
+  startDate: string;
+  endDate: string;
+  personalRole: string;
+  goal: string;
+  description: string;
+  completionSummary: string;
+  aliases: string[];
+  mergedIntoProjectId: string | null;
+  archiveTime: number | null;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface ProjectInput {
+  name: string;
+  shortName?: string;
+  status?: ProjectStatus;
+  startDate?: string;
+  endDate?: string;
+  personalRole?: string;
+  goal?: string;
+  description?: string;
+  completionSummary?: string;
+  aliases?: string[];
+}
+
+export type ProjectUpdateInput = Partial<ProjectInput>;
+
+export interface ProjectBreakdownItem {
+  label: string;
+  recordCount: number;
+  timeHours: number;
+  workload: number;
+}
+
+export interface ProjectSummary {
+  recordCount: number;
+  activeDays: number;
+  timeHours: number;
+  workload: number;
+  lastActiveDate: string;
+  currentFocus: string[];
+  businessCategories: ProjectBreakdownItem[];
+  products: ProjectBreakdownItem[];
+  abilities: ProjectBreakdownItem[];
+  records: WorkRecord[];
+}
+
+export interface ProjectMergePreview {
+  sourceProject: Project;
+  targetProject: Project;
+  recordCount: number;
+  timeHours: number;
+  workload: number;
+}
+
 export type CoefficientSource = "none" | "legacy" | "manual" | "standard_exact" | "standard_general";
 
 export interface AbilityAllocation {
