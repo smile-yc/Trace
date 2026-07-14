@@ -18,7 +18,9 @@ import type {
   MilestoneUpdateInput,
   Project,
   ProjectInput,
+  ProjectMergePreview,
   ProjectRelation,
+  ProjectSummary,
   ProjectStatus,
   ProjectUpdateInput,
   RecordInput,
@@ -889,21 +891,22 @@ function assertProjectIdentityAvailable(input: {
   name: string;
   shortName: string;
   aliases: string[];
-}, excludeProjectId = ""): void {
+}, excludeProjectIds: string[] = []): void {
   const normalizedName = normalizeProjectName(input.name);
   if (!normalizedName) throw new Error("PROJECT_NAME_CONFLICT");
   const candidateIdentities = new Set(
     [normalizedName, normalizeProjectName(input.shortName), ...input.aliases.map(normalizeProjectName)].filter(Boolean)
   );
-  const projects = db.prepare("SELECT id, normalizedName, shortName FROM projects WHERE id <> ?").all(excludeProjectId) as Array<{
+  const excluded = new Set(excludeProjectIds);
+  const projects = (db.prepare("SELECT id, normalizedName, shortName FROM projects").all() as Array<{
     id: string;
     normalizedName: string;
     shortName: string;
-  }>;
-  const aliases = db.prepare(`SELECT projectId, normalizedAlias FROM project_aliases WHERE projectId <> ?`).all(excludeProjectId) as Array<{
+  }>).filter((project) => !excluded.has(project.id));
+  const aliases = (db.prepare("SELECT projectId, normalizedAlias FROM project_aliases").all() as Array<{
     projectId: string;
     normalizedAlias: string;
-  }>;
+  }>).filter((alias) => !excluded.has(alias.projectId));
 
   if (projects.some((project) => project.normalizedName === normalizedName)) {
     throw new Error("PROJECT_NAME_CONFLICT");
@@ -1014,7 +1017,7 @@ export function updateProject(id: string, input: ProjectUpdateInput): Project | 
   if (name !== existing.name) aliases.push(existing.name);
   if (!projectStatuses.has(status)) throw new Error("PROJECT_INVALID_STATUS");
   assertProjectDates(startDate, endDate);
-  assertProjectIdentityAvailable({ name, shortName, aliases }, id);
+  assertProjectIdentityAvailable({ name, shortName, aliases }, [id]);
 
   const now = Date.now();
   db.exec("BEGIN IMMEDIATE");
@@ -1057,6 +1060,129 @@ export function reactivateProject(id: string): Project | null {
   if (!project) return null;
   if (project.mergedIntoProjectId) throw new Error("PROJECT_NOT_SELECTABLE");
   return updateProject(id, { status: "active" });
+}
+
+function buildProjectBreakdown(
+  records: WorkRecord[],
+  labelsForRecord: (record: WorkRecord) => Array<{ label: string; share: number }>
+) {
+  const values = new Map<string, { recordIds: Set<string>; timeHours: number; workload: number }>();
+  for (const record of records) {
+    for (const { label, share } of labelsForRecord(record)) {
+      if (!label) continue;
+      const current = values.get(label) ?? { recordIds: new Set<string>(), timeHours: 0, workload: 0 };
+      current.recordIds.add(record.id);
+      current.timeHours += (record.timeHours ?? 0) * share;
+      current.workload += (record.workload ?? 0) * share;
+      values.set(label, current);
+    }
+  }
+  return [...values.entries()]
+    .map(([label, value]) => ({
+      label,
+      recordCount: value.recordIds.size,
+      timeHours: value.timeHours,
+      workload: value.workload
+    }))
+    .sort((left, right) => right.workload - left.workload || right.timeHours - left.timeHours || left.label.localeCompare(right.label));
+}
+
+export function getProjectSummary(projectId: string): ProjectSummary | null {
+  if (!getProject(projectId)) return null;
+  const records = listRecords().filter((record) => record.projectId === projectId);
+  const activeDates = new Set(records.map((record) => record.date));
+  const lastActiveDate = records[0]?.date ?? "";
+  const latest = lastActiveDate ? new Date(`${lastActiveDate}T00:00:00`) : null;
+  const focusStart = latest ? new Date(latest) : null;
+  if (focusStart) focusStart.setDate(focusStart.getDate() - 29);
+  const recentRecords = focusStart
+    ? records.filter((record) => new Date(`${record.date}T00:00:00`) >= focusStart)
+    : [];
+  const focusCounts = new Map<string, { count: number; latestDate: string }>();
+  recentRecords.forEach((record) => {
+    const label = record.workType || "其他项";
+    const current = focusCounts.get(label) ?? { count: 0, latestDate: "" };
+    focusCounts.set(label, { count: current.count + 1, latestDate: current.latestDate > record.date ? current.latestDate : record.date });
+  });
+
+  return {
+    recordCount: records.length,
+    activeDays: activeDates.size,
+    timeHours: records.reduce((sum, record) => sum + (record.timeHours ?? 0), 0),
+    workload: records.reduce((sum, record) => sum + (record.workload ?? 0), 0),
+    lastActiveDate,
+    currentFocus: [...focusCounts.entries()]
+      .sort((left, right) => right[1].count - left[1].count || right[1].latestDate.localeCompare(left[1].latestDate))
+      .slice(0, 3)
+      .map(([label]) => label),
+    businessCategories: buildProjectBreakdown(records, (record) => [{ label: record.businessCategory || "其他", share: 1 }]),
+    products: buildProjectBreakdown(records, (record) => [{ label: record.productSystem || "未填写产品", share: 1 }]),
+    abilities: buildProjectBreakdown(records, (record) => {
+      if (record.abilityAllocations.length) {
+        return record.abilityAllocations.map((allocation) => ({
+          label: allocation.abilityName,
+          share: allocation.percentage / 100
+        }));
+      }
+      const labels = record.abilityDimension.split(",").map((value) => value.trim()).filter(Boolean);
+      return labels.length
+        ? labels.map((label) => ({ label, share: 1 / labels.length }))
+        : [{ label: "未填写能力", share: 1 }];
+    }),
+    records
+  };
+}
+
+export function getProjectMergePreview(sourceId: string, targetId: string): ProjectMergePreview | null {
+  const sourceProject = getProject(sourceId);
+  const targetProject = getProject(targetId);
+  if (!sourceProject || !targetProject || sourceId === targetId || sourceProject.mergedIntoProjectId || targetProject.mergedIntoProjectId) {
+    return null;
+  }
+  const summary = getProjectSummary(sourceId) as ProjectSummary;
+  return {
+    sourceProject,
+    targetProject,
+    recordCount: summary.recordCount,
+    timeHours: summary.timeHours,
+    workload: summary.workload
+  };
+}
+
+export function mergeProjects(sourceId: string, targetId: string): Project {
+  const preview = getProjectMergePreview(sourceId, targetId);
+  if (!preview) throw new Error("PROJECT_MERGE_TARGET_INVALID");
+  const { sourceProject, targetProject } = preview;
+  const aliases = [
+    ...targetProject.aliases,
+    sourceProject.name,
+    sourceProject.shortName,
+    ...sourceProject.aliases
+  ].map(normalizeProjectName).filter(Boolean);
+  assertProjectIdentityAvailable(
+    { name: targetProject.name, shortName: targetProject.shortName, aliases },
+    [sourceProject.id, targetProject.id]
+  );
+
+  const now = Date.now();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("DELETE FROM project_aliases WHERE projectId = ?").run(sourceProject.id);
+    replaceProjectAliases(
+      targetProject.id,
+      aliases.filter((alias) => alias !== targetProject.name && alias !== targetProject.shortName)
+    );
+    db.prepare("UPDATE records SET projectId = ? WHERE projectId = ?").run(targetProject.id, sourceProject.id);
+    db.prepare(`UPDATE projects
+      SET status = 'archived', mergedIntoProjectId = ?, archiveTime = ?, updateTime = ?
+      WHERE id = ?`).run(targetProject.id, now, now, sourceProject.id);
+    db.prepare("UPDATE projects SET updateTime = ? WHERE id = ?").run(now, targetProject.id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getProject(targetProject.id) as Project;
 }
 
 export function reorderConfigOptions(type: ConfigOptionType, orderedIds: string[]): ConfigOption[] {

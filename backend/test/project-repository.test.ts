@@ -101,3 +101,77 @@ test("records snapshot linked projects and require an explicit relation", () => 
     /PROJECT_RELATION_INVALID/
   );
 });
+
+test("project summaries aggregate original metrics and merges preserve name snapshots", () => {
+  const source = database.insertProject({ name: "合并来源", shortName: "来源", aliases: ["旧来源"] });
+  const target = database.insertProject({ name: "合并目标" });
+  const sourceRecordA = database.insertRecord(recordInput({
+    title: "来源 A",
+    date: "2026-07-12",
+    projectId: source.id,
+    projectRelation: "project",
+    workType: "工程调试",
+    businessCategory: "传统业务",
+    productSystem: "Trace",
+    quantity: 2,
+    coefficient: 2,
+    timeHours: 3
+  }));
+  database.insertRecord(recordInput({
+    title: "来源 B",
+    date: "2026-07-13",
+    projectId: source.id,
+    projectRelation: "project",
+    workType: "问题处理",
+    businessCategory: "三新业务",
+    productSystem: "GM1000",
+    quantity: 2,
+    coefficient: 2,
+    timeHours: 2
+  }));
+  database.insertRecord(recordInput({
+    title: "目标记录",
+    date: "2026-07-14",
+    projectId: target.id,
+    projectRelation: "project",
+    quantity: 1,
+    coefficient: 1,
+    timeHours: 1
+  }));
+
+  const summary = database.getProjectSummary(source.id);
+  assert.equal(summary?.recordCount, 2);
+  assert.equal(summary?.activeDays, 2);
+  assert.equal(summary?.timeHours, 5);
+  assert.equal(summary?.workload, 8);
+  assert.deepEqual(summary?.records.map((record) => record.title), ["来源 B", "来源 A"]);
+
+  const preview = database.getProjectMergePreview(source.id, target.id);
+  assert.equal(preview?.recordCount, 2);
+  assert.equal(preview?.timeHours, 5);
+  assert.equal(preview?.workload, 8);
+
+  const mergedTarget = database.mergeProjects(source.id, target.id);
+  assert.equal(database.getProject(source.id)?.mergedIntoProjectId, target.id);
+  assert.equal(database.getProject(source.id)?.status, "archived");
+  assert.equal(database.listRecords().filter((record) => record.projectId === target.id).length, 3);
+  assert.equal(database.getRecord(sourceRecordA.id)?.projectName, "合并来源");
+  assert.ok(mergedTarget.aliases.includes("合并来源"));
+  assert.ok(mergedTarget.aliases.includes("来源"));
+  assert.ok(mergedTarget.aliases.includes("旧来源"));
+});
+
+test("project merge rolls back when transferred aliases conflict", () => {
+  const source = database.insertProject({ name: "回滚来源" });
+  const target = database.insertProject({ name: "回滚目标" });
+  const third = database.insertProject({ name: "占用名称" });
+  const record = database.insertRecord(recordInput({ projectId: source.id, projectRelation: "project" }));
+  const direct = new DatabaseSync(dbPath);
+  direct.prepare(`INSERT INTO project_aliases (id, projectId, alias, normalizedAlias, createTime)
+    VALUES ('forced-conflict', ?, ?, ?, 1)`).run(source.id, third.name, third.name);
+  direct.close();
+
+  assert.throws(() => database.mergeProjects(source.id, target.id), /PROJECT_ALIAS_CONFLICT/);
+  assert.equal(database.getRecord(record.id)?.projectId, source.id);
+  assert.equal(database.getProject(source.id)?.mergedIntoProjectId, null);
+});
