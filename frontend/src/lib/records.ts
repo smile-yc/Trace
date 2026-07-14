@@ -143,7 +143,9 @@ export function createRecord(input: RecordInput): WorkRecord {
     businessCategory: inferBusinessCategory(input),
     workType: inferWorkType(input),
     abilityDimension: inferAbilityDimension(input),
-    projectName: String(input.projectName || "").trim(),
+    projectId: input.projectRelation === "project" ? normalizeNullableText(input.projectId) : null,
+    projectRelation: input.projectRelation,
+    projectName: "",
     productSystem: String(input.productSystem || "").trim(),
     subtask: String(input.subtask || "").trim(),
     quantity,
@@ -187,6 +189,13 @@ export function sanitizeRecord(record: Partial<WorkRecord>): WorkRecord | null {
   const abilityDimension = record.abilityDimension
     ? String(record.abilityDimension)
     : "";
+  const storedProjectId = normalizeNullableText(record.projectId);
+  const storedProjectRelation = record.projectRelation;
+  const projectRelation = storedProjectRelation === "non_project"
+    ? "non_project"
+    : storedProjectRelation === "project" && storedProjectId
+      ? "project"
+      : "unassigned";
 
   return {
     id: String(record.id),
@@ -197,6 +206,8 @@ export function sanitizeRecord(record: Partial<WorkRecord>): WorkRecord | null {
     businessCategory,
     workType,
     abilityDimension,
+    projectId: projectRelation === "project" ? storedProjectId : null,
+    projectRelation,
     projectName: String(record.projectName || ""),
     productSystem: String(record.productSystem || ""),
     subtask: String(record.subtask || ""),

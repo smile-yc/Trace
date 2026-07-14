@@ -25,13 +25,15 @@ function memoryStorage(): StorageLike & { values: Map<string, string> } {
 }
 
 const draft: RecordDraft = {
-  version: 1,
+  version: 2,
   date: "2026-07-11",
   title: "日报草稿",
   businessCategory: "业务",
   workType: "开发",
   abilityDimension: "分析",
   projectName: "Trace",
+  projectId: "project-trace",
+  projectRelation: "project",
   productSystem: "日报系统",
   subtask: "筛选",
   quantity: "2",
@@ -53,11 +55,26 @@ test("record draft loader ignores malformed and incompatible data", () => {
   storage.setItem("trace:daily-record-draft", "{");
   assert.equal(loadRecordDraft(storage), null);
 
-  storage.setItem("trace:daily-record-draft", JSON.stringify({ ...draft, version: 2 }));
+  storage.setItem("trace:daily-record-draft", JSON.stringify({ ...draft, version: 3 }));
   assert.equal(loadRecordDraft(storage), null);
 
   storage.setItem("trace:daily-record-draft", JSON.stringify({ ...draft, title: 3 }));
   assert.equal(loadRecordDraft(storage), null);
+});
+
+test("version one drafts upgrade to an explicit unassigned project relation", () => {
+  const storage = memoryStorage();
+  const { projectId: _projectId, projectRelation: _projectRelation, ...versionTwoFields } = draft;
+  const versionOneDraft = { ...versionTwoFields, version: 1 as const };
+
+  storage.setItem("trace:daily-record-draft", JSON.stringify(versionOneDraft));
+
+  assert.deepEqual(loadRecordDraft(storage), {
+    ...versionOneDraft,
+    version: 2,
+    projectId: "",
+    projectRelation: "unassigned"
+  });
 });
 
 test("record draft can be cleared", () => {
@@ -72,4 +89,6 @@ test("new record form exposes manual draft actions and clears after submit", () 
   assert.equal(formSource.includes("清除草稿"), true);
   assert.match(formSource, /savedDraft = !record[\s\S]*loadRecordDraft/);
   assert.match(formSource, /await onSubmit\([\s\S]*clearRecordDraft/);
+  assert.match(formSource, /projectId: projectRelation === "project" \? selectedProjectId : null/);
+  assert.match(formSource, /projectRelation/);
 });

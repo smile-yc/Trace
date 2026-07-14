@@ -28,7 +28,8 @@ test("createRecord snapshots manual workload provenance and allocated abilities"
     businessCategory: "Traditional",
     workType: "Commissioning",
     abilityDimension: "Engineering,Documentation",
-    projectName: "Trace",
+    projectId: "project-trace",
+    projectRelation: "project",
     productSystem: "Trace",
     subtask: "Integration",
     quantity: 2,
@@ -45,6 +46,8 @@ test("createRecord snapshots manual workload provenance and allocated abilities"
   const record = createRecord(input);
 
   assert.equal(record.workload, 3);
+  assert.equal(record.projectId, "project-trace");
+  assert.equal(record.projectRelation, "project");
   assert.equal(record.workloadUnit, "item");
   assert.equal(record.coefficientSource, "manual");
   assert.equal(record.coefficientStandardId, null);
@@ -85,6 +88,8 @@ test("sanitizeRecord backfills legacy provenance and equal ability allocations",
   assert.equal(record.coefficientStandardId, null);
   assert.equal(record.coefficientStandardVersionId, null);
   assert.equal(record.workloadFormulaVersion, "quantity_x_coefficient_v1");
+  assert.equal(record.projectId, null);
+  assert.equal(record.projectRelation, "unassigned");
   assert.deepEqual(record.abilityAllocations, [
     {
       abilityId: "legacy:Engineering",

@@ -120,3 +120,21 @@ test("project API module exposes every project lifecycle endpoint", () => {
     assert.ok(source.includes(endpoint), `missing project endpoint ${endpoint}`);
   }
 });
+
+test("record form uses an explicit searchable project relation", () => {
+  const fieldSource = readSource("../src/components/ProjectSelectField.tsx");
+  const editorSource = readSource("../src/components/ProjectEditor.tsx");
+  const formSource = readSource("../src/components/RecordForm.tsx");
+
+  assert.match(fieldSource, /项目事项/);
+  assert.match(fieldSource, /非项目事项/);
+  assert.match(fieldSource, /<SearchSelect/);
+  assert.match(fieldSource, /新建项目/);
+  assert.match(editorSource, /status: "active"/);
+  assert.match(editorSource, /项目名称/);
+  assert.match(formSource, /fetchProjects/);
+  assert.match(formSource, /ProjectSelectField/);
+  assert.match(formSource, /projectRelation === "unassigned"/);
+  assert.match(formSource, /projectId: projectRelation === "project" \? selectedProjectId : null/);
+  assert.equal(formSource.includes("setProjectName"), false);
+});

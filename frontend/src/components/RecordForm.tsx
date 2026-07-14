@@ -19,12 +19,17 @@ import {
 import { todayKey } from "../lib/date";
 import { clearRecordDraft, loadRecordDraft, saveRecordDraft, type RecordDraft } from "../lib/recordDraft";
 import { getInitialOptionFieldValue, getPostSubmitCoefficientValue } from "../lib/recordFormState";
+import { createProject, fetchProjects } from "../lib/projectApi";
 import { matchWorkloadStandard } from "../lib/workloadApi";
+import { ProjectSelectField } from "./ProjectSelectField";
 import type {
   BusinessCategory,
   Category,
   ConfigOption,
   ConfigOptionType,
+  Project,
+  ProjectInput,
+  ProjectRelation,
   RecordInput,
   WorkloadStandard,
   WorkRecord
@@ -311,7 +316,13 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
   );
   const [workType, setWorkType] = useState(getInitialOptionFieldValue(record?.workType ?? savedDraft?.workType));
   const [abilityDimension, setAbilityDimension] = useState(record?.abilityDimension ?? savedDraft?.abilityDimension ?? "");
-  const [projectName, setProjectName] = useState(record?.projectName ?? savedDraft?.projectName ?? "");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState(record?.projectId ?? savedDraft?.projectId ?? "");
+  const [projectRelation, setProjectRelation] = useState<ProjectRelation>(
+    record?.projectRelation ?? savedDraft?.projectRelation ?? "unassigned"
+  );
+  const [projectBusy, setProjectBusy] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
   const [productSystem, setProductSystem] = useState(record?.productSystem ?? savedDraft?.productSystem ?? "");
   const [subtask, setSubtask] = useState(record?.subtask ?? savedDraft?.subtask ?? "");
   const [quantity, setQuantity] = useState(record ? formatOptionalNumber(record.quantity) : savedDraft?.quantity ?? "");
@@ -339,6 +350,32 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
       .catch((error) => {
         if (!isMounted) return;
         setConfigError(error instanceof Error ? `配置读取失败：${error.message}` : "配置读取失败");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchProjects({ includeArchived: true })
+      .then((items) => {
+        if (!isMounted) return;
+        setProjects(items);
+        const selected = items.find((item) => item.id === selectedProjectId);
+        if (selected?.mergedIntoProjectId) {
+          setSelectedProjectId("");
+          setProjectRelation("unassigned");
+          setProjectError("历史未关联：请选择项目或改为非项目事项");
+        } else {
+          setProjectError(null);
+        }
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        setProjectError(error instanceof Error ? `项目读取失败：${error.message}` : "项目读取失败");
       });
 
     return () => {
@@ -403,7 +440,9 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
 
   function currentDraft(): RecordDraft {
     return {
-      version: 1, date, title, businessCategory, workType, abilityDimension, projectName, productSystem,
+      version: 2, date, title, businessCategory, workType, abilityDimension,
+      projectName: projects.find((project) => project.id === selectedProjectId)?.name ?? "",
+      projectId: selectedProjectId, projectRelation, productSystem,
       subtask, quantity, coefficient, workload, timeHours, tags, content
     };
   }
@@ -424,7 +463,9 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
       setBusinessCategory("");
       setWorkType("");
       setAbilityDimension("");
-      setProjectName("");
+      setSelectedProjectId("");
+      setProjectRelation("unassigned");
+      setProjectError(null);
       setProductSystem("");
       setSubtask("");
       setQuantity("");
@@ -464,6 +505,22 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
     }
   }
 
+  async function handleQuickCreateProject(input: ProjectInput): Promise<void> {
+    setProjectBusy(true);
+    setProjectError(null);
+    try {
+      const project = await createProject(input);
+      setProjects((current) => [...current, project]);
+      setSelectedProjectId(project.id);
+      setProjectRelation("project");
+    } catch (error) {
+      setProjectError(error instanceof Error ? error.message : "项目创建失败");
+      throw error;
+    } finally {
+      setProjectBusy(false);
+    }
+  }
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim() && !content.trim()) return;
@@ -477,6 +534,12 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
     };
 
     if (!normalizedValues.businessCategory || !normalizedValues.workType) return;
+    if (projectRelation === "unassigned" || (projectRelation === "project" && !selectedProjectId)) {
+      setProjectError(projectRelation === "project"
+        ? "项目事项：必须选择一个项目"
+        : "历史未关联：请选择项目或改为非项目事项");
+      return;
+    }
 
     const category = deriveLegacyCategory(
       normalizedValues.businessCategory,
@@ -493,7 +556,8 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
       businessCategory: normalizedValues.businessCategory,
       workType: normalizedValues.workType,
       abilityDimension: normalizedValues.abilityDimension,
-      projectName,
+      projectId: projectRelation === "project" ? selectedProjectId : null,
+      projectRelation,
       productSystem: normalizedValues.productSystem,
       subtask: normalizedValues.subtask,
       quantity: quantityNumber,
@@ -518,6 +582,9 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
       setTitle("");
       setTags("");
       setContent("");
+      setSelectedProjectId("");
+      setProjectRelation("unassigned");
+      setProjectError(null);
       setQuantity("");
       setCoefficient(formatOptionalNumber(nextCoefficient));
       setCoefficientTouched(false);
@@ -594,15 +661,20 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
         <div className="form-section-title">
           <span>项目与当量</span>
         </div>
-        <div className="form-row three">
-          <label>
-            <span>项目名称</span>
-            <input
-              placeholder="例如：马东铁路"
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-            />
-          </label>
+        <ProjectSelectField
+          busy={projectBusy}
+          error={projectError}
+          projectId={selectedProjectId}
+          projects={projects}
+          relation={projectRelation}
+          onChange={(projectId, relation) => {
+            setSelectedProjectId(projectId);
+            setProjectRelation(relation);
+            setProjectError(null);
+          }}
+          onQuickCreate={handleQuickCreateProject}
+        />
+        <div className="form-row two">
           <ConfigurableOptionField
             allowEmpty
             fallback={fallbackOptions.productSystem}

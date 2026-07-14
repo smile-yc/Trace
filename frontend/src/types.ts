@@ -275,6 +275,8 @@ export interface WorkRecord {
   businessCategory: BusinessCategory;
   workType: WorkType;
   abilityDimension: AbilityDimension;
+  projectId: string | null;
+  projectRelation: ProjectRelation;
   projectName: string;
   productSystem: string;
   subtask: string;
@@ -301,7 +303,8 @@ export interface RecordInput {
   businessCategory?: BusinessCategory;
   workType?: WorkType;
   abilityDimension?: AbilityDimension;
-  projectName?: string;
+  projectId: string | null;
+  projectRelation: Exclude<ProjectRelation, "unassigned">;
   productSystem?: string;
   subtask?: string;
   quantity?: number | null;
