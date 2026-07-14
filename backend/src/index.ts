@@ -61,6 +61,8 @@ import {
 import { buildExcel } from "./exporters/excel.js";
 import { buildPdf } from "./exporters/pdf.js";
 import { buildWord } from "./exporters/word.js";
+import { createBackupPackage, previewRestorePackage, restoreBackupPackage } from "./core/backup.js";
+import { createYearArchive, previewYearArchive } from "./core/yearArchive.js";
 import { sanitizeFileName } from "./report.js";
 import { createImportRouter } from "./routes/import.js";
 import type {
@@ -420,6 +422,10 @@ const exportSchema = z.object({
   records: z.array(recordSchema).max(5000),
   scope: exportScopeSchema,
   workloadAdjustmentPercent: z.coerce.number().finite().min(0).max(1000).optional().default(100)
+});
+
+const backupPayloadSchema = z.object({
+  backupBase64: z.string().min(1)
 });
 
 type ExportFormat = "docx" | "pdf" | "xlsx";
@@ -937,6 +943,57 @@ app.delete("/api/records/:id", (req, res) => {
 app.delete("/api/records", (_req, res) => {
   clearRecords();
   res.status(204).send();
+});
+
+app.get("/api/backup", (_req, res, next) => {
+  try {
+    const buffer = createBackupPackage();
+    const fileName = `trace-backup-${new Date().toISOString().slice(0, 10)}.json.gz`;
+    res.setHeader("Content-Type", "application/gzip");
+    res.setHeader("Content-Length", buffer.byteLength);
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/backup/preview", (req, res, next) => {
+  try {
+    const input = backupPayloadSchema.parse(req.body);
+    const preview = previewRestorePackage(Buffer.from(input.backupBase64, "base64"));
+    res.json({ preview });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/backup/restore", (req, res, next) => {
+  try {
+    const input = backupPayloadSchema.parse(req.body);
+    const result = restoreBackupPackage(Buffer.from(input.backupBase64, "base64"));
+    res.json({ result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/year-archives/:year/preview", (req, res, next) => {
+  try {
+    const year = z.coerce.number().int().min(2000).max(2200).parse(req.params.year);
+    res.json({ preview: previewYearArchive(year) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/year-archives/:year", (req, res, next) => {
+  try {
+    const year = z.coerce.number().int().min(2000).max(2200).parse(req.params.year);
+    res.status(201).json({ archive: createYearArchive(year) });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/export/:format", async (req, res, next) => {

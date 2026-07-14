@@ -1099,3 +1099,10 @@ P8：部署、安全与备份
 - 月报中的“新技能、新任务、新工具、外出交流学习”是通过标签识别，还是新增专门字段。
 - 知识资产是否需要附件上传。
 - 年度目标占比是否需要为每个能力维度单独设置。
+## Data Maintenance Requirements
+
+- The annual workload-standard Excel file must be imported through preview and confirmation, with conflicts and invalid rows visible before writing.
+- A confirmed standard import creates a new standard version; existing records keep their historical coefficient snapshots.
+- Full backup restore must show replacement impact before the user confirms.
+- Year archives are generated as separate packages and must not delete original records, outcomes, or report reviews.
+- Traditional-business workload is not automatically discounted; temporary yearly adjustment remains export-preview only.

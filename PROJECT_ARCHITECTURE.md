@@ -196,3 +196,6 @@ PORT       # 后端端口，默认 4100
 - Nginx 把 `/api/` 反向代理到 `127.0.0.1:4100`
 - `backend/data/report.sqlite` 做定期备份
 - 公网访问前增加登录或 Nginx Basic Auth
+## Data Maintenance
+
+Backup and archive logic lives under `backend/src/core/`. `backup.ts` wraps a full SQLite table snapshot in a compressed package and requires a restore preview before replacement. `yearArchive.ts` writes a year-scoped archive file under the data directory while leaving the working database unchanged. Workload-standard Excel import remains versioned and atomic: failed imports do not create partial standard versions.

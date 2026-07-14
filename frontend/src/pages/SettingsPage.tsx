@@ -1,8 +1,10 @@
 import {
   ArrowDown,
   ArrowUp,
+  Archive,
   CheckCircle2,
   ClipboardList,
+  Download,
   Gauge,
   Plus,
   RefreshCw,
@@ -11,7 +13,8 @@ import {
   Star,
   Trash2,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Upload
 } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
@@ -24,13 +27,22 @@ import {
   updateConfigOptionApi
 } from "../lib/configApi";
 import {
+  confirmWorkloadStandardImport,
+  createYearArchive,
   createWorkloadStandard,
   deleteWorkloadStandardApi,
+  downloadBackupPackage,
   fetchWorkloadStandards,
+  previewBackupRestore,
+  previewWorkloadStandardImport,
+  previewYearArchive,
+  restoreBackupPackage,
   updateWorkloadStandardApi
 } from "../lib/workloadApi";
+import { downloadBlob } from "../lib/download";
 import { DEFAULT_APP_SETTINGS, fetchSettings, updateSettings } from "../lib/settingsApi";
 import type { AppSettings, ConfigOption, ConfigOptionType, FocusScoreWeights, WarningRules, WorkloadStandard } from "../types";
+import type { BackupRestorePreview, WorkloadStandardImportPreview, YearArchivePreview } from "../lib/workloadApi";
 
 interface SettingsPageProps {
   onNotify: (message: string) => void;
@@ -43,7 +55,7 @@ interface ConfigGroupMeta {
   eyebrow: string;
 }
 
-type SettingsPanel = "options" | "standards" | "analysis";
+type SettingsPanel = "options" | "standards" | "analysis" | "maintenance";
 
 interface WorkloadStandardDraft {
   businessCategory: string;
@@ -163,6 +175,14 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
   const [activeType, setActiveType] = useState<ConfigOptionType>("businessCategory");
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [standardImportFile, setStandardImportFile] = useState<File | null>(null);
+  const [standardImportPreview, setStandardImportPreview] = useState<WorkloadStandardImportPreview | null>(null);
+  const [standardImportName, setStandardImportName] = useState(`工作当量标准 ${new Date().getFullYear()}`);
+  const [standardImportYear, setStandardImportYear] = useState(String(new Date().getFullYear()));
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restorePreview, setRestorePreview] = useState<BackupRestorePreview | null>(null);
+  const [archiveYear, setArchiveYear] = useState(String(new Date().getFullYear()));
+  const [archivePreview, setArchivePreview] = useState<YearArchivePreview | null>(null);
 
   async function loadOptions(): Promise<void> {
     try {
@@ -481,6 +501,115 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
       onNotify("分析规则已保存");
     } catch (error) {
       onNotify(error instanceof Error ? error.message : "保存分析规则失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handlePreviewStandardImport(): Promise<void> {
+    if (!standardImportFile) return;
+    try {
+      setSavingId("standard-import-preview");
+      setStandardImportPreview(await previewWorkloadStandardImport(standardImportFile));
+      onNotify("标准导入预览已生成");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "标准导入预览失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleConfirmStandardImport(): Promise<void> {
+    if (!standardImportFile || !standardImportPreview) return;
+    if (standardImportPreview.rows.some((row) => row.status === "invalid") || standardImportPreview.duplicateKeyRowNumbers.length) {
+      onNotify("存在无效行或文件内重复规则，不能确认导入");
+      return;
+    }
+    try {
+      setSavingId("standard-import-confirm");
+      await confirmWorkloadStandardImport({
+        name: standardImportName,
+        year: Number(standardImportYear) || null,
+        sourceName: standardImportFile.name,
+        rows: standardImportPreview.rows,
+        conflictResolutions: Object.fromEntries(
+          standardImportPreview.rows
+            .filter((row) => row.status === "conflict")
+            .map((row) => [String(row.rowNumber), "use_imported" as const])
+        )
+      });
+      setStandardImportPreview(null);
+      setStandardImportFile(null);
+      await loadOptions();
+      onNotify("标准已导入为新版本");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "确认导入失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleDownloadBackup(): Promise<void> {
+    try {
+      setSavingId("backup-download");
+      const blob = await downloadBackupPackage();
+      downloadBlob(blob, `trace-backup-${new Date().toISOString().slice(0, 10)}.json.gz`);
+      onNotify("备份包已生成");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "备份生成失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handlePreviewBackupRestore(): Promise<void> {
+    if (!restoreFile) return;
+    try {
+      setSavingId("backup-preview");
+      setRestorePreview(await previewBackupRestore(restoreFile));
+      onNotify("恢复影响预览已生成");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "恢复预览失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleRestoreBackup(): Promise<void> {
+    if (!restoreFile || !restorePreview) return;
+    if (!window.confirm("确认用备份包替换当前数据库内容吗？")) return;
+    try {
+      setSavingId("backup-restore");
+      await restoreBackupPackage(restoreFile);
+      setRestorePreview(null);
+      await loadOptions();
+      onNotify("备份已恢复");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "恢复失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handlePreviewYearArchive(): Promise<void> {
+    try {
+      setSavingId("year-archive-preview");
+      setArchivePreview(await previewYearArchive(Number(archiveYear)));
+      onNotify("年度归档预览已生成");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "年度归档预览失败");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleCreateYearArchive(): Promise<void> {
+    try {
+      setSavingId("year-archive-create");
+      setArchivePreview(await createYearArchive(Number(archiveYear)));
+      onNotify("年度归档包已生成，原始记录未删除");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "年度归档失败");
     } finally {
       setSavingId(null);
     }
@@ -966,9 +1095,141 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
     );
   }
 
+  function renderMaintenancePanel() {
+    const importCounts = standardImportPreview
+      ? {
+          new: standardImportPreview.rows.filter((row) => row.status === "new").length,
+          duplicate: standardImportPreview.rows.filter((row) => row.status === "duplicate").length,
+          conflict: standardImportPreview.rows.filter((row) => row.status === "conflict").length,
+          invalid: standardImportPreview.rows.filter((row) => row.status === "invalid").length
+        }
+      : null;
+
+    return (
+      <section className="panel analysis-rules-panel">
+        <div className="config-workbench-header">
+          <div>
+            <span className="eyebrow">Data Maintenance</span>
+            <h2>数据维护</h2>
+          </div>
+        </div>
+
+        <div className="analysis-settings-grid">
+          <article className="analysis-setting-card wide">
+            <div className="dashboard-card-heading">
+              <h3>Excel 标准导入</h3>
+              <span>{standardImportPreview ? `${standardImportPreview.rows.length} 行` : "未预览"}</span>
+            </div>
+            <div className="settings-field-grid">
+              <label>
+                <span>版本名称</span>
+                <input value={standardImportName} onChange={(event) => setStandardImportName(event.target.value)} />
+              </label>
+              <label>
+                <span>年度</span>
+                <input value={standardImportYear} onChange={(event) => setStandardImportYear(event.target.value)} />
+              </label>
+              <label>
+                <span>标准文件</span>
+                <input
+                  accept=".xlsx,.xls"
+                  type="file"
+                  onChange={(event) => {
+                    setStandardImportFile(event.target.files?.[0] ?? null);
+                    setStandardImportPreview(null);
+                  }}
+                />
+              </label>
+            </div>
+            {importCounts && (
+              <p className="muted-text">
+                新增 {importCounts.new}，重复 {importCounts.duplicate}，冲突 {importCounts.conflict}，无效 {importCounts.invalid}
+              </p>
+            )}
+            <div className="standard-actions">
+              <button disabled={!standardImportFile || savingId === "standard-import-preview"} onClick={handlePreviewStandardImport} type="button">
+                <Upload size={16} />
+                预览导入
+              </button>
+              <button className="primary-button" disabled={!standardImportPreview || savingId === "standard-import-confirm"} onClick={handleConfirmStandardImport} type="button">
+                <CheckCircle2 size={16} />
+                确认生成新版本
+              </button>
+            </div>
+          </article>
+
+          <article className="analysis-setting-card">
+            <div className="dashboard-card-heading">
+              <h3>完整备份</h3>
+              <span>全量</span>
+            </div>
+            <button className="primary-button" disabled={savingId === "backup-download"} onClick={handleDownloadBackup} type="button">
+              <Download size={16} />
+              下载备份包
+            </button>
+          </article>
+
+          <article className="analysis-setting-card">
+            <div className="dashboard-card-heading">
+              <h3>恢复预检</h3>
+              <span>{restorePreview ? `${restorePreview.tables.length} 表` : "未预览"}</span>
+            </div>
+            <label>
+              <span>备份包</span>
+              <input
+                accept=".gz,.json"
+                type="file"
+                onChange={(event) => {
+                  setRestoreFile(event.target.files?.[0] ?? null);
+                  setRestorePreview(null);
+                }}
+              />
+            </label>
+            {restorePreview && <p className="muted-text">当前 {restorePreview.currentCounts.records} 条记录，将恢复为 {restorePreview.incomingCounts.records} 条。</p>}
+            <div className="standard-actions">
+              <button disabled={!restoreFile || savingId === "backup-preview"} onClick={handlePreviewBackupRestore} type="button">
+                <Upload size={16} />
+                预览影响
+              </button>
+              <button className="danger-action" disabled={!restorePreview || savingId === "backup-restore"} onClick={handleRestoreBackup} type="button">
+                <RefreshCw size={16} />
+                确认恢复
+              </button>
+            </div>
+          </article>
+
+          <article className="analysis-setting-card wide">
+            <div className="dashboard-card-heading">
+              <h3>年度归档</h3>
+              <span>{archivePreview ? `${archivePreview.recordCount} 条记录` : "未预览"}</span>
+            </div>
+            <div className="settings-field-grid two">
+              <label>
+                <span>年度</span>
+                <input value={archiveYear} onChange={(event) => setArchiveYear(event.target.value)} />
+              </label>
+            </div>
+            {archivePreview && <p className="muted-text">记录 {archivePreview.recordCount}，成果 {archivePreview.outcomeCount}，复盘 {archivePreview.reportReviewCount}。归档不会删除原始数据。</p>}
+            <div className="standard-actions">
+              <button disabled={savingId === "year-archive-preview"} onClick={handlePreviewYearArchive} type="button">
+                <Archive size={16} />
+                预览年度
+              </button>
+              <button className="primary-button" disabled={savingId === "year-archive-create"} onClick={handleCreateYearArchive} type="button">
+                <Save size={16} />
+                生成归档包
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+    );
+  }
+
   function renderActivePanel() {
     if (activePanel === "standards") return renderWorkloadStandards();
     if (activePanel === "analysis") return renderAnalysisRules();
+    if (activePanel === "maintenance") return renderMaintenancePanel();
     return renderBasicOptions();
   }
 
@@ -1022,6 +1283,17 @@ export function SettingsPage({ onNotify }: SettingsPageProps) {
         </button>
         <span>{disabledCount + disabledStandardCount} 项停用</span>
         <span>{defaultCount} 个默认项</span>
+      </div>
+
+      <div className="settings-tabs">
+        <button
+          className={activePanel === "maintenance" ? "active" : ""}
+          onClick={() => setActivePanel("maintenance")}
+          type="button"
+        >
+          <Archive size={16} />
+          数据维护
+        </button>
       </div>
 
       {renderActivePanel()}

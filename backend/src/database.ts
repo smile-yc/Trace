@@ -3039,3 +3039,121 @@ export function clearRecords(): void {
 export function getDatabasePath(): string {
   return dbPath;
 }
+
+const backupTables = [
+  "schema_migrations",
+  "workload_standard_versions",
+  "config_options",
+  "app_settings",
+  "projects",
+  "workload_standards",
+  "growth_goals",
+  "milestones",
+  "milestone_stages",
+  "milestone_corrections",
+  "records",
+  "record_ability_allocations",
+  "knowledge_assets",
+  "outcomes",
+  "outcome_records",
+  "outcome_abilities",
+  "outcome_milestones",
+  "outcome_status_history",
+  "project_aliases",
+  "report_reviews"
+] as const;
+
+export type BackupTableName = typeof backupTables[number];
+
+export interface DatabaseTableSnapshot {
+  name: BackupTableName;
+  columns: string[];
+  rows: Record<string, unknown>[];
+}
+
+export interface DatabaseSnapshot {
+  schemaVersion: 1;
+  createdAt: string;
+  tables: DatabaseTableSnapshot[];
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replace(/"/g, "\"\"")}"`;
+}
+
+function toSqlValue(value: unknown): string | number | bigint | Buffer | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "bigint") return value;
+  if (Buffer.isBuffer(value)) return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  return JSON.stringify(value);
+}
+
+function getTableColumns(table: BackupTableName): string[] {
+  return db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all()
+    .map((row) => String((row as { name: unknown }).name));
+}
+
+function getTableCount(table: BackupTableName): number {
+  return Number((db.prepare(`SELECT COUNT(*) AS count FROM ${quoteIdentifier(table)}`).get() as { count: unknown }).count);
+}
+
+export function listBackupTableNames(): BackupTableName[] {
+  return [...backupTables];
+}
+
+export function getDatabaseTableCounts(): Record<BackupTableName, number> {
+  return Object.fromEntries(backupTables.map((table) => [table, getTableCount(table)])) as Record<BackupTableName, number>;
+}
+
+export function createDatabaseSnapshot(): DatabaseSnapshot {
+  return {
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+    tables: backupTables.map((table) => ({
+      name: table,
+      columns: getTableColumns(table),
+      rows: db.prepare(`SELECT * FROM ${quoteIdentifier(table)}`).all() as Record<string, unknown>[]
+    }))
+  };
+}
+
+export function restoreDatabaseSnapshot(snapshot: DatabaseSnapshot): BackupTableName[] {
+  const incomingNames = new Set(snapshot.tables.map((table) => table.name));
+  if (snapshot.schemaVersion !== 1 || backupTables.some((table) => !incomingNames.has(table))) {
+    throw new Error("BACKUP_INVALID");
+  }
+
+  const byName = new Map(snapshot.tables.map((table) => [table.name, table]));
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const table of [...backupTables].reverse()) {
+      db.prepare(`DELETE FROM ${quoteIdentifier(table)}`).run();
+    }
+    for (const table of backupTables) {
+      const snapshotTable = byName.get(table) as DatabaseTableSnapshot;
+      const validColumns = new Set(getTableColumns(table));
+      const columns = snapshotTable.columns.filter((column) => validColumns.has(column));
+      if (!columns.length) continue;
+      const sql = `INSERT INTO ${quoteIdentifier(table)} (${columns.map(quoteIdentifier).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`;
+      const statement = db.prepare(sql);
+      for (const row of snapshotTable.rows) {
+        statement.run(...columns.map((column) => toSqlValue(row[column])));
+      }
+    }
+    db.exec("COMMIT");
+    const violations = db.prepare("PRAGMA foreign_key_check").all();
+    if (violations.length) throw new Error("BACKUP_FOREIGN_KEY_INVALID");
+    return [...backupTables];
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      // ignore rollback errors when commit already completed
+    }
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}

@@ -248,3 +248,11 @@ Trace/
 - 定期备份 `backend/data/report.sqlite` 或自定义 `DB_PATH` 指向的数据库文件。
 
 当前系统没有账号登录。部署到公网前，建议增加登录鉴权，或至少使用 Nginx Basic Auth 做访问保护。
+## Data Maintenance
+
+Trace supports year-end data maintenance from Settings:
+
+- Import the annual workload-standard Excel sheet into a new standard version after previewing new, duplicate, conflict, and invalid rows.
+- Download a compressed full backup package.
+- Preview restore impact before replacing local data from a backup package.
+- Create a yearly archive package without deleting source records, outcomes, or report reviews.
