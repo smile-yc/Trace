@@ -30,6 +30,7 @@ import type {
   ProjectSummary,
   ProjectStatus,
   ProjectUpdateInput,
+  RecordDeleteImpact,
   RecordInput,
   AbilityAllocation,
   AbilityAllocationInput,
@@ -2287,6 +2288,25 @@ export function listRecords(): WorkRecord[] {
 export function getRecord(id: string): WorkRecord | null {
   const row = db.prepare(`${selectSql} WHERE id = ?`).get(id);
   return row ? toRecord(row) : null;
+}
+
+export function getRecordDeleteImpact(id: string): RecordDeleteImpact | null {
+  const record = getRecord(id);
+  if (!record) return null;
+  const outcomes = db.prepare(`
+    SELECT outcomes.id, outcomes.title, outcomes.type, outcomes.status
+    FROM outcome_records
+    JOIN outcomes ON outcomes.id = outcome_records.outcomeId
+    WHERE outcome_records.recordId = ?
+    ORDER BY outcomes.createTime, outcomes.id
+  `).all(id) as Array<{ id: string; title: string; type: OutcomeType; status: OutcomeStatus }>;
+
+  return {
+    recordId: record.id,
+    title: record.title,
+    project: record.projectId ? { id: record.projectId, name: record.projectName } : null,
+    outcomes
+  };
 }
 
 export function insertRecord(input: RecordInput): WorkRecord {

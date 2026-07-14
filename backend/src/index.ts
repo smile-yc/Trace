@@ -12,6 +12,7 @@ import {
   getDatabasePath,
   getOutcome,
   getProject,
+  getRecordDeleteImpact,
   getProjectMergePreview,
   getProjectSummary,
   insertKnowledgeAsset,
@@ -749,6 +750,16 @@ app.put("/api/records/:id", (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.get("/api/records/:id/impact", (req, res) => {
+  const impact = getRecordDeleteImpact(req.params.id);
+  if (!impact) {
+    res.status(404).json({ message: "Record not found." });
+    return;
+  }
+
+  res.json({ impact });
 });
 
 app.delete("/api/records/:id", (req, res) => {

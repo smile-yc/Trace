@@ -27,6 +27,18 @@ export interface WorkRecord {
   updateTime: number;
 }
 
+export interface RecordDeleteImpact {
+  recordId: string;
+  title: string;
+  project: { id: string; name: string } | null;
+  outcomes: Array<{
+    id: string;
+    title: string;
+    type: OutcomeType;
+    status: OutcomeStatus;
+  }>;
+}
+
 export type ProjectStatus = "planned" | "active" | "paused" | "completed" | "archived";
 
 export type ProjectRelation = "project" | "non_project" | "unassigned";
