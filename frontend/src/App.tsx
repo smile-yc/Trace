@@ -134,6 +134,7 @@ export function App() {
   });
   const activePage = pageRegistry.getPage(pageNavigation.activePageId) ?? pageRegistry.getDefaultPage();
   const pageContext: AppPageContext = {
+    activePageId: activePage.id,
     records,
     onAddRecord: handleAdd,
     onEditRecord: setEditingRecord,

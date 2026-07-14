@@ -22,6 +22,7 @@ import { buildJsonBackup } from "../lib/storage";
 import type { Outcome, OutcomeSeed, Project, WorkRecord } from "../types";
 
 interface AllRecordsPageProps {
+  active: boolean;
   records: WorkRecord[];
   onEdit: (record: WorkRecord) => void;
   onDelete: (record: WorkRecord) => void | Promise<void>;
@@ -89,7 +90,7 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"));
 }
 
-export function AllRecordsPage({ records, onEdit, onDelete, onClear, onGenerateReport, onCreateOutcome }: AllRecordsPageProps) {
+export function AllRecordsPage({ active, records, onEdit, onDelete, onClear, onGenerateReport, onCreateOutcome }: AllRecordsPageProps) {
   const today = todayKey();
   const [rangePreset, setRangePreset] = useState<RangePreset>("current");
   const [filters, setFilters] = useState<LedgerFilters>(() => defaultFilters(today));
@@ -100,6 +101,7 @@ export function AllRecordsPage({ records, onEdit, onDelete, onClear, onGenerateR
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    if (!active) return;
     let cancelled = false;
     Promise.all([fetchProjects({ includeArchived: true }), fetchOutcomes({ includeArchived: true })])
       .then(([nextProjects, outcomeResult]) => {
@@ -112,7 +114,7 @@ export function AllRecordsPage({ records, onEdit, onDelete, onClear, onGenerateR
         if (!cancelled) setRelationError(error instanceof Error ? error.message : "项目与成果数据加载失败");
       });
     return () => { cancelled = true; };
-  }, [records.length]);
+  }, [active, records.length]);
 
   const scopeRecords = useMemo(
     () => filterLedgerRecords(records, outcomes, { ...filters, qualityCode: "" }, today),

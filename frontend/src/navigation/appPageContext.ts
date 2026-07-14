@@ -1,6 +1,7 @@
 import type { OutcomeSeed, RecordInput, WorkRecord } from "../types";
 
 export interface AppPageContext {
+  activePageId: string;
   records: WorkRecord[];
   onAddRecord: (input: RecordInput) => Promise<void>;
   onEditRecord: (record: WorkRecord) => void;

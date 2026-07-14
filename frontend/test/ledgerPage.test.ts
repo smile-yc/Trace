@@ -61,3 +61,16 @@ test("record deletion asks the impact endpoint before confirmation", () => {
   assert.match(app, /window\.confirm/);
 });
 
+test("ledger relation indexes refresh whenever the retained page becomes active again", () => {
+  const page = readSource("../src/pages/AllRecordsPage.tsx");
+  const pagePackage = readSource("../src/navigation/corePagePackage.tsx");
+  const context = readSource("../src/navigation/appPageContext.ts");
+  const app = readSource("../src/App.tsx");
+
+  assert.match(context, /activePageId: string/);
+  assert.match(app, /activePageId: activePage\.id/);
+  assert.match(pagePackage, /active=\{context\.activePageId === "all"\}/);
+  assert.match(page, /active: boolean/);
+  assert.match(page, /if \(!active\) return/);
+  assert.match(page, /\}, \[active, records\.length\]\)/);
+});

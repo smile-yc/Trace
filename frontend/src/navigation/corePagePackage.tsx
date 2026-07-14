@@ -35,6 +35,7 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
         group: "records",
         render: (context) => (
           <AllRecordsPage
+            active={context.activePageId === "all"}
             records={context.records}
             onEdit={context.onEditRecord}
             onDelete={context.onDeleteRecord}
