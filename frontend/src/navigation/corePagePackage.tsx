@@ -84,7 +84,7 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
         id: "growth",
         label: "成长与目标",
         group: "growth",
-        render: (context) => <GrowthPage records={context.records} onNotify={context.onNotify} />
+        render: (context) => <GrowthPage active={context.activePageId === "growth"} records={context.records} onNotify={context.onNotify} />
       }
     ]
   },

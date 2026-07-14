@@ -60,6 +60,105 @@ test("manual ability allocation must total exactly 100 percent", () => {
   );
 });
 
+test("growth goals group milestones and preserve manual correction history", () => {
+  const goal = database.insertGrowthGoal({
+    title: "Build technical leadership",
+    scope: "career",
+    status: "active",
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
+    abilityId: "engineering",
+    abilityName: "Engineering"
+  });
+  const milestone = database.insertMilestone({
+    goalId: goal.id,
+    name: "Resolve important problems",
+    metricType: "quantity",
+    metricSource: "problem_count",
+    targetValue: 2,
+    startDate: "2026-01-01",
+    deadline: "2026-12-31"
+  });
+
+  const corrected = database.correctMilestone(milestone.id, 1.5, "Include one cross-team intervention");
+
+  assert.equal(database.listGrowthGoals()[0]?.title, goal.title);
+  assert.equal(corrected?.currentValue, 1.5);
+  assert.equal(corrected?.overrideReason, "Include one cross-team intervention");
+  assert.equal(database.listMilestoneCorrections(milestone.id).length, 1);
+});
+
+test("milestone progress derives input and quantity evidence from source records", () => {
+  const project = database.insertProject({ name: "Growth evidence project", status: "active" });
+  const record = database.insertRecord(recordInput({
+    date: "2026-07-10",
+    projectId: project.id,
+    projectRelation: "project",
+    abilityDimension: "Engineering,Communication",
+    abilityAllocations: [
+      { abilityId: "engineering", abilityName: "Engineering", percentage: 75 },
+      { abilityId: "communication", abilityName: "Communication", percentage: 25 }
+    ],
+    timeHours: 8,
+    workload: 12
+  }));
+  database.insertOutcome({
+    type: "problem_resolution",
+    status: "completed",
+    title: "Solved a recurring production issue",
+    projectId: project.id,
+    updateDate: "2026-07-10",
+    completedDate: "2026-07-10",
+    recordIds: [record.id],
+    abilities: [{ abilityId: "engineering", abilityName: "Engineering" }]
+  });
+  const inputMilestone = database.insertMilestone({
+    name: "Engineering investment",
+    metricType: "input",
+    metricSource: "time_hours",
+    abilityId: "engineering",
+    abilityName: "Engineering",
+    targetValue: 12,
+    startDate: "2026-07-01",
+    deadline: "2026-07-31"
+  });
+  const resultMilestone = database.insertMilestone({
+    name: "Problem results",
+    metricType: "quantity",
+    metricSource: "problem_count",
+    targetValue: 2,
+    startDate: "2026-07-01",
+    deadline: "2026-07-31"
+  });
+
+  const inputProgress = database.getMilestoneProgress(inputMilestone.id);
+  const resultProgress = database.getMilestoneProgress(resultMilestone.id);
+
+  assert.equal(inputProgress?.calculatedValue, 6);
+  assert.equal(inputProgress?.progress, 50);
+  assert.ok(inputProgress?.evidence.some((item: { kind: string }) => item.kind === "record"));
+  assert.equal(resultProgress?.calculatedValue, 1);
+  assert.ok(resultProgress?.evidence.some((item: { kind: string }) => item.kind === "outcome"));
+});
+
+test("stage milestones calculate progress from completed steps", () => {
+  const milestone = database.insertMilestone({
+    name: "Complete leadership practice",
+    metricType: "stage",
+    metricSource: "manual_stage",
+    stages: [
+      { label: "Lead planning", completed: true },
+      { label: "Lead delivery", completed: false }
+    ]
+  });
+
+  const progress = database.getMilestoneProgress(milestone.id);
+
+  assert.equal(progress?.targetValue, 2);
+  assert.equal(progress?.calculatedValue, 1);
+  assert.equal(progress?.progress, 50);
+});
+
 test("new records snapshot a matched standard and later standard edits leave history unchanged", () => {
   const version = database.getActiveWorkloadStandardVersion();
   assert.ok(version);

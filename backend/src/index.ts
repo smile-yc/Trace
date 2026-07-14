@@ -9,6 +9,7 @@ import {
   deleteRecord,
   deleteWorkloadStandard,
   getAppSettings,
+  getMilestoneProgress,
   getDatabasePath,
   getOutcome,
   getProject,
@@ -16,6 +17,7 @@ import {
   getProjectMergePreview,
   getProjectSummary,
   insertKnowledgeAsset,
+  insertGrowthGoal,
   insertOutcome,
   insertWorkloadStandardVersion,
   activateWorkloadStandardVersion,
@@ -26,8 +28,10 @@ import {
   insertWorkloadStandard,
   listConfigOptions,
   listKnowledgeAssets,
+  listGrowthGoals,
   listOutcomes,
-  listMilestones,
+  listMilestoneCorrections,
+  listMilestonesWithProgress,
   listProjects,
   listRecords,
   listWorkloadStandards,
@@ -38,9 +42,13 @@ import {
   reactivateOutcome,
   reorderConfigOptions,
   summarizeOutcomes,
+  correctMilestone,
+  resetMilestoneCorrection,
+  toggleMilestoneStage,
   updateAppSettings,
   updateConfigOption,
   updateKnowledgeAsset,
+  updateGrowthGoal,
   updateOutcome,
   updateMilestone,
   updateProject,
@@ -58,6 +66,8 @@ import type {
   ConfigOptionType,
   ConfigOptionUpdateInput,
   ExportPayload,
+  GrowthGoalInput,
+  GrowthGoalUpdateInput,
   KnowledgeAssetInput,
   KnowledgeAssetUpdateInput,
   MilestoneInput,
@@ -254,6 +264,20 @@ const milestoneInputSchema = z.object({
   targetType: z.string().trim().max(80).optional().default("工作当量"),
   targetValue: z.coerce.number().finite().min(0).optional().default(0),
   currentValue: z.coerce.number().finite().min(0).optional().default(0),
+  goalId: z.string().trim().max(120).optional().default(""),
+  metricType: z.enum(["quantity", "input", "stage", "continuous"]).optional().default("stage"),
+  metricSource: z.enum(["outcome_count", "problem_count", "project_count", "time_hours", "workload", "active_months", "manual_stage", "legacy_manual"]).optional().default("manual_stage"),
+  abilityId: z.string().trim().max(120).optional().default(""),
+  abilityName: z.string().trim().max(120).optional().default(""),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).default(""),
+  requiredOutcomeCount: z.coerce.number().finite().min(0).optional().default(0),
+  stages: z.array(z.object({
+    id: z.string().trim().max(120).optional(),
+    label: z.string().trim().min(1).max(160),
+    sortOrder: z.number().int().min(0).max(100000).optional(),
+    completed: z.boolean().optional(),
+    completedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal(""))
+  })).max(50).optional(),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).default(""),
   enabled: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(100000).optional()
@@ -266,10 +290,38 @@ const milestoneUpdateSchema = z.object({
   targetType: z.string().trim().max(80).optional(),
   targetValue: z.coerce.number().finite().min(0).optional(),
   currentValue: z.coerce.number().finite().min(0).optional(),
+  goalId: z.string().trim().max(120).optional(),
+  metricType: z.enum(["quantity", "input", "stage", "continuous"]).optional(),
+  metricSource: z.enum(["outcome_count", "problem_count", "project_count", "time_hours", "workload", "active_months", "manual_stage", "legacy_manual"]).optional(),
+  abilityId: z.string().trim().max(120).optional(),
+  abilityName: z.string().trim().max(120).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
+  requiredOutcomeCount: z.coerce.number().finite().min(0).optional(),
+  stages: z.array(z.object({
+    id: z.string().trim().max(120).optional(),
+    label: z.string().trim().min(1).max(160),
+    sortOrder: z.number().int().min(0).max(100000).optional(),
+    completed: z.boolean().optional(),
+    completedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal(""))
+  })).max(50).optional(),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
   enabled: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(100000).optional()
 });
+
+const growthGoalInputSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  scope: z.enum(["career", "cultivation", "annual", "learning"]).optional().default("career"),
+  status: z.enum(["planned", "active", "paused", "completed", "archived"]).optional().default("planned"),
+  description: z.string().trim().max(1200).optional().default(""),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).default(""),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).default(""),
+  targetYear: z.coerce.number().int().min(2000).max(2200).nullable().optional(),
+  abilityId: z.string().trim().max(120).optional().default(""),
+  abilityName: z.string().trim().max(120).optional().default("")
+});
+
+const growthGoalUpdateSchema = growthGoalInputSchema.partial();
 
 const knowledgeAssetStatuses = ["draft", "published", "archived"] as const;
 
@@ -619,8 +671,35 @@ app.put("/api/settings", (req, res, next) => {
   }
 });
 
+app.get("/api/growth-goals", (req, res) => {
+  res.json({ goals: listGrowthGoals({ includeArchived: req.query.includeArchived === "true" }) });
+});
+
+app.post("/api/growth-goals", (req, res, next) => {
+  try {
+    const input: GrowthGoalInput = growthGoalInputSchema.parse(req.body);
+    res.status(201).json({ goal: insertGrowthGoal(input) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/growth-goals/:id", (req, res, next) => {
+  try {
+    const input: GrowthGoalUpdateInput = growthGoalUpdateSchema.parse(req.body);
+    const goal = updateGrowthGoal(req.params.id, input);
+    if (!goal) {
+      res.status(404).json({ message: "Growth goal not found." });
+      return;
+    }
+    res.json({ goal });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/milestones", (_req, res) => {
-  res.json({ milestones: listMilestones() });
+  res.json({ milestones: listMilestonesWithProgress() });
 });
 
 app.post("/api/milestones", (req, res, next) => {
@@ -644,6 +723,48 @@ app.put("/api/milestones/:id", (req, res, next) => {
     }
 
     res.json({ milestone });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/milestones/:id/correction", (req, res, next) => {
+  try {
+    const input = z.object({ value: z.coerce.number().finite().min(0), reason: z.string().trim().min(1).max(600) }).parse(req.body);
+    const milestone = correctMilestone(req.params.id, input.value, input.reason);
+    if (!milestone) {
+      res.status(404).json({ message: "Milestone not found." });
+      return;
+    }
+    res.json({ milestone, progress: getMilestoneProgress(milestone.id), corrections: listMilestoneCorrections(milestone.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/milestones/:id/correction/reset", (req, res, next) => {
+  try {
+    const input = z.object({ reason: z.string().trim().min(1).max(600) }).parse(req.body);
+    const milestone = resetMilestoneCorrection(req.params.id, input.reason);
+    if (!milestone) {
+      res.status(404).json({ message: "Milestone not found." });
+      return;
+    }
+    res.json({ milestone, progress: getMilestoneProgress(milestone.id), corrections: listMilestoneCorrections(milestone.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/milestones/:id/stages/:stageId/toggle", (req, res, next) => {
+  try {
+    const input = z.object({ completed: z.boolean(), completedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")) }).parse(req.body);
+    const milestone = toggleMilestoneStage(req.params.id, req.params.stageId, input.completed, input.completedDate);
+    if (!milestone) {
+      res.status(404).json({ message: "Milestone stage not found." });
+      return;
+    }
+    res.json({ milestone, progress: getMilestoneProgress(milestone.id) });
   } catch (error) {
     next(error);
   }
@@ -800,7 +921,7 @@ app.post("/api/export/:format", async (req, res, next) => {
       configOptions: listConfigOptions(),
       workloadStandards: listWorkloadStandards(),
       appSettings: getAppSettings(),
-      milestones: listMilestones(),
+      milestones: listMilestonesWithProgress(),
       knowledgeAssets: listKnowledgeAssets(),
       outcomes
     };

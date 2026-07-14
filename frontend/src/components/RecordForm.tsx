@@ -6,6 +6,7 @@ import {
   formatAbilitySelectionSummary,
   parseAbilityDimensions
 } from "../lib/abilityDimensions";
+import { buildEqualAbilityAllocations, validateAbilityAllocations, type AbilityAllocationDraft } from "../lib/abilityAllocations";
 import { createConfigOption, fetchConfigOptions } from "../lib/configApi";
 import {
   collectPersistedConfigOptionInputs,
@@ -316,6 +317,13 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
   );
   const [workType, setWorkType] = useState(getInitialOptionFieldValue(record?.workType ?? savedDraft?.workType));
   const [abilityDimension, setAbilityDimension] = useState(record?.abilityDimension ?? savedDraft?.abilityDimension ?? "");
+  const [abilityAllocationMode, setAbilityAllocationMode] = useState<"equal" | "manual">(
+    savedDraft?.abilityAllocationMode ?? (record?.abilityAllocations.length && record.abilityAllocations.length > 1 ? "manual" : "equal")
+  );
+  const [abilityAllocations, setAbilityAllocations] = useState<AbilityAllocationDraft[]>(
+    (record?.abilityAllocations ?? savedDraft?.abilityAllocations ?? []).map(({ abilityId, abilityName, percentage }) => ({ abilityId, abilityName, percentage }))
+  );
+  const [abilityAllocationError, setAbilityAllocationError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState(record?.projectId ?? savedDraft?.projectId ?? "");
   const [projectRelation, setProjectRelation] = useState<ProjectRelation>(
@@ -396,6 +404,25 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
   }, [configOptions, record]);
 
   useEffect(() => {
+    const selected = parseAbilityDimensions(abilityDimension).map((abilityName) => ({
+      abilityId: configOptions.find((option) => option.type === "abilityDimension" && option.label === abilityName)?.id
+        ?? `legacy:${encodeURIComponent(abilityName)}`,
+      abilityName
+    }));
+    setAbilityAllocations((current) => {
+      if (abilityAllocationMode === "manual" && selected.length === current.length
+        && selected.every((ability) => current.some((item) => item.abilityName === ability.abilityName))) {
+        return selected.map((ability) => ({
+          ...ability,
+          percentage: current.find((item) => item.abilityName === ability.abilityName)?.percentage ?? 0
+        }));
+      }
+      return buildEqualAbilityAllocations(selected);
+    });
+    setAbilityAllocationError(null);
+  }, [abilityDimension, configOptions, abilityAllocationMode]);
+
+  useEffect(() => {
     if (!businessCategory || !workType || coefficientTouched) return;
 
     let isMounted = true;
@@ -441,6 +468,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
   function currentDraft(): RecordDraft {
     return {
       version: 2, date, title, businessCategory, workType, abilityDimension,
+      abilityAllocationMode, abilityAllocations,
       projectName: projects.find((project) => project.id === selectedProjectId)?.name ?? "",
       projectId: selectedProjectId, projectRelation, productSystem,
       subtask, quantity, coefficient, workload, timeHours, tags, content
@@ -463,6 +491,9 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
       setBusinessCategory("");
       setWorkType("");
       setAbilityDimension("");
+      setAbilityAllocationMode("equal");
+      setAbilityAllocations([]);
+      setAbilityAllocationError(null);
       setSelectedProjectId("");
       setProjectRelation("unassigned");
       setProjectError(null);
@@ -534,6 +565,11 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
     };
 
     if (!normalizedValues.businessCategory || !normalizedValues.workType) return;
+    const allocationError = validateAbilityAllocations(abilityAllocations);
+    if (allocationError) {
+      setAbilityAllocationError(allocationError);
+      return;
+    }
     if (projectRelation === "unassigned" || (projectRelation === "project" && !selectedProjectId)) {
       setProjectError(projectRelation === "project"
         ? "项目事项：必须选择一个项目"
@@ -556,6 +592,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
       businessCategory: normalizedValues.businessCategory,
       workType: normalizedValues.workType,
       abilityDimension: normalizedValues.abilityDimension,
+      abilityAllocations,
       projectId: projectRelation === "project" ? selectedProjectId : null,
       projectRelation,
       productSystem: normalizedValues.productSystem,
@@ -655,6 +692,48 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
             onValueChange={setAbilityDimension}
           />
         </div>
+        {abilityAllocations.length > 1 && (
+          <div className="ability-allocation-editor">
+            <div className="ability-allocation-heading">
+              <span>能力投入分配</span>
+              <div className="mode-switch" role="group" aria-label="能力投入分配方式">
+                <button
+                  className={abilityAllocationMode === "equal" ? "active" : ""}
+                  onClick={() => setAbilityAllocationMode("equal")}
+                  type="button"
+                >平均分配</button>
+                <button
+                  className={abilityAllocationMode === "manual" ? "active" : ""}
+                  onClick={() => setAbilityAllocationMode("manual")}
+                  type="button"
+                >手动分配</button>
+              </div>
+            </div>
+            <div className="ability-allocation-grid">
+              {abilityAllocations.map((allocation) => (
+                <label key={allocation.abilityId}>
+                  <span>{allocation.abilityName}</span>
+                  <div><input
+                    disabled={abilityAllocationMode === "equal"}
+                    min="0.01"
+                    max="100"
+                    step="0.01"
+                    type="number"
+                    value={allocation.percentage}
+                    onChange={(event) => {
+                      const percentage = Number(event.target.value);
+                      setAbilityAllocations((current) => current.map((item) => item.abilityId === allocation.abilityId
+                        ? { ...item, percentage }
+                        : item));
+                      setAbilityAllocationError(null);
+                    }}
+                  /><span>%</span></div>
+                </label>
+              ))}
+            </div>
+            {abilityAllocationError && <p className="field-error">{abilityAllocationError}</p>}
+          </div>
+        )}
       </div>
 
       <div className="form-section">

@@ -9,12 +9,24 @@ import type {
   ConfigOptionInput,
   ConfigOptionType,
   ConfigOptionUpdateInput,
+  GrowthGoal,
+  GrowthGoalInput,
+  GrowthGoalScope,
+  GrowthGoalStatus,
+  GrowthGoalUpdateInput,
   KnowledgeAsset,
   KnowledgeAssetInput,
   KnowledgeAssetStatus,
   KnowledgeAssetUpdateInput,
   Milestone,
+  MilestoneCorrection,
+  MilestoneEvidenceItem,
   MilestoneInput,
+  MilestoneMetricSource,
+  MilestoneMetricType,
+  MilestoneProgress,
+  MilestoneStage,
+  MilestoneStageInput,
   MilestoneUpdateInput,
   Outcome,
   OutcomeAbility,
@@ -445,6 +457,75 @@ const foundationMigrations: Migration[] = [
         FROM knowledge_assets asset;
       `);
     }
+  },
+  {
+    version: 2026071403,
+    name: "add growth goals and measurable milestones",
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS growth_goals (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          scope TEXT NOT NULL CHECK(scope IN ('career', 'cultivation', 'annual', 'learning')),
+          status TEXT NOT NULL CHECK(status IN ('planned', 'active', 'paused', 'completed', 'archived')),
+          description TEXT NOT NULL DEFAULT '',
+          startDate TEXT NOT NULL DEFAULT '',
+          endDate TEXT NOT NULL DEFAULT '',
+          targetYear INTEGER DEFAULT NULL,
+          abilityId TEXT NOT NULL DEFAULT '',
+          abilityName TEXT NOT NULL DEFAULT '',
+          archiveTime INTEGER DEFAULT NULL,
+          createTime INTEGER NOT NULL,
+          updateTime INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_growth_goals_status ON growth_goals(status, updateTime);
+      `);
+
+      const milestoneColumns = new Set(database.prepare("PRAGMA table_info(milestones)").all()
+        .map((row) => String((row as { name: unknown }).name)));
+      const additions = [
+        ["goalId", "TEXT NOT NULL DEFAULT ''"],
+        ["metricType", "TEXT NOT NULL DEFAULT 'stage'"],
+        ["metricSource", "TEXT NOT NULL DEFAULT 'legacy_manual'"],
+        ["abilityId", "TEXT NOT NULL DEFAULT ''"],
+        ["abilityName", "TEXT NOT NULL DEFAULT ''"],
+        ["startDate", "TEXT NOT NULL DEFAULT ''"],
+        ["requiredOutcomeCount", "REAL NOT NULL DEFAULT 0"],
+        ["overrideValue", "REAL DEFAULT NULL"],
+        ["overrideReason", "TEXT NOT NULL DEFAULT ''"],
+        ["overrideTime", "INTEGER DEFAULT NULL"]
+      ] as const;
+      additions.forEach(([name, definition]) => {
+        if (!milestoneColumns.has(name)) database.exec(`ALTER TABLE milestones ADD COLUMN ${name} ${definition}`);
+      });
+
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS milestone_stages (
+          id TEXT PRIMARY KEY,
+          milestoneId TEXT NOT NULL,
+          label TEXT NOT NULL,
+          sortOrder INTEGER NOT NULL DEFAULT 0,
+          completed INTEGER NOT NULL DEFAULT 0,
+          completedDate TEXT NOT NULL DEFAULT '',
+          FOREIGN KEY(milestoneId) REFERENCES milestones(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS milestone_corrections (
+          id TEXT PRIMARY KEY,
+          milestoneId TEXT NOT NULL,
+          calculatedValue REAL NOT NULL,
+          overrideValue REAL NOT NULL,
+          reason TEXT NOT NULL,
+          changedTime INTEGER NOT NULL,
+          FOREIGN KEY(milestoneId) REFERENCES milestones(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_milestone_stages_order ON milestone_stages(milestoneId, sortOrder);
+        CREATE INDEX IF NOT EXISTS idx_milestone_corrections_time ON milestone_corrections(milestoneId, changedTime);
+        CREATE INDEX IF NOT EXISTS idx_milestones_goal ON milestones(goalId, enabled, sortOrder);
+      `);
+    }
   }
 ];
 
@@ -810,6 +891,16 @@ function toMilestone(row: unknown): Milestone {
     targetType: unknown;
     targetValue: unknown;
     currentValue: unknown;
+    goalId: unknown;
+    metricType: unknown;
+    metricSource: unknown;
+    abilityId: unknown;
+    abilityName: unknown;
+    startDate: unknown;
+    requiredOutcomeCount: unknown;
+    overrideValue: unknown;
+    overrideReason: unknown;
+    overrideTime: unknown;
     deadline: unknown;
     enabled: unknown;
     sortOrder: unknown;
@@ -824,12 +915,44 @@ function toMilestone(row: unknown): Milestone {
     category: String(milestone.category || ""),
     targetType: String(milestone.targetType || ""),
     targetValue: normalizeNonNegativeNumber(milestone.targetValue),
-    currentValue: normalizeNonNegativeNumber(milestone.currentValue),
+    currentValue: milestone.overrideValue == null
+      ? normalizeNonNegativeNumber(milestone.currentValue)
+      : normalizeNonNegativeNumber(milestone.overrideValue),
+    goalId: String(milestone.goalId || ""),
+    metricType: normalizeMilestoneMetricType(milestone.metricType),
+    metricSource: normalizeMilestoneMetricSource(milestone.metricSource),
+    abilityId: String(milestone.abilityId || ""),
+    abilityName: String(milestone.abilityName || ""),
+    startDate: String(milestone.startDate || ""),
+    requiredOutcomeCount: normalizeNonNegativeNumber(milestone.requiredOutcomeCount),
+    overrideValue: milestone.overrideValue == null ? null : normalizeNonNegativeNumber(milestone.overrideValue),
+    overrideReason: String(milestone.overrideReason || ""),
+    overrideTime: milestone.overrideTime == null ? null : Number(milestone.overrideTime),
+    stages: listMilestoneStages(String(milestone.id)),
     deadline: String(milestone.deadline || ""),
     enabled: Boolean(milestone.enabled),
     sortOrder: Number(milestone.sortOrder || 0),
     createTime: Number(milestone.createTime),
     updateTime: Number(milestone.updateTime)
+  };
+}
+
+function toGrowthGoal(row: unknown): GrowthGoal {
+  const goal = row as Record<string, unknown>;
+  return {
+    id: String(goal.id),
+    title: String(goal.title || ""),
+    scope: normalizeGrowthGoalScope(goal.scope),
+    status: normalizeGrowthGoalStatus(goal.status),
+    description: String(goal.description || ""),
+    startDate: String(goal.startDate || ""),
+    endDate: String(goal.endDate || ""),
+    targetYear: goal.targetYear == null ? null : Number(goal.targetYear),
+    abilityId: String(goal.abilityId || ""),
+    abilityName: String(goal.abilityName || ""),
+    archiveTime: goal.archiveTime == null ? null : Number(goal.archiveTime),
+    createTime: Number(goal.createTime),
+    updateTime: Number(goal.updateTime)
   };
 }
 
@@ -1691,6 +1814,121 @@ export function updateAppSettings(input: AppSettingsInput): AppSettings {
   return getAppSettings();
 }
 
+const growthGoalScopes = new Set<GrowthGoalScope>(["career", "cultivation", "annual", "learning"]);
+const growthGoalStatuses = new Set<GrowthGoalStatus>(["planned", "active", "paused", "completed", "archived"]);
+const milestoneMetricTypes = new Set<MilestoneMetricType>(["quantity", "input", "stage", "continuous"]);
+const milestoneMetricSources = new Set<MilestoneMetricSource>([
+  "outcome_count", "problem_count", "project_count", "time_hours", "workload", "active_months", "manual_stage", "legacy_manual"
+]);
+
+function normalizeGrowthGoalScope(value: unknown): GrowthGoalScope {
+  const scope = String(value || "career") as GrowthGoalScope;
+  return growthGoalScopes.has(scope) ? scope : "career";
+}
+
+function normalizeGrowthGoalStatus(value: unknown): GrowthGoalStatus {
+  const status = String(value || "planned") as GrowthGoalStatus;
+  return growthGoalStatuses.has(status) ? status : "planned";
+}
+
+function normalizeMilestoneMetricType(value: unknown): MilestoneMetricType {
+  const type = String(value || "stage") as MilestoneMetricType;
+  return milestoneMetricTypes.has(type) ? type : "stage";
+}
+
+function normalizeMilestoneMetricSource(value: unknown): MilestoneMetricSource {
+  const source = String(value || "legacy_manual") as MilestoneMetricSource;
+  return milestoneMetricSources.has(source) ? source : "legacy_manual";
+}
+
+function normalizeGoalDate(value: unknown): string {
+  const date = normalizeText(value);
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("GROWTH_GOAL_INVALID_DATE");
+  return date;
+}
+
+export function listGrowthGoals(options: { includeArchived?: boolean } = {}): GrowthGoal[] {
+  const rows = options.includeArchived
+    ? db.prepare("SELECT * FROM growth_goals ORDER BY status = 'active' DESC, updateTime DESC").all()
+    : db.prepare("SELECT * FROM growth_goals WHERE status <> 'archived' ORDER BY status = 'active' DESC, updateTime DESC").all();
+  return rows.map(toGrowthGoal);
+}
+
+export function getGrowthGoal(id: string): GrowthGoal | null {
+  const row = db.prepare("SELECT * FROM growth_goals WHERE id = ?").get(id);
+  return row ? toGrowthGoal(row) : null;
+}
+
+export function insertGrowthGoal(input: GrowthGoalInput): GrowthGoal {
+  const title = normalizeText(input.title);
+  if (!title) throw new Error("GROWTH_GOAL_INVALID");
+  const startDate = normalizeGoalDate(input.startDate);
+  const endDate = normalizeGoalDate(input.endDate);
+  if (startDate && endDate && endDate < startDate) throw new Error("GROWTH_GOAL_INVALID_DATE");
+  const now = Date.now();
+  const id = createId();
+  const status = normalizeGrowthGoalStatus(input.status);
+  db.prepare(`INSERT INTO growth_goals
+    (id, title, scope, status, description, startDate, endDate, targetYear, abilityId, abilityName, archiveTime, createTime, updateTime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, title, normalizeGrowthGoalScope(input.scope), status, normalizeText(input.description), startDate, endDate,
+      input.targetYear == null ? null : Number(input.targetYear), normalizeText(input.abilityId), normalizeText(input.abilityName),
+      status === "archived" ? now : null, now, now);
+  return getGrowthGoal(id) as GrowthGoal;
+}
+
+export function updateGrowthGoal(id: string, input: GrowthGoalUpdateInput): GrowthGoal | null {
+  const existing = getGrowthGoal(id);
+  if (!existing) return null;
+  const title = input.title === undefined ? existing.title : normalizeText(input.title);
+  if (!title) throw new Error("GROWTH_GOAL_INVALID");
+  const startDate = input.startDate === undefined ? existing.startDate : normalizeGoalDate(input.startDate);
+  const endDate = input.endDate === undefined ? existing.endDate : normalizeGoalDate(input.endDate);
+  if (startDate && endDate && endDate < startDate) throw new Error("GROWTH_GOAL_INVALID_DATE");
+  const status = input.status === undefined ? existing.status : normalizeGrowthGoalStatus(input.status);
+  const now = Date.now();
+  db.prepare(`UPDATE growth_goals SET title = ?, scope = ?, status = ?, description = ?, startDate = ?, endDate = ?,
+    targetYear = ?, abilityId = ?, abilityName = ?, archiveTime = ?, updateTime = ? WHERE id = ?`)
+    .run(title, input.scope === undefined ? existing.scope : normalizeGrowthGoalScope(input.scope), status,
+      input.description === undefined ? existing.description : normalizeText(input.description), startDate, endDate,
+      input.targetYear === undefined ? existing.targetYear : input.targetYear,
+      input.abilityId === undefined ? existing.abilityId : normalizeText(input.abilityId),
+      input.abilityName === undefined ? existing.abilityName : normalizeText(input.abilityName),
+      status === "archived" ? existing.archiveTime ?? now : null, now, id);
+  return getGrowthGoal(id);
+}
+
+export function listMilestoneStages(milestoneId: string): MilestoneStage[] {
+  return db.prepare("SELECT * FROM milestone_stages WHERE milestoneId = ? ORDER BY sortOrder, rowid").all(milestoneId).map((row) => {
+    const stage = row as Record<string, unknown>;
+    return {
+      id: String(stage.id), label: String(stage.label || ""), sortOrder: Number(stage.sortOrder || 0),
+      completed: Boolean(stage.completed), completedDate: String(stage.completedDate || "")
+    };
+  });
+}
+
+function replaceMilestoneStages(milestoneId: string, stages: MilestoneStageInput[]): void {
+  db.prepare("DELETE FROM milestone_stages WHERE milestoneId = ?").run(milestoneId);
+  const insert = db.prepare("INSERT INTO milestone_stages (id, milestoneId, label, sortOrder, completed, completedDate) VALUES (?, ?, ?, ?, ?, ?)");
+  stages.forEach((stage, index) => {
+    const label = normalizeText(stage.label);
+    if (!label) throw new Error("MILESTONE_STAGE_INVALID");
+    insert.run(stage.id || createId(), milestoneId, label, stage.sortOrder ?? (index + 1) * 10, stage.completed ? 1 : 0,
+      stage.completed ? normalizeGoalDate(stage.completedDate) : "");
+  });
+}
+
+export function listMilestoneCorrections(milestoneId: string): MilestoneCorrection[] {
+  return db.prepare("SELECT * FROM milestone_corrections WHERE milestoneId = ? ORDER BY changedTime DESC").all(milestoneId).map((row) => {
+    const correction = row as Record<string, unknown>;
+    return {
+      id: String(correction.id), calculatedValue: Number(correction.calculatedValue), overrideValue: Number(correction.overrideValue),
+      reason: String(correction.reason), changedTime: Number(correction.changedTime)
+    };
+  });
+}
+
 function getNextMilestoneSortOrder(): number {
   const result = db.prepare("SELECT MAX(sortOrder) AS maxSortOrder FROM milestones").get() as {
     maxSortOrder: number | null;
@@ -1717,6 +1955,12 @@ export function insertMilestone(input: MilestoneInput): Milestone {
 
   const now = Date.now();
   const id = createId();
+  if (input.goalId && !getGrowthGoal(input.goalId)) throw new Error("MILESTONE_GOAL_INVALID");
+  const metricType = normalizeMilestoneMetricType(input.metricType);
+  const metricSource = normalizeMilestoneMetricSource(input.metricSource ?? (metricType === "stage" ? "manual_stage" : "outcome_count"));
+  const startDate = normalizeGoalDate(input.startDate);
+  const deadline = normalizeGoalDate(input.deadline);
+  if (startDate && deadline && deadline < startDate) throw new Error("MILESTONE_INVALID_DATE");
 
   db.prepare(
     `INSERT INTO milestones (
@@ -1727,13 +1971,20 @@ export function insertMilestone(input: MilestoneInput): Milestone {
        targetType,
        targetValue,
        currentValue,
+       goalId,
+       metricType,
+       metricSource,
+       abilityId,
+       abilityName,
+       startDate,
+       requiredOutcomeCount,
        deadline,
        enabled,
        sortOrder,
        createTime,
        updateTime
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     name,
@@ -1742,12 +1993,21 @@ export function insertMilestone(input: MilestoneInput): Milestone {
     normalizeText(input.targetType) || "工作当量",
     normalizeNonNegativeNumber(input.targetValue),
     normalizeNonNegativeNumber(input.currentValue),
-    normalizeText(input.deadline),
+    normalizeText(input.goalId),
+    metricType,
+    metricSource,
+    normalizeText(input.abilityId),
+    normalizeText(input.abilityName),
+    startDate,
+    normalizeNonNegativeNumber(input.requiredOutcomeCount),
+    deadline,
     input.enabled === false ? 0 : 1,
     input.sortOrder ?? getNextMilestoneSortOrder(),
     now,
     now
   );
+
+  if (input.stages) replaceMilestoneStages(id, input.stages);
 
   return getMilestone(id) as Milestone;
 }
@@ -1758,6 +2018,10 @@ export function updateMilestone(id: string, input: MilestoneUpdateInput): Milest
 
   const name = input.name === undefined ? existing.name : normalizeText(input.name);
   if (!name) throw new Error("MILESTONE_INVALID");
+  if (input.goalId && !getGrowthGoal(input.goalId)) throw new Error("MILESTONE_GOAL_INVALID");
+  const startDate = input.startDate === undefined ? existing.startDate : normalizeGoalDate(input.startDate);
+  const deadline = input.deadline === undefined ? existing.deadline : normalizeGoalDate(input.deadline);
+  if (startDate && deadline && deadline < startDate) throw new Error("MILESTONE_INVALID_DATE");
 
   db.prepare(
     `UPDATE milestones
@@ -1767,6 +2031,13 @@ export function updateMilestone(id: string, input: MilestoneUpdateInput): Milest
          targetType = ?,
          targetValue = ?,
          currentValue = ?,
+         goalId = ?,
+         metricType = ?,
+         metricSource = ?,
+         abilityId = ?,
+         abilityName = ?,
+         startDate = ?,
+         requiredOutcomeCount = ?,
          deadline = ?,
          enabled = ?,
          sortOrder = ?,
@@ -1779,14 +2050,153 @@ export function updateMilestone(id: string, input: MilestoneUpdateInput): Milest
     input.targetType === undefined ? existing.targetType : normalizeText(input.targetType),
     input.targetValue === undefined ? existing.targetValue : normalizeNonNegativeNumber(input.targetValue),
     input.currentValue === undefined ? existing.currentValue : normalizeNonNegativeNumber(input.currentValue),
-    input.deadline === undefined ? existing.deadline : normalizeText(input.deadline),
+    input.goalId === undefined ? existing.goalId : normalizeText(input.goalId),
+    input.metricType === undefined ? existing.metricType : normalizeMilestoneMetricType(input.metricType),
+    input.metricSource === undefined ? existing.metricSource : normalizeMilestoneMetricSource(input.metricSource),
+    input.abilityId === undefined ? existing.abilityId : normalizeText(input.abilityId),
+    input.abilityName === undefined ? existing.abilityName : normalizeText(input.abilityName),
+    startDate,
+    input.requiredOutcomeCount === undefined ? existing.requiredOutcomeCount : normalizeNonNegativeNumber(input.requiredOutcomeCount),
+    deadline,
     (input.enabled ?? existing.enabled) ? 1 : 0,
     input.sortOrder ?? existing.sortOrder,
     Date.now(),
     id
   );
 
+  if (input.stages) replaceMilestoneStages(id, input.stages);
+
   return getMilestone(id);
+}
+
+function milestoneDateInRange(date: string, milestone: Pick<Milestone, "startDate" | "deadline">): boolean {
+  if (!date) return false;
+  return (!milestone.startDate || date >= milestone.startDate) && (!milestone.deadline || date <= milestone.deadline);
+}
+
+function recordMatchesMilestoneAbility(record: WorkRecord, milestone: Milestone): boolean {
+  if (!milestone.abilityId && !milestone.abilityName) return true;
+  return record.abilityAllocations.some((allocation) =>
+    (milestone.abilityId && allocation.abilityId === milestone.abilityId)
+    || (milestone.abilityName && allocation.abilityName === milestone.abilityName));
+}
+
+function allocatedRecordMetric(record: WorkRecord, milestone: Milestone, metric: "timeHours" | "workload"): number {
+  const raw = record[metric] ?? 0;
+  if (!milestone.abilityId && !milestone.abilityName) return raw;
+  const allocation = record.abilityAllocations.find((item) =>
+    (milestone.abilityId && item.abilityId === milestone.abilityId)
+    || (milestone.abilityName && item.abilityName === milestone.abilityName));
+  return allocation ? raw * allocation.percentage / 100 : 0;
+}
+
+export function getMilestoneProgress(id: string): MilestoneProgress | null {
+  const milestone = getMilestone(id);
+  if (!milestone) return null;
+  const records = listRecords().filter((record) => milestoneDateInRange(record.date, milestone) && recordMatchesMilestoneAbility(record, milestone));
+  const outcomes = listOutcomes().filter((outcome) => {
+    const date = outcome.completedDate || outcome.updateDate || outcome.startDate || new Date(outcome.createTime).toISOString().slice(0, 10);
+    const abilityMatches = !milestone.abilityId && !milestone.abilityName
+      ? true
+      : outcome.abilities.some((ability) => ability.abilityId === milestone.abilityId || ability.abilityName === milestone.abilityName)
+        || outcome.records.some((record) => recordMatchesMilestoneAbility(record, milestone));
+    return milestoneDateInRange(date, milestone) && abilityMatches && ["stage_result", "completed"].includes(outcome.status);
+  });
+  let calculatedValue = milestone.currentValue;
+  let targetValue = milestone.targetValue;
+  let evidence: MilestoneEvidenceItem[] = [];
+
+  if (milestone.metricSource === "time_hours" || milestone.metricSource === "workload") {
+    const metric = milestone.metricSource === "time_hours" ? "timeHours" : "workload";
+    calculatedValue = records.reduce((sum, record) => sum + allocatedRecordMetric(record, milestone, metric), 0);
+    evidence = records.map((record) => ({
+      kind: "record", id: record.id, title: record.title, date: record.date,
+      detail: `${Number(allocatedRecordMetric(record, milestone, metric).toFixed(2))} ${metric === "timeHours" ? "h" : record.workloadUnit || "workload"}`
+    }));
+  } else if (milestone.metricSource === "outcome_count" || milestone.metricSource === "problem_count") {
+    const matched = milestone.metricSource === "problem_count" ? outcomes.filter((outcome) => outcome.type === "problem_resolution") : outcomes;
+    calculatedValue = matched.length;
+    evidence = matched.map((outcome) => ({
+      kind: "outcome", id: outcome.id, title: outcome.title,
+      date: outcome.completedDate || outcome.updateDate || outcome.startDate,
+      detail: outcome.type
+    }));
+  } else if (milestone.metricSource === "project_count") {
+    const projectIds = Array.from(new Set(records.map((record) => record.projectId).filter((value): value is string => Boolean(value))));
+    calculatedValue = projectIds.length;
+    evidence = projectIds.map((projectId) => {
+      const project = getProject(projectId);
+      return { kind: "project", id: projectId, title: project?.name || "Project", date: project?.startDate || "", detail: "Related work records" };
+    });
+  } else if (milestone.metricSource === "active_months") {
+    const months = Array.from(new Set(records.map((record) => record.date.slice(0, 7))));
+    calculatedValue = months.length;
+    evidence = months.map((month) => ({ kind: "record", id: month, title: `${month} active`, date: `${month}-01`, detail: "Monthly continuity evidence" }));
+  } else if (milestone.metricSource === "manual_stage") {
+    targetValue = milestone.stages.length || milestone.targetValue;
+    calculatedValue = milestone.stages.length
+      ? milestone.stages.filter((stage) => stage.completed).length
+      : milestone.currentValue;
+    evidence = milestone.stages.filter((stage) => stage.completed).map((stage) => ({
+      kind: "stage", id: stage.id, title: stage.label, date: stage.completedDate, detail: "Completed stage"
+    }));
+  }
+
+  calculatedValue = Number(calculatedValue.toFixed(4));
+  const effectiveValue = milestone.overrideValue ?? calculatedValue;
+  const progress = targetValue > 0 ? Number(Math.min(100, Math.max(0, effectiveValue / targetValue * 100)).toFixed(2)) : 0;
+  return {
+    milestoneId: milestone.id,
+    targetValue,
+    calculatedValue,
+    effectiveValue,
+    progress,
+    evidence,
+    outcomeRequirementMet: milestone.requiredOutcomeCount <= outcomes.length
+  };
+}
+
+export function listMilestonesWithProgress(): Array<Milestone & { progressDetail: MilestoneProgress }> {
+  return listMilestones().map((milestone) => {
+    const progress = getMilestoneProgress(milestone.id) as MilestoneProgress;
+    return { ...milestone, targetValue: progress.targetValue, currentValue: progress.effectiveValue, progressDetail: progress };
+  });
+}
+
+export function correctMilestone(id: string, value: number, reason: string): Milestone | null {
+  const milestone = getMilestone(id);
+  if (!milestone) return null;
+  const normalizedReason = normalizeText(reason);
+  if (!normalizedReason || !Number.isFinite(value) || value < 0) throw new Error("MILESTONE_CORRECTION_INVALID");
+  const calculatedValue = getMilestoneProgress(id)?.calculatedValue ?? milestone.currentValue;
+  const now = Date.now();
+  db.prepare("INSERT INTO milestone_corrections (id, milestoneId, calculatedValue, overrideValue, reason, changedTime) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(createId(), id, calculatedValue, value, normalizedReason, now);
+  db.prepare("UPDATE milestones SET overrideValue = ?, overrideReason = ?, overrideTime = ?, updateTime = ? WHERE id = ?")
+    .run(value, normalizedReason, now, now, id);
+  return getMilestone(id);
+}
+
+export function resetMilestoneCorrection(id: string, reason: string): Milestone | null {
+  const milestone = getMilestone(id);
+  if (!milestone) return null;
+  const normalizedReason = normalizeText(reason);
+  if (!normalizedReason) throw new Error("MILESTONE_CORRECTION_INVALID");
+  const calculatedValue = getMilestoneProgress(id)?.calculatedValue ?? milestone.currentValue;
+  const now = Date.now();
+  db.prepare("INSERT INTO milestone_corrections (id, milestoneId, calculatedValue, overrideValue, reason, changedTime) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(createId(), id, calculatedValue, calculatedValue, `Reset: ${normalizedReason}`, now);
+  db.prepare("UPDATE milestones SET overrideValue = NULL, overrideReason = '', overrideTime = NULL, updateTime = ? WHERE id = ?").run(now, id);
+  return getMilestone(id);
+}
+
+export function toggleMilestoneStage(milestoneId: string, stageId: string, completed: boolean, completedDate = ""): Milestone | null {
+  const stage = db.prepare("SELECT id FROM milestone_stages WHERE id = ? AND milestoneId = ?").get(stageId, milestoneId);
+  if (!stage) return null;
+  db.prepare("UPDATE milestone_stages SET completed = ?, completedDate = ? WHERE id = ?")
+    .run(completed ? 1 : 0, completed ? normalizeGoalDate(completedDate || new Date().toISOString().slice(0, 10)) : "", stageId);
+  db.prepare("UPDATE milestones SET updateTime = ? WHERE id = ?").run(Date.now(), milestoneId);
+  return getMilestone(milestoneId);
 }
 
 const outcomeTypes = new Set<OutcomeType>(["deliverable", "problem_resolution", "stage_progress", "reusable_asset"]);

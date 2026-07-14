@@ -117,6 +117,67 @@ export interface AppSettingsInput {
   abilityTargets?: Record<string, number>;
 }
 
+export type GrowthGoalScope = "career" | "cultivation" | "annual" | "learning";
+export type GrowthGoalStatus = "planned" | "active" | "paused" | "completed" | "archived";
+
+export interface GrowthGoal {
+  id: string;
+  title: string;
+  scope: GrowthGoalScope;
+  status: GrowthGoalStatus;
+  description: string;
+  startDate: string;
+  endDate: string;
+  targetYear: number | null;
+  abilityId: string;
+  abilityName: string;
+  archiveTime: number | null;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface GrowthGoalInput {
+  title: string;
+  scope?: GrowthGoalScope;
+  status?: GrowthGoalStatus;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  targetYear?: number | null;
+  abilityId?: string;
+  abilityName?: string;
+}
+
+export type GrowthGoalUpdateInput = Partial<GrowthGoalInput>;
+export type MilestoneMetricType = "quantity" | "input" | "stage" | "continuous";
+export type MilestoneMetricSource = "outcome_count" | "problem_count" | "project_count" | "time_hours" | "workload" | "active_months" | "manual_stage" | "legacy_manual";
+
+export interface MilestoneStage {
+  id: string;
+  label: string;
+  sortOrder: number;
+  completed: boolean;
+  completedDate: string;
+}
+
+export interface MilestoneEvidenceItem {
+  kind: "record" | "outcome" | "project" | "stage";
+  id: string;
+  title: string;
+  date: string;
+  detail: string;
+}
+
+export interface MilestoneProgress {
+  milestoneId: string;
+  targetValue: number;
+  calculatedValue: number;
+  effectiveValue: number;
+  progress: number;
+  evidence: MilestoneEvidenceItem[];
+  outcomeRequirementMet: boolean;
+}
+
 export interface Milestone {
   id: string;
   name: string;
@@ -125,6 +186,18 @@ export interface Milestone {
   targetType: string;
   targetValue: number;
   currentValue: number;
+  goalId: string;
+  metricType: MilestoneMetricType;
+  metricSource: MilestoneMetricSource;
+  abilityId: string;
+  abilityName: string;
+  startDate: string;
+  requiredOutcomeCount: number;
+  overrideValue: number | null;
+  overrideReason: string;
+  overrideTime: number | null;
+  stages: MilestoneStage[];
+  progressDetail?: MilestoneProgress;
   deadline: string;
   enabled: boolean;
   sortOrder: number;
@@ -139,6 +212,14 @@ export interface MilestoneInput {
   targetType?: string;
   targetValue?: number;
   currentValue?: number;
+  goalId?: string;
+  metricType?: MilestoneMetricType;
+  metricSource?: MilestoneMetricSource;
+  abilityId?: string;
+  abilityName?: string;
+  startDate?: string;
+  requiredOutcomeCount?: number;
+  stages?: Array<{ id?: string; label: string; sortOrder?: number; completed?: boolean; completedDate?: string }>;
   deadline?: string;
   enabled?: boolean;
   sortOrder?: number;
@@ -151,6 +232,14 @@ export interface MilestoneUpdateInput {
   targetType?: string;
   targetValue?: number;
   currentValue?: number;
+  goalId?: string;
+  metricType?: MilestoneMetricType;
+  metricSource?: MilestoneMetricSource;
+  abilityId?: string;
+  abilityName?: string;
+  startDate?: string;
+  requiredOutcomeCount?: number;
+  stages?: Array<{ id?: string; label: string; sortOrder?: number; completed?: boolean; completedDate?: string }>;
   deadline?: string;
   enabled?: boolean;
   sortOrder?: number;

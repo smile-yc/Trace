@@ -11,6 +11,8 @@ export interface RecordDraft {
   businessCategory: string;
   workType: string;
   abilityDimension: string;
+  abilityAllocationMode?: "equal" | "manual";
+  abilityAllocations?: Array<{ abilityId: string; abilityName: string; percentage: number }>;
   projectName: string;
   projectId: string;
   projectRelation: "project" | "non_project" | "unassigned";

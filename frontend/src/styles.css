@@ -2048,6 +2048,72 @@ textarea:focus-visible {
   font-weight: 720;
 }
 
+.ability-allocation-editor {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.ability-allocation-heading,
+.ability-allocation-heading .mode-switch,
+.ability-allocation-grid label > div {
+  display: flex;
+  align-items: center;
+}
+
+.ability-allocation-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ability-allocation-heading .mode-switch {
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+}
+
+.ability-allocation-heading .mode-switch button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.ability-allocation-heading .mode-switch button.active {
+  background: var(--paper-muted);
+  color: var(--ink);
+}
+
+.ability-allocation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px 12px;
+}
+
+.ability-allocation-grid label {
+  min-width: 0;
+}
+
+.ability-allocation-grid label > div {
+  gap: 6px;
+}
+
+.ability-allocation-grid input {
+  min-width: 0;
+  width: 100%;
+}
+
+.field-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
 .business-donut-card .business-donut-stage {
   min-height: 232px;
 }
@@ -3477,6 +3543,7 @@ textarea:focus-visible {
 .settings-field-grid input,
 .ability-target-grid input,
 .milestone-form input,
+.milestone-form select,
 .milestone-form textarea,
 .knowledge-form input,
 .knowledge-form select,
@@ -3492,6 +3559,167 @@ textarea:focus-visible {
   background: #fff;
   color: var(--ink);
   padding: 9px 10px;
+}
+
+.growth-goal-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.growth-goal-sidebar {
+  position: sticky;
+  top: 16px;
+}
+
+.growth-goal-list,
+.goal-quick-form,
+.growth-goal-main {
+  display: grid;
+  gap: 10px;
+}
+
+.growth-goal-list button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 11px 30px 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--text);
+  text-align: left;
+}
+
+.growth-goal-list button.active {
+  border-color: rgba(184, 132, 61, 0.45);
+  background: var(--brass-soft);
+}
+
+.growth-goal-list button span,
+.growth-goal-list button small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.growth-goal-list button strong {
+  grid-column: 1 / -1;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.growth-goal-list button svg {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.goal-quick-form {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.goal-quick-form > div {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 8px;
+}
+
+.goal-quick-form input,
+.goal-quick-form select,
+.milestone-correction input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.growth-focus-panel p {
+  margin: 0 0 12px;
+  color: var(--text);
+}
+
+.goal-status-actions,
+.milestone-meta,
+.milestone-correction {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.goal-status-actions button,
+.milestone-correction button,
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+
+.warning-item[type="button"] {
+  width: 100%;
+  text-align: left;
+}
+
+.milestone-meta {
+  margin-bottom: 10px;
+}
+
+.milestone-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.milestone-evidence {
+  margin: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.milestone-evidence summary {
+  padding: 8px 0;
+  cursor: pointer;
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.milestone-evidence > div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+
+.milestone-evidence small,
+.muted-copy {
+  color: var(--muted);
+}
+
+.milestone-correction {
+  margin-top: 10px;
+}
+
+.milestone-correction input:first-child {
+  flex: 0 0 100px;
+}
+
+.milestone-correction input:nth-child(2) {
+  flex: 1 1 220px;
 }
 
 .milestone-form textarea,
@@ -4117,8 +4345,13 @@ textarea:focus-visible {
   }
 
   .analysis-settings-grid,
-  .growth-layout {
+  .growth-layout,
+  .growth-goal-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .growth-goal-sidebar {
+    position: static;
   }
 
   .ability-target-grid,
