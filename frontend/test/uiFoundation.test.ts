@@ -246,6 +246,13 @@ test("closed mobile drawer renders inert as an empty attribute and removes it wh
   assert.match(sidebar, /<aside \{\.\.\.inertAttribute\}/, "open drawers must omit the inert attribute");
 });
 
+test("nested navigation exposes only the most specific current page", () => {
+  const sidebar = readSource("../src/components/Sidebar.tsx");
+
+  assert.match(sidebar, /const parentCurrent = item\.pageId === activePageId && !childActive;/);
+  assert.match(sidebar, /aria-current=\{parentCurrent \? "page" : undefined\}/);
+});
+
 test("drawer, modal and detail panel use the shared focus scope and modal aria contract", () => {
   const appShell = readSource("../src/components/layout/AppShell.tsx");
   const mobileTopBar = readSource("../src/components/layout/MobileTopBar.tsx");

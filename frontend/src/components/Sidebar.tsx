@@ -47,6 +47,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar({ 
                   const Icon = item.icon;
                   const childActive = item.children?.some((child) => child.pageId === activePageId) ?? false;
                   const active = item.pageId === activePageId || childActive;
+                  const parentCurrent = item.pageId === activePageId && !childActive;
 
                   return (
                     <div className="nav-entry" key={item.id}>
@@ -54,7 +55,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar({ 
                         className={`nav-item ${active ? "active" : ""}`}
                         type="button"
                         disabled={item.disabled}
-                        aria-current={item.pageId === activePageId ? "page" : undefined}
+                        aria-current={parentCurrent ? "page" : undefined}
                         onClick={() => item.pageId && onNavigate(item.pageId)}
                       >
                         <Icon aria-hidden="true" size={18} />
