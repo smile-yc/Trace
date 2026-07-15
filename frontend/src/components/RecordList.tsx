@@ -1,4 +1,4 @@
-import { Edit3, PackagePlus, Trash2 } from "lucide-react";
+import { CopyPlus, Edit3, PackagePlus, Trash2 } from "lucide-react";
 import type { WorkRecord } from "../types";
 import { parseAbilityDimensions } from "../lib/abilityDimensions";
 import { formatDate } from "../lib/date";
@@ -9,11 +9,12 @@ interface RecordListProps {
   records: WorkRecord[];
   emptyText: string;
   onEdit?: (record: WorkRecord) => void;
+  onCopy?: (record: WorkRecord) => void;
   onDelete?: (record: WorkRecord) => void;
   onCreateOutcome?: (record: WorkRecord) => void;
 }
 
-export function RecordList({ records, emptyText, onEdit, onDelete, onCreateOutcome }: RecordListProps) {
+export function RecordList({ records, emptyText, onEdit, onCopy, onDelete, onCreateOutcome }: RecordListProps) {
   if (!records.length) {
     return <div className="empty-state">{emptyText}</div>;
   }
@@ -27,11 +28,16 @@ export function RecordList({ records, emptyText, onEdit, onDelete, onCreateOutco
               <h3>{record.title}</h3>
               <p>{formatDate(record.date)}</p>
             </div>
-            {(onEdit || onDelete || onCreateOutcome) && (
+            {(onEdit || onCopy || onDelete || onCreateOutcome) && (
               <div className="record-actions no-print">
                 {onCreateOutcome && (
                   <button aria-label="提炼为成果" onClick={() => onCreateOutcome(record)} title="提炼为成果" type="button">
                     <PackagePlus size={16} />
+                  </button>
+                )}
+                {onCopy && (
+                  <button aria-label="复制为新记录" onClick={() => onCopy(record)} title="复制为新记录" type="button">
+                    <CopyPlus size={16} />
                   </button>
                 )}
                 {onEdit && (

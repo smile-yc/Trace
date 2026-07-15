@@ -19,7 +19,11 @@ import {
 } from "../lib/configOptionDrafts";
 import { todayKey } from "../lib/date";
 import { clearRecordDraft, loadRecordDraft, saveRecordDraft, type RecordDraft } from "../lib/recordDraft";
-import { getInitialOptionFieldValue, getPostSubmitCoefficientValue } from "../lib/recordFormState";
+import {
+  getInitialOptionFieldValue,
+  getPostSubmitCoefficientValue,
+  type RecordCopyTemplate
+} from "../lib/recordFormState";
 import { createProject, fetchProjects } from "../lib/projectApi";
 import { matchWorkloadStandard } from "../lib/workloadApi";
 import { ProjectSelectField } from "./ProjectSelectField";
@@ -39,6 +43,7 @@ import type {
 interface RecordFormProps {
   initialDate?: string;
   record?: WorkRecord;
+  template?: RecordCopyTemplate;
   compact?: boolean;
   onSubmit: (input: RecordInput) => void | Promise<void>;
   onNotify?: (message: string) => void;
@@ -304,46 +309,47 @@ function AbilityMultiSelectField({
   );
 }
 
-export function RecordForm({ initialDate, record, compact = false, onSubmit, onNotify }: RecordFormProps) {
-  const savedDraft = !record && typeof window !== "undefined" ? loadRecordDraft(window.localStorage) : null;
+export function RecordForm({ initialDate, record, template, compact = false, onSubmit, onNotify }: RecordFormProps) {
+  const formSource = record ?? template;
+  const savedDraft = !formSource && typeof window !== "undefined" ? loadRecordDraft(window.localStorage) : null;
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>([]);
   const [configError, setConfigError] = useState<string | null>(null);
   const [configPersistenceSelections, setConfigPersistenceSelections] =
     useState<ConfigOptionPersistenceSelections>({});
-  const [title, setTitle] = useState(record?.title ?? savedDraft?.title ?? "");
-  const [date, setDate] = useState(record?.date ?? savedDraft?.date ?? initialDate ?? todayKey());
+  const [title, setTitle] = useState(formSource?.title ?? savedDraft?.title ?? "");
+  const [date, setDate] = useState(formSource?.date ?? savedDraft?.date ?? initialDate ?? todayKey());
   const [businessCategory, setBusinessCategory] = useState<BusinessCategory>(
-    getInitialOptionFieldValue(record?.businessCategory ?? savedDraft?.businessCategory)
+    getInitialOptionFieldValue(formSource?.businessCategory ?? savedDraft?.businessCategory)
   );
-  const [workType, setWorkType] = useState(getInitialOptionFieldValue(record?.workType ?? savedDraft?.workType));
-  const [abilityDimension, setAbilityDimension] = useState(record?.abilityDimension ?? savedDraft?.abilityDimension ?? "");
+  const [workType, setWorkType] = useState(getInitialOptionFieldValue(formSource?.workType ?? savedDraft?.workType));
+  const [abilityDimension, setAbilityDimension] = useState(formSource?.abilityDimension ?? savedDraft?.abilityDimension ?? "");
   const [abilityAllocationMode, setAbilityAllocationMode] = useState<"equal" | "manual">(
-    savedDraft?.abilityAllocationMode ?? (record?.abilityAllocations.length && record.abilityAllocations.length > 1 ? "manual" : "equal")
+    savedDraft?.abilityAllocationMode ?? (formSource?.abilityAllocations?.length && formSource.abilityAllocations.length > 1 ? "manual" : "equal")
   );
   const [abilityAllocations, setAbilityAllocations] = useState<AbilityAllocationDraft[]>(
-    (record?.abilityAllocations ?? savedDraft?.abilityAllocations ?? []).map(({ abilityId, abilityName, percentage }) => ({ abilityId, abilityName, percentage }))
+    (formSource?.abilityAllocations ?? savedDraft?.abilityAllocations ?? []).map(({ abilityId, abilityName, percentage }) => ({ abilityId, abilityName, percentage }))
   );
   const [abilityAllocationError, setAbilityAllocationError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState(record?.projectId ?? savedDraft?.projectId ?? "");
+  const [selectedProjectId, setSelectedProjectId] = useState(formSource?.projectId ?? savedDraft?.projectId ?? "");
   const [projectRelation, setProjectRelation] = useState<ProjectRelation>(
-    record?.projectRelation ?? savedDraft?.projectRelation ?? "unassigned"
+    formSource?.projectRelation ?? savedDraft?.projectRelation ?? "unassigned"
   );
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
-  const [productSystem, setProductSystem] = useState(record?.productSystem ?? savedDraft?.productSystem ?? "");
-  const [subtask, setSubtask] = useState(record?.subtask ?? savedDraft?.subtask ?? "");
-  const [quantity, setQuantity] = useState(record ? formatOptionalNumber(record.quantity) : savedDraft?.quantity ?? "");
-  const [coefficient, setCoefficient] = useState(record ? formatOptionalNumber(record.coefficient) : savedDraft?.coefficient ?? "");
+  const [productSystem, setProductSystem] = useState(formSource?.productSystem ?? savedDraft?.productSystem ?? "");
+  const [subtask, setSubtask] = useState(formSource?.subtask ?? savedDraft?.subtask ?? "");
+  const [quantity, setQuantity] = useState(formSource ? formatOptionalNumber(formSource.quantity) : savedDraft?.quantity ?? "");
+  const [coefficient, setCoefficient] = useState(formSource ? formatOptionalNumber(formSource.coefficient) : savedDraft?.coefficient ?? "");
   const [coefficientTouched, setCoefficientTouched] = useState(Boolean(record?.coefficient));
-  const [workload, setWorkload] = useState(record ? formatOptionalNumber(record.workload) : savedDraft?.workload ?? "");
-  const [timeHours, setTimeHours] = useState(record ? formatOptionalNumber(record.timeHours) : savedDraft?.timeHours ?? "");
+  const [workload, setWorkload] = useState(formSource ? formatOptionalNumber(formSource.workload) : savedDraft?.workload ?? "");
+  const [timeHours, setTimeHours] = useState(formSource ? formatOptionalNumber(formSource.timeHours) : savedDraft?.timeHours ?? "");
   const [matchedStandard, setMatchedStandard] = useState<WorkloadStandard | null>(null);
-  const [tags, setTags] = useState(record?.tags ?? savedDraft?.tags ?? "");
-  const [content, setContent] = useState(record?.content ?? savedDraft?.content ?? "");
+  const [tags, setTags] = useState(formSource?.tags ?? savedDraft?.tags ?? "");
+  const [content, setContent] = useState(formSource?.content ?? savedDraft?.content ?? "");
 
   useEffect(() => {
-    if (!record && savedDraft) onNotify?.("已恢复日报草稿");
+    if (!formSource && savedDraft) onNotify?.("已恢复日报草稿");
   }, []);
 
   useEffect(() => {
@@ -580,7 +586,7 @@ export function RecordForm({ initialDate, record, compact = false, onSubmit, onN
     const category = deriveLegacyCategory(
       normalizedValues.businessCategory,
       normalizedValues.workType,
-      record?.category
+      formSource?.category
     );
 
     await onSubmit({

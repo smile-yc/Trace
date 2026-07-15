@@ -87,7 +87,7 @@ test("record draft can be cleared", () => {
 test("new record form exposes manual draft actions and clears after submit", () => {
   assert.equal(formSource.includes("保存草稿"), true);
   assert.equal(formSource.includes("清除草稿"), true);
-  assert.match(formSource, /savedDraft = !record[\s\S]*loadRecordDraft/);
+  assert.match(formSource, /savedDraft = !formSource[\s\S]*loadRecordDraft/);
   assert.match(formSource, /await onSubmit\([\s\S]*clearRecordDraft/);
   assert.match(formSource, /projectId: projectRelation === "project" \? selectedProjectId : null/);
   assert.match(formSource, /projectRelation/);
