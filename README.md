@@ -72,8 +72,13 @@ pnpm run dev        # 同时启动前端和后端开发服务
 pnpm run test       # 运行后端和前端的 node:test 测试
 pnpm run typecheck  # TypeScript 类型检查
 pnpm run build      # 构建后端 dist 和前端 dist
+pnpm run verify:runtime # 使用临时数据库验证启动时间和核心接口响应
 pnpm run start      # 启动已构建的后端服务
 ```
+
+`verify:runtime` 会启动一个独立后端并写入临时测试数据，不会读取或修改正式数据库。默认验证 250 条日报下的启动耗时，以及记录、项目、成果和设置接口的 P50/P95；可通过 `TRACE_STARTUP_BUDGET_MS`、`TRACE_API_P95_BUDGET_MS`、`TRACE_RUNTIME_RECORDS` 和 `TRACE_RUNTIME_SAMPLES` 调整验证规模与预算。
+
+如果后端端口已被占用，Trace 会直接说明占用端口并退出，不再输出难以判断的未处理异常堆栈。前端端口被占用时，Vite 仍会自动选择下一个可用端口，并以终端实际显示的地址为准。
 
 ## 核心功能
 

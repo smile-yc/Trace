@@ -1131,6 +1131,15 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ message: "Server error." });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Trace report backend listening on http://localhost:${port}`);
+});
+
+server.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`[Trace] 后端端口 ${port} 已被占用。请复用现有 Trace 后端，或停止占用该端口的进程后重试。`);
+  } else {
+    console.error(`[Trace] 后端启动失败：${error.message}`);
+  }
+  process.exit(1);
 });
