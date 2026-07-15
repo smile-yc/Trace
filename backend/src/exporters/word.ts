@@ -1,4 +1,5 @@
 import { analyzeExport, sortRecordsForExport, type ExportSummaryItem } from "./analysis.js";
+import { buildAnnualOutputPackage } from "./annualOutput.js";
 import { formatDate } from "../report.js";
 import type { ExportPayload } from "../types.js";
 
@@ -109,15 +110,26 @@ export async function buildWord(payload: ExportPayload): Promise<Buffer> {
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
       spacing: { before: 300, after: 100 },
-      children: [new TextRun({ text: "三、成果与成长", bold: true })]
+      children: [new TextRun({ text: payload.scope?.periodType === "year" ? "三、年度成果包" : "三、成果与成长", bold: true })]
     })
   );
 
   const milestones = payload.milestones ?? [];
   const outcomes = payload.outcomes ?? [];
   const doneMilestones = milestones.filter((milestone) => milestone.enabled && milestone.targetValue > 0 && milestone.currentValue >= milestone.targetValue);
-  children.push(new Paragraph({ children: [new TextRun(`里程碑：${milestones.length} 项，其中已完成 ${doneMilestones.length} 项。`)] }));
-  if (milestones.length) {
+  const annualPackage = payload.scope?.periodType === "year" ? buildAnnualOutputPackage(payload.records, outcomes, payload.workloadAdjustmentPercent ?? 100) : null;
+  if (annualPackage) {
+    const metrics = annualPackage.metrics;
+    children.push(new Paragraph({ children: [new TextRun(`年度事实：${metrics.recordCount} 条记录，${metrics.rawWorkload} 原始当量，${metrics.timeHours} 小时，涉及 ${metrics.projectCount} 个项目。`)] }));
+    children.push(new Paragraph({ children: [new TextRun(`成果证据：${metrics.reportableOutcomeCount} 项可汇报成果，${metrics.linkedRecordCount} 条本年度关联日报提供 ${metrics.linkedWorkload} 当量、${metrics.linkedTimeHours} 小时的直接投入证据。`)] }));
+    children.push(new Paragraph({ children: [new TextRun(`成果结构：正式交付 ${annualPackage.outcomeCounts.deliverable} 项，重要问题解决 ${annualPackage.outcomeCounts.problemResolution} 项，阶段性进展 ${annualPackage.outcomeCounts.stageProgress} 项，可复用资产 ${annualPackage.outcomeCounts.reusableAsset} 项。`)] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: "项目贡献材料", bold: true })] }));
+    annualPackage.projects.slice(0, 8).forEach((project, index) => children.push(new Paragraph({ spacing: { after: 60 }, children: [new TextRun(`${index + 1}. ${project.name}：${project.workload} 当量，${project.timeHours} 小时，${project.recordCount} 条记录，${project.outcomeCount} 项成果。`)] })));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: "代表性成果", bold: true })] }));
+    annualPackage.reportableOutcomes.slice(0, 12).forEach((outcome, index) => children.push(new Paragraph({ spacing: { after: 60 }, children: [new TextRun(`${index + 1}. ${outcome.title}：${outcome.reportSummary || outcome.completedWork || "待补充汇报表述"}`)] })));
+    annualPackage.reminders.forEach((message) => children.push(new Paragraph({ children: [new TextRun({ text: `材料待补充：${message}`, color: "8A5A20" })] })));
+  } else {
+    children.push(new Paragraph({ children: [new TextRun(`里程碑：${milestones.length} 项，其中已完成 ${doneMilestones.length} 项。`)] }));
     milestones.slice(0, 6).forEach((milestone, index) => {
       const progress = milestone.targetValue > 0 ? Math.min(100, (milestone.currentValue / milestone.targetValue) * 100) : 0;
       children.push(
@@ -131,10 +143,7 @@ export async function buildWord(payload: ExportPayload): Promise<Buffer> {
         })
       );
     });
-  }
-
-  children.push(new Paragraph({ children: [new TextRun(`成果：${outcomes.length} 项。`)] }));
-  if (outcomes.length) {
+    children.push(new Paragraph({ children: [new TextRun(`成果：${outcomes.length} 项。`)] }));
     outcomes.slice(0, 10).forEach((outcome, index) => {
       children.push(
         new Paragraph({

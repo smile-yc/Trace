@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { analyzeExport } from "../src/exporters/analysis.ts";
+import { buildAnnualOutputPackage } from "../src/exporters/annualOutput.ts";
 import type { WorkRecord } from "../src/types.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,4 +87,45 @@ test("Excel exports ability allocation metrics without a duplicated quantity col
   assert.match(excel, /分配后当量/);
   assert.match(excel, /分配后时间/);
   assert.match(excel, /投入占比/);
+});
+
+test("annual export package deduplicates shared source records and keeps gaps factual", () => {
+  const records = [
+    { id: "r1", projectName: "Alpha", workload: 8, timeHours: 6 },
+    { id: "r2", projectName: "Alpha", workload: 2, timeHours: 4 },
+    { id: "r3", projectName: "Beta", workload: 5, timeHours: 3 }
+  ] as WorkRecord[];
+  const outcomes = [
+    {
+      id: "o1", type: "deliverable", status: "completed", title: "交付成果", projectName: "Alpha",
+      completedDate: "2026-06-30", recordIds: ["r1", "outside"], reportSummary: "完成交付",
+      valueImpact: "支撑验收", contribution: "负责方案与实施"
+    },
+    {
+      id: "o2", type: "problem_resolution", status: "stage_result", title: "问题解决", projectName: "Alpha",
+      updateDate: "2026-08-01", recordIds: ["r1", "r2"], reportSummary: "",
+      valueImpact: "", contribution: ""
+    }
+  ] as Parameters<typeof buildAnnualOutputPackage>[1];
+
+  const result = buildAnnualOutputPackage(records, outcomes, 85);
+
+  assert.equal(result.metrics.linkedRecordCount, 2);
+  assert.equal(result.metrics.linkedWorkload, 10);
+  assert.equal(result.metrics.adjustedWorkload, 12.75);
+  assert.equal(result.gaps.missingReportSummaryCount, 1);
+  assert.doesNotMatch(result.reminders.join(" "), /价值低|效率低|投入不合理/);
+});
+
+test("annual Word PDF and Excel exports expose a dedicated evidence-backed outcome package", () => {
+  const excel = readExporter("excel.ts");
+  assert.match(excel, /createAnnualOutputSheet/);
+  assert.match(excel, /年度成果包/);
+  for (const file of ["word.ts", "pdf.ts"]) {
+    const source = readExporter(file);
+    assert.match(source, /buildAnnualOutputPackage/);
+    assert.match(source, /年度成果包/);
+    assert.match(source, /linkedRecordCount/);
+    assert.match(source, /reportableOutcomes/);
+  }
 });

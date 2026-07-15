@@ -7,13 +7,12 @@ import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
 import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
-import type { Milestone, Outcome, WorkRecord } from "../types";
+import type { Outcome, WorkRecord } from "../types";
 import { getYearRange, shiftYear, todayKey } from "../lib/date";
 import { buildYearMonthTrend, sumWorkload } from "../lib/dashboard";
-import { buildMonthlyReview, summarizeMilestones } from "../lib/growthReview";
+import { buildAnnualOutputPackage } from "../lib/annualOutput";
 import { fetchOutcomes } from "../lib/outcomeApi";
 import { filterOutcomesByRange } from "../lib/outcomes";
-import { fetchMilestones } from "../lib/milestoneApi";
 import { countActiveMonths, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
 import {
   filterReportDetailRecords,
@@ -30,7 +29,6 @@ interface YearlyPageProps {
 
 export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPageProps) {
   const [date, setDate] = useState(todayKey());
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const [workloadAdjustmentPercent, setWorkloadAdjustmentPercent] = useState(100);
   const range = useMemo(() => getYearRange(date), [date]);
@@ -59,9 +57,11 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
   const trend = useMemo(() => buildYearMonthTrend(yearlyRecords, range.year), [yearlyRecords, range.year]);
   const title = `${range.year}年年报`;
   const activeMonths = countActiveMonths(yearlyRecords);
-  const yearlyReview = useMemo(() => buildMonthlyReview(yearlyRecords, milestones), [yearlyRecords, milestones]);
   const yearlyOutcomes = useMemo(() => filterOutcomesByRange(outcomes, range.start, range.end), [outcomes, range.start, range.end]);
-  const milestoneSummaries = useMemo(() => summarizeMilestones(milestones), [milestones]);
+  const annualPackage = useMemo(
+    () => buildAnnualOutputPackage(yearlyRecords, yearlyOutcomes, workloadAdjustmentPercent),
+    [yearlyRecords, yearlyOutcomes, workloadAdjustmentPercent]
+  );
   const detailRange = getArchiveRange(detailMode, detailPeriod || defaultDetailPeriod);
   const detailStart = detailRange && detailRange.start > range.start ? detailRange.start : range.start;
   const detailEnd = detailRange && detailRange.end < range.end ? detailRange.end : range.end;
@@ -79,10 +79,9 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
   useEffect(() => {
     let ignore = false;
 
-    Promise.all([fetchMilestones(), fetchOutcomes()])
-      .then(([nextMilestones, nextOutcomes]) => {
+    fetchOutcomes()
+      .then((nextOutcomes) => {
         if (ignore) return;
-        setMilestones(nextMilestones);
         setOutcomes(nextOutcomes.outcomes);
       })
       .catch((error) => {
@@ -135,26 +134,48 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
 
       <OutcomePeriodSection outcomes={yearlyOutcomes} title="年度代表性成果与进展" />
 
-      <section className="panel review-panel">
+      <section className="panel annual-package-panel">
         <div className="panel-heading">
-          <h2>年报复盘增强</h2>
-          <span>{yearlyOutcomes.length} 项成果</span>
+          <h2>年度成果包</h2>
+          <span>{annualPackage.metrics.reportableOutcomeCount} 项可汇报成果</span>
         </div>
-        <div className="review-text">{yearlyReview.text}</div>
-        <div className="year-review-grid">
-          <article>
-            <strong>{milestoneSummaries.filter((milestone) => milestone.status === "done").length}</strong>
-            <span>完成里程碑</span>
-          </article>
-          <article>
-            <strong>{yearlyOutcomes.filter((outcome) => outcome.status === "completed").length}</strong>
-            <span>已完成成果</span>
-          </article>
-          <article>
-            <strong>{yearlyOutcomes.filter((outcome) => outcome.type === "problem_resolution").length}</strong>
-            <span>重要问题解决</span>
-          </article>
+        <div className="annual-package-metrics">
+          <div><strong>{annualPackage.metrics.projectCount}</strong><span>年度项目</span></div>
+          <div><strong>{annualPackage.metrics.rawWorkload}</strong><span>原始工作当量</span></div>
+          <div><strong>{annualPackage.metrics.timeHours}</strong><span>投入小时</span></div>
+          <div><strong>{annualPackage.metrics.linkedRecordCount}</strong><span>成果来源记录</span></div>
         </div>
+        <div className="annual-package-grid">
+          <div>
+            <h3>项目贡献材料</h3>
+            <div className="annual-project-list">
+              {annualPackage.projects.slice(0, 6).map((project) => (
+                <div key={project.name}>
+                  <strong>{project.name}</strong>
+                  <span>{project.workload} 当量 · {project.timeHours} 小时 · {project.outcomeCount} 项成果</span>
+                </div>
+              ))}
+              {!annualPackage.projects.length && <p className="field-hint">本年度暂无项目投入记录。</p>}
+            </div>
+          </div>
+          <div>
+            <h3>成果结构</h3>
+            <dl className="annual-outcome-breakdown">
+              <div><dt>正式交付</dt><dd>{annualPackage.outcomeCounts.deliverable}</dd></div>
+              <div><dt>重要问题解决</dt><dd>{annualPackage.outcomeCounts.problemResolution}</dd></div>
+              <div><dt>阶段性进展</dt><dd>{annualPackage.outcomeCounts.stageProgress}</dd></div>
+              <div><dt>可复用资产</dt><dd>{annualPackage.outcomeCounts.reusableAsset}</dd></div>
+            </dl>
+          </div>
+          <div>
+            <h3>材料待补充</h3>
+            <div className="annual-package-reminders">
+              {annualPackage.reminders.map((message) => <p key={message}>{message}</p>)}
+              {!annualPackage.reminders.length && <p>成果来源、价值影响、个人贡献和汇报表述已填写完整。</p>}
+            </div>
+          </div>
+        </div>
+        <p className="field-hint">成果关联投入仅统计本年度已关联日报并按记录 ID 去重；系统不自动评价成果价值。</p>
       </section>
 
       <ReportReviewWorkspace

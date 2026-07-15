@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import PDFDocument from "pdfkit";
 import { analyzeExport, sortRecordsForExport, type ExportSummaryItem } from "./analysis.js";
+import { buildAnnualOutputPackage } from "./annualOutput.js";
 import { formatDate } from "../report.js";
 import type { ExportPayload } from "../types.js";
 
@@ -141,31 +142,41 @@ export async function buildPdf(payload: ExportPayload): Promise<Buffer> {
     drawSummaryRows(doc, "项目汇总", analysis.projectSummary, width);
     drawSummaryRows(doc, "产品系统汇总", analysis.productSummary, width);
 
-    drawSectionTitle(doc, "三、成果与成长", width);
+    drawSectionTitle(doc, payload.scope?.periodType === "year" ? "三、年度成果包" : "三、成果与成长", width);
     const milestones = payload.milestones ?? [];
     const outcomes = payload.outcomes ?? [];
     const doneMilestones = milestones.filter((milestone) => milestone.enabled && milestone.targetValue > 0 && milestone.currentValue >= milestone.targetValue);
-    doc.fillColor("#4f4a43").fontSize(10).text(`里程碑：${milestones.length} 项，其中已完成 ${doneMilestones.length} 项。`, { width });
-    milestones.slice(0, 6).forEach((milestone, index) => {
-      const progress = milestone.targetValue > 0 ? Math.min(100, (milestone.currentValue / milestone.targetValue) * 100) : 0;
-      ensureSpace(doc, 28);
-      doc
-        .fillColor("#4f4a43")
-        .fontSize(9.5)
-        .text(
-          `${index + 1}. ${milestone.name}：${formatMetric(progress)}%，${formatMetric(milestone.currentValue)}/${formatMetric(milestone.targetValue)} ${milestone.targetType || ""}`,
-          { width, indent: 12 }
-        );
-    });
-    doc.moveDown(0.4);
-    doc.fillColor("#4f4a43").fontSize(10).text(`成果：${outcomes.length} 项。`, { width });
-    outcomes.slice(0, 10).forEach((outcome, index) => {
-      ensureSpace(doc, 28);
-      doc
-        .fillColor("#4f4a43")
-        .fontSize(9.5)
-        .text(`${index + 1}. ${outcome.title}：${outcome.reportSummary || outcome.completedWork || outcome.valueImpact || outcome.type}`, { width, indent: 12 });
-    });
+    const annualPackage = payload.scope?.periodType === "year" ? buildAnnualOutputPackage(payload.records, outcomes, payload.workloadAdjustmentPercent ?? 100) : null;
+    if (annualPackage) {
+      const metrics = annualPackage.metrics;
+      doc.fillColor("#4f4a43").fontSize(10).text(`年度事实：${metrics.recordCount} 条记录，${metrics.rawWorkload} 原始当量，${metrics.timeHours} 小时，涉及 ${metrics.projectCount} 个项目。`, { width });
+      doc.text(`成果证据：${metrics.reportableOutcomeCount} 项可汇报成果，${metrics.linkedRecordCount} 条本年度关联日报提供 ${metrics.linkedWorkload} 当量、${metrics.linkedTimeHours} 小时的直接投入证据。`, { width });
+      doc.text(`成果结构：正式交付 ${annualPackage.outcomeCounts.deliverable} 项，重要问题解决 ${annualPackage.outcomeCounts.problemResolution} 项，阶段性进展 ${annualPackage.outcomeCounts.stageProgress} 项，可复用资产 ${annualPackage.outcomeCounts.reusableAsset} 项。`, { width });
+      doc.moveDown(0.5).fontSize(11).text("项目贡献材料", { width });
+      annualPackage.projects.slice(0, 8).forEach((project, index) => {
+        ensureSpace(doc, 28);
+        doc.fontSize(9.5).text(`${index + 1}. ${project.name}：${project.workload} 当量，${project.timeHours} 小时，${project.recordCount} 条记录，${project.outcomeCount} 项成果。`, { width, indent: 12 });
+      });
+      doc.moveDown(0.5).fontSize(11).text("代表性成果", { width });
+      annualPackage.reportableOutcomes.slice(0, 12).forEach((outcome, index) => {
+        ensureSpace(doc, 28);
+        doc.fontSize(9.5).text(`${index + 1}. ${outcome.title}：${outcome.reportSummary || outcome.completedWork || "待补充汇报表述"}`, { width, indent: 12 });
+      });
+      annualPackage.reminders.forEach((message) => doc.fillColor("#8A5A20").fontSize(9.5).text(`材料待补充：${message}`, { width }));
+    } else {
+      doc.fillColor("#4f4a43").fontSize(10).text(`里程碑：${milestones.length} 项，其中已完成 ${doneMilestones.length} 项。`, { width });
+      milestones.slice(0, 6).forEach((milestone, index) => {
+        const progress = milestone.targetValue > 0 ? Math.min(100, (milestone.currentValue / milestone.targetValue) * 100) : 0;
+        ensureSpace(doc, 28);
+        doc.fillColor("#4f4a43").fontSize(9.5).text(`${index + 1}. ${milestone.name}：${formatMetric(progress)}%，${formatMetric(milestone.currentValue)}/${formatMetric(milestone.targetValue)} ${milestone.targetType || ""}`, { width, indent: 12 });
+      });
+      doc.moveDown(0.4);
+      doc.fillColor("#4f4a43").fontSize(10).text(`成果：${outcomes.length} 项。`, { width });
+      outcomes.slice(0, 10).forEach((outcome, index) => {
+        ensureSpace(doc, 28);
+        doc.fillColor("#4f4a43").fontSize(9.5).text(`${index + 1}. ${outcome.title}：${outcome.reportSummary || outcome.completedWork || outcome.valueImpact || outcome.type}`, { width, indent: 12 });
+      });
+    }
 
     if (payload.reportReview) {
       drawSectionTitle(doc, "四、手工复盘", width);

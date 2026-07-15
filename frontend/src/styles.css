@@ -2294,6 +2294,86 @@ textarea:focus-visible {
   align-items: end;
 }
 
+.annual-package-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+
+.annual-package-metrics > div {
+  min-width: 0;
+  padding: 13px 16px;
+  border-right: 1px solid var(--line);
+}
+
+.annual-package-metrics > div:last-child {
+  border-right: 0;
+}
+
+.annual-package-metrics strong,
+.annual-package-metrics span {
+  display: block;
+}
+
+.annual-package-metrics strong {
+  color: var(--ink);
+  font-size: 22px;
+}
+
+.annual-package-metrics span,
+.annual-project-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.annual-package-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr) minmax(260px, 1fr);
+  gap: 20px;
+}
+
+.annual-package-grid h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.annual-project-list,
+.annual-package-reminders,
+.annual-outcome-breakdown {
+  display: grid;
+  gap: 8px;
+}
+
+.annual-project-list > div,
+.annual-outcome-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.annual-outcome-breakdown {
+  margin: 0;
+}
+
+.annual-outcome-breakdown dt {
+  color: var(--muted);
+}
+
+.annual-outcome-breakdown dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 760;
+}
+
+.annual-package-reminders p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .annual-adjustment-grid > div,
 .annual-adjustment-grid label {
   display: grid;
@@ -2335,6 +2415,10 @@ textarea:focus-visible {
   }
 
   .annual-adjustment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-package-grid {
     grid-template-columns: 1fr;
   }
 }

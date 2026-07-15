@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { analyzeExport, sortRecordsForExport, type ExportSummaryItem } from "./analysis.js";
+import { buildAnnualOutputPackage } from "./annualOutput.js";
 import type { AppSettings, ConfigOption, ExportPayload, Milestone, Outcome, WorkloadStandard } from "../types.js";
 
 type Worksheet = ExcelJS.Worksheet;
@@ -168,6 +169,52 @@ function createDistributionSheet(workbook: ExcelJS.Workbook, name: string, rows:
   ];
 
   addSummaryRows(sheet, rows);
+  styleSheet(sheet);
+}
+
+function createAnnualOutputSheet(workbook: ExcelJS.Workbook, payload: ExportPayload): void {
+  if (payload.scope?.periodType !== "year") return;
+  const annualPackage = buildAnnualOutputPackage(
+    payload.records,
+    payload.outcomes ?? [],
+    payload.workloadAdjustmentPercent ?? 100
+  );
+  const sheet = workbook.addWorksheet("年度成果包", { views: [{ state: "frozen", ySplit: 1 }] });
+  sheet.columns = [
+    { header: "材料分区", key: "section", width: 18 },
+    { header: "项目", key: "item", width: 30 },
+    { header: "数值或内容", key: "value", width: 48 },
+    { header: "来源与口径", key: "source", width: 52 }
+  ];
+  const metrics = annualPackage.metrics;
+  [
+    ["年度事实", "工作记录", metrics.recordCount, "本年度导出范围内日报，按记录 ID 计数"],
+    ["年度事实", "投入时间", `${metrics.timeHours} 小时`, "本年度日报 timeHours 求和"],
+    ["年度事实", "原始工作当量", metrics.rawWorkload, "本年度日报 workload 求和"],
+    ["年度事实", "本次汇报折算当量", metrics.adjustedWorkload, `原始工作当量 × ${payload.workloadAdjustmentPercent ?? 100}%`],
+    ["成果证据", "可汇报成果", metrics.reportableOutcomeCount, "状态为阶段成果或已完成"],
+    ["成果证据", "来源记录", metrics.linkedRecordCount, "成果关联且属于本年度的日报，按记录 ID 去重"],
+    ["成果证据", "关联投入", `${metrics.linkedWorkload} 当量 / ${metrics.linkedTimeHours} 小时`, "仅汇总上述来源记录"]
+  ].forEach(([section, item, value, source]) => sheet.addRow({ section, item, value, source }));
+  annualPackage.projects.forEach((project) => sheet.addRow({
+    section: "项目贡献",
+    item: project.name,
+    value: `${project.workload} 当量 / ${project.timeHours} 小时 / ${project.outcomeCount} 项成果`,
+    source: `${project.recordCount} 条本年度日报；记录 ID 与成果 ID 可在明细表核对`
+  }));
+  annualPackage.reportableOutcomes.forEach((outcome) => sheet.addRow({
+    section: "代表性成果",
+    item: outcome.title,
+    value: outcome.reportSummary || outcome.completedWork || "待补充汇报表述",
+    source: `${(outcome.recordIds ?? []).filter((id) => payload.records.some((record) => record.id === id)).length} 条本年度关联日报`
+  }));
+  annualPackage.reminders.forEach((message) => sheet.addRow({ section: "材料待补充", item: message, value: "", source: "字段完整度检查，不代表价值评价" }));
+  sheet.addRow({
+    section: "人工总结",
+    item: "年报复盘状态",
+    value: payload.reportReview ? (payload.reportReview.status === "final" ? "已定稿" : "草稿") : "尚未填写",
+    source: "来自年报手工复盘，不由系统推断"
+  });
   styleSheet(sheet);
 }
 
@@ -406,6 +453,7 @@ export async function buildExcel(payload: ExportPayload): Promise<Buffer> {
   workbook.created = new Date();
 
   createSummarySheet(workbook, payload);
+  createAnnualOutputSheet(workbook, payload);
   createReportReviewSheet(workbook, payload);
   createRawSheet(workbook, payload);
   createDistributionSheet(workbook, "业务分类汇总", analysis.businessSummary);
