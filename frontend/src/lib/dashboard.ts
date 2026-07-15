@@ -8,12 +8,14 @@ export {
   buildDistribution,
   buildFocusRankings,
   buildProjectSummaries,
+  filterDashboardSourceRecords,
   sumTimeHours,
   sumWorkload
 } from "./analysis";
 export type {
   DashboardAnalysis,
   BusinessAbilityRelationItem,
+  DashboardSourceFilter,
   DistributionItem,
   FocusRankingItem,
   ProjectSummary,

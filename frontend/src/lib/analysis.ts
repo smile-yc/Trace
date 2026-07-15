@@ -75,6 +75,11 @@ export interface AnalysisOptions {
   focusScoreWeights?: Partial<FocusScoreWeights>;
 }
 
+export type DashboardSourceFilter =
+  | { kind: "all" | "projectRecords" }
+  | { kind: "business" | "workType" | "ability" | "project" | "product" | "trend"; value: string }
+  | { kind: "businessAbility"; business: string; ability: string };
+
 function numberValue(value: number | null | undefined): number {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
@@ -140,7 +145,23 @@ function firstTag(tags: string): string {
 }
 
 function getProjectName(record: WorkRecord): string {
+  if (record.projectRelation === "non_project") return "非项目事项";
   return record.projectName || firstTag(record.tags) || "未归属项目";
+}
+
+function isProjectRecord(record: WorkRecord): boolean {
+  if (record.projectRelation === "project") return true;
+  if (record.projectRelation === "non_project") return false;
+  return Boolean(record.projectName || firstTag(record.tags));
+}
+
+function matchesTrend(record: WorkRecord, value: string): boolean {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return record.date === value;
+  if (/^\d{4}-\d{2}$/.test(value)) return record.date.startsWith(`${value}-`);
+
+  const weekMatch = value.match(/^(\d{4}-\d{2})-W([1-5])$/);
+  if (!weekMatch || !record.date.startsWith(`${weekMatch[1]}-`)) return false;
+  return Math.ceil(Number(record.date.slice(8, 10)) / 7) === Number(weekMatch[2]);
 }
 
 function uniqueValues(values: string[]): string[] {
@@ -216,6 +237,32 @@ function resolveAbilityMetrics(record: WorkRecord): Array<{ abilityName: string;
     allocatedTimeHours: Number((timeOf(record) / fallback.length).toFixed(4)),
     allocatedWorkload: Number((workloadOf(record) / fallback.length).toFixed(4))
   }));
+}
+
+export function filterDashboardSourceRecords(
+  records: WorkRecord[],
+  filter: DashboardSourceFilter
+): WorkRecord[] {
+  const matches = (record: WorkRecord): boolean => {
+    if (filter.kind === "all") return true;
+    if (filter.kind === "projectRecords") return isProjectRecord(record);
+    if (filter.kind === "business") return (record.businessCategory || record.category || "其他") === filter.value;
+    if (filter.kind === "workType") return (record.workType || "其他项") === filter.value;
+    if (filter.kind === "ability") {
+      return resolveAbilityMetrics(record).some((allocation) => allocation.abilityName === filter.value);
+    }
+    if (filter.kind === "project") return getProjectName(record) === filter.value;
+    if (filter.kind === "product") return (record.productSystem || "未填写产品") === filter.value;
+    if (filter.kind === "trend") return matchesTrend(record, filter.value);
+    if (filter.kind === "businessAbility") {
+      return (record.businessCategory || record.category || "其他") === filter.business
+        && resolveAbilityMetrics(record).some((allocation) => allocation.abilityName === filter.ability);
+    }
+    return false;
+  };
+
+  return Array.from(new Map(records.filter(matches).map((record) => [record.id, record])).values())
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createTime - a.createTime);
 }
 
 function buildAbilityDistribution(records: WorkRecord[]): DistributionItem[] {
@@ -365,7 +412,7 @@ export function analyzeRecords(records: WorkRecord[], options?: AnalysisOptions 
     totalRecords: records.length,
     totalWorkload: sumWorkload(records),
     totalTimeHours: sumTimeHours(records),
-    projectCount: projectSummaries.length,
+    projectCount: new Set(records.filter(isProjectRecord).map(getProjectName)).size,
     businessDistribution,
     workTypeDistribution,
     abilityDistribution,

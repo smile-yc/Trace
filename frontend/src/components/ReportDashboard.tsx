@@ -5,18 +5,24 @@ import {
   Clock3,
   GitBranch,
   Layers3,
+  ListFilter,
   PieChart,
   Radar,
   Sparkles,
   Trophy,
   Workflow,
+  X,
   type LucideIcon
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import type { AppSettings, WorkRecord } from "../types";
 import {
   analyzeRecords,
+  filterDashboardSourceRecords,
+  sumTimeHours,
+  sumWorkload,
   type BusinessAbilityRelationItem,
+  type DashboardSourceFilter,
   type DistributionItem,
   type ProjectSummary,
   type TrendPoint
@@ -45,6 +51,14 @@ interface TrendTooltipState {
   x: number;
   y: number;
 }
+
+interface DashboardSourceView {
+  title: string;
+  description: string;
+  filter: DashboardSourceFilter;
+}
+
+type OpenDashboardSource = (title: string, filter: DashboardSourceFilter, description?: string) => void;
 
 function formatMetric(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -206,11 +220,13 @@ function SegmentedDonutChart({
 function CardHeading({
   icon: Icon,
   meta,
+  onSource,
   title,
   tone = "purple"
 }: {
   icon: LucideIcon;
   meta: string;
+  onSource?: () => void;
   title: string;
   tone?: "purple" | "cyan" | "green" | "orange" | "navy";
 }) {
@@ -222,12 +238,74 @@ function CardHeading({
         </span>
         <h3>{title}</h3>
       </div>
-      <span className="heading-meta">{meta}</span>
+      <div className="dashboard-heading-actions">
+        <span className="heading-meta">{meta}</span>
+        {onSource && (
+          <button className="dashboard-source-button" onClick={onSource} title="查看来源日报" type="button">
+            <ListFilter size={14} />
+            来源
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-function BusinessCategoryDonut({ items }: { items: DistributionItem[] }) {
+function DashboardSourcePanel({
+  description,
+  onClose,
+  records,
+  title
+}: {
+  description: string;
+  onClose: () => void;
+  records: WorkRecord[];
+  title: string;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const visibleRecords = showAll ? records : records.slice(0, 20);
+  const hiddenCount = records.length - visibleRecords.length;
+
+  return (
+    <section className="panel dashboard-source-panel" aria-live="polite">
+      <div className="panel-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <button className="ghost-button" onClick={onClose} type="button">
+          <X size={16} />
+          关闭
+        </button>
+      </div>
+      <div className="dashboard-source-metrics">
+        <span><strong>{records.length}</strong> 条记录</span>
+        <span><strong>{formatMetric(sumWorkload(records))}</strong> 原始当量</span>
+        <span><strong>{formatMetric(sumTimeHours(records))}</strong> 小时</span>
+      </div>
+      <div className="dashboard-source-list">
+        {visibleRecords.map((record) => (
+          <article key={record.id}>
+            <time>{formatDate(record.date)}</time>
+            <div>
+              <strong>{record.title}</strong>
+              <span>{record.projectName || "非项目事项"} · {record.businessCategory || record.category} · {record.workType || "其他项"}</span>
+            </div>
+            <small>{formatMetric(record.workload ?? 0)} 当量 · {formatMetric(record.timeHours ?? 0)}h</small>
+          </article>
+        ))}
+        {!records.length && <div className="empty-state">当前条件没有来源日报。</div>}
+      </div>
+      {hiddenCount > 0 && (
+        <button className="ghost-button dashboard-source-more" onClick={() => setShowAll(true)} type="button">
+          显示其余 {hiddenCount} 条
+        </button>
+      )}
+    </section>
+  );
+}
+
+function BusinessCategoryDonut({ items, onOpenSource }: { items: DistributionItem[]; onOpenSource: OpenDashboardSource }) {
   const visibleItems = items;
   const total = chartTotal(visibleItems);
   const topItem = visibleItems[0];
@@ -237,7 +315,13 @@ function BusinessCategoryDonut({ items }: { items: DistributionItem[] }) {
 
   return (
     <section className="dashboard-card business-donut-card">
-      <CardHeading icon={PieChart} meta={`${items.length} 类`} title="业务分类占比" tone="purple" />
+      <CardHeading
+        icon={PieChart}
+        meta={`${items.length} 类`}
+        title="业务分类占比"
+        tone="purple"
+        onSource={() => onOpenSource("业务分类全部来源", { kind: "all" })}
+      />
 
       {visibleItems.length ? (
         <div className="business-donut-layout">
@@ -253,14 +337,19 @@ function BusinessCategoryDonut({ items }: { items: DistributionItem[] }) {
 
             <div className="business-donut-legend">
               {visibleItems.map((item, index) => (
-                <span className="business-legend-pill" key={item.label}>
+                <button
+                  className="business-legend-pill"
+                  key={item.label}
+                  onClick={() => onOpenSource(`业务分类：${item.label}`, { kind: "business", value: item.label })}
+                  type="button"
+                >
                   <i style={{ backgroundColor: businessColors[index % businessColors.length] }} />
                   <span>
                     <strong>{item.label}</strong>
                     <small className="business-legend-meta">{formatMetric(metricValue(item))} 当量</small>
                   </span>
                   <em>{percentOf(metricValue(item), total)}%</em>
-                </span>
+                </button>
               ))}
             </div>
           </div>
@@ -283,7 +372,7 @@ function BusinessCategoryDonut({ items }: { items: DistributionItem[] }) {
   );
 }
 
-function AbilityRadarChart({ items }: { items: DistributionItem[] }) {
+function AbilityRadarChart({ items, onOpenSource }: { items: DistributionItem[]; onOpenSource: OpenDashboardSource }) {
   const visibleItems = items;
   const total = chartTotal(visibleItems);
   const topItem = visibleItems[0];
@@ -301,7 +390,13 @@ function AbilityRadarChart({ items }: { items: DistributionItem[] }) {
 
   return (
     <section className="dashboard-card ability-radar-card">
-      <CardHeading icon={Radar} meta={`${items.length} 类`} title="能力维度占比" tone="cyan" />
+      <CardHeading
+        icon={Radar}
+        meta={`${items.length} 类`}
+        title="能力维度占比"
+        tone="cyan"
+        onSource={() => onOpenSource("能力投入全部来源", { kind: "all" }, "能力当量和工时按每条日报保存的分配比例计算。")}
+      />
 
       {visibleItems.length ? (
         <div className="ability-radar-layout">
@@ -385,11 +480,16 @@ function AbilityRadarChart({ items }: { items: DistributionItem[] }) {
               <span>记录数</span>
             </div>
             {visibleItems.map((item, index) => (
-              <div className="ability-radar-row" key={item.label}>
+              <button
+                className="ability-radar-row"
+                key={item.label}
+                onClick={() => onOpenSource(`能力维度：${item.label}`, { kind: "ability", value: item.label }, "一条多能力日报在来源列表中只出现一次，面板汇总仍使用日报原始当量和工时。")}
+                type="button"
+              >
                 <span><i style={{ backgroundColor: abilityColors[index % abilityColors.length] }} />{item.label}</span>
                 <strong>{formatMetric(metricValue(item))}</strong>
                 <em>{item.count}</em>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -410,7 +510,7 @@ function AbilityRadarChart({ items }: { items: DistributionItem[] }) {
   );
 }
 
-function WorkTypeProfileChart({ items }: { items: DistributionItem[] }) {
+function WorkTypeProfileChart({ items, onOpenSource }: { items: DistributionItem[]; onOpenSource: OpenDashboardSource }) {
   const visibleItems = items;
   const total = chartTotal(visibleItems);
   const topItem = visibleItems[0];
@@ -420,7 +520,13 @@ function WorkTypeProfileChart({ items }: { items: DistributionItem[] }) {
 
   return (
     <section className="dashboard-card worktype-profile-card">
-      <CardHeading icon={Workflow} meta={`${items.length} 类`} title="工作类型画像" tone="orange" />
+      <CardHeading
+        icon={Workflow}
+        meta={`${items.length} 类`}
+        title="工作类型画像"
+        tone="orange"
+        onSource={() => onOpenSource("工作类型全部来源", { kind: "all" })}
+      />
 
       {visibleItems.length ? (
         <div className="worktype-profile-layout">
@@ -452,14 +558,18 @@ function WorkTypeProfileChart({ items }: { items: DistributionItem[] }) {
             <div className="worktype-metric-scroll">
               <div className="worktype-metric-list">
                 {visibleItems.map((item, index) => (
-                  <div key={item.label}>
+                  <button
+                    key={item.label}
+                    onClick={() => onOpenSource(`工作类型：${item.label}`, { kind: "workType", value: item.label })}
+                    type="button"
+                  >
                     <i style={{ backgroundColor: workTypeColors[index % workTypeColors.length] }} />
                     <span>
                       <strong>{item.label}</strong>
                       <small>{formatMetric(metricValue(item))} 当量 / {item.count} 条</small>
                     </span>
                     <em>{percentOf(metricValue(item), total)}%</em>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -474,7 +584,7 @@ function WorkTypeProfileChart({ items }: { items: DistributionItem[] }) {
   );
 }
 
-function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelationItem[] }) {
+function BusinessAbilityMatrix({ relations, onOpenSource }: { relations: BusinessAbilityRelationItem[]; onOpenSource: OpenDashboardSource }) {
   const visibleBusinesses = Array.from(new Set(relations.map((item) => item.businessLabel)));
   const abilityTotals = new Map<string, number>();
 
@@ -491,7 +601,13 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
 
   return (
     <section className="dashboard-card business-ability-card">
-      <CardHeading icon={GitBranch} meta="矩阵视图" title="业务与能力关联洞察" tone="green" />
+      <CardHeading
+        icon={GitBranch}
+        meta="矩阵视图"
+        title="业务与能力关联洞察"
+        tone="green"
+        onSource={() => onOpenSource("业务与能力全部来源", { kind: "all" }, "矩阵能力投入按日报能力分配比例计算。")}
+      />
 
       {visibleBusinesses.length && visibleAbilities.length ? (
         <div className="business-ability-layout">
@@ -522,13 +638,20 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
                   return (
                     <span className="matrix-cell business-ability-gridline" key={`${business}-${ability}`}>
                       {relation && (
-                        <i
+                        <button
+                          aria-label={`查看${business}与${ability}的来源日报`}
                           className="relation-bubble"
+                          onClick={() => onOpenSource(
+                            `${business} / ${ability}`,
+                            { kind: "businessAbility", business, ability },
+                            "仅显示同时属于该业务分类并包含该能力分配的日报。"
+                          )}
                           style={{
                             "--bubble-color": abilityColors[abilityIndex % abilityColors.length],
                             "--bubble-size": `${10 + scale * 48}px`
                           } as CSSProperties}
                           title={`${business} / ${ability}: ${formatMetric(relation.workload)} 当量，${formatMetric(relation.timeHours)}h，占该业务 ${relation.businessShare}%`}
+                          type="button"
                         />
                       )}
                     </span>
@@ -570,7 +693,7 @@ function BusinessAbilityMatrix({ relations }: { relations: BusinessAbilityRelati
   );
 }
 
-function TrendChart({ points }: { points: TrendPoint[] }) {
+function TrendChart({ points, onOpenSource }: { points: TrendPoint[]; onOpenSource: OpenDashboardSource }) {
   const [tooltip, setTooltip] = useState<TrendTooltipState | null>(null);
   const maxValue = Math.max(1, ...points.map((point) => Math.max(point.workload, point.timeHours)));
   const chartWidth = Math.max(520, points.length * 58 + 76);
@@ -590,7 +713,13 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
 
   return (
     <section className="dashboard-card trend-card">
-      <CardHeading icon={Activity} meta="当量 / 时间" title="工作量趋势" tone="cyan" />
+      <CardHeading
+        icon={Activity}
+        meta="当量 / 时间"
+        title="工作量趋势"
+        tone="cyan"
+        onSource={() => onOpenSource("趋势全部来源", { kind: "all" })}
+      />
       <div className="trend-combo-chart" onMouseLeave={() => setTooltip(null)}>
         {points.length ? (
           <svg className="trend-combo-svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="工作量趋势柱线组合图">
@@ -625,6 +754,7 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
                     <title>{`${point.label}：当量 ${formatMetric(point.workload)}，时间 ${formatMetric(point.timeHours)}h`}</title>
                   </rect>
                   <rect
+                    aria-label={`查看${point.label}来源日报`}
                     className="trend-hit-zone"
                     height={plotHeight}
                     width={Math.max(28, barWidth + 18)}
@@ -632,6 +762,15 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
                     y={padding.top}
                     onMouseEnter={(event) => showTooltip(point, event)}
                     onMouseMove={(event) => showTooltip(point, event)}
+                    onClick={() => onOpenSource(`趋势周期：${point.label}`, { kind: "trend", value: point.key })}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onOpenSource(`趋势周期：${point.label}`, { kind: "trend", value: point.key });
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                   />
                   <text className="trend-label" x={x} y={chartHeight - 10} textAnchor="middle">
                     {point.label}
@@ -678,24 +817,35 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
   );
 }
 
-function ProjectRank({ projects }: { projects: ProjectSummary[] }) {
+function ProjectRank({ projects, onOpenSource }: { projects: ProjectSummary[]; onOpenSource: OpenDashboardSource }) {
   const maxValue = Math.max(1, ...projects.map((project) => Math.max(project.count, project.workload)));
 
   return (
     <section className="dashboard-card project-rank-card">
-      <CardHeading icon={BriefcaseBusiness} meta={`${projects.length} 个项目`} title="项目工作量排行" tone="purple" />
+      <CardHeading
+        icon={BriefcaseBusiness}
+        meta={`${projects.length} 个项目`}
+        title="项目工作量排行"
+        tone="purple"
+        onSource={() => onOpenSource("项目投入全部来源", { kind: "projectRecords" })}
+      />
       <div className="project-rank-list">
         {projects.slice(0, 8).map((project, index) => {
           const width = Math.max(6, (Math.max(project.count, project.workload) / maxValue) * 100);
           return (
-            <article className="project-rank-item" key={project.projectName}>
+            <button
+              className="project-rank-item"
+              key={project.projectName}
+              onClick={() => onOpenSource(`项目：${project.projectName}`, { kind: "project", value: project.projectName })}
+              type="button"
+            >
               <em>{String(index + 1).padStart(2, "0")}</em>
               <div>
                 <strong>{project.projectName}</strong>
                 <span>{project.count} 条 / {formatMetric(project.workload)} 当量</span>
                 <i style={{ width: `${width}%` }} />
               </div>
-            </article>
+            </button>
           );
         })}
         {!projects.length && <div className="empty-state">暂无项目数据。</div>}
@@ -706,9 +856,11 @@ function ProjectRank({ projects }: { projects: ProjectSummary[] }) {
 
 function FocusRank({
   items,
+  onOpenSource,
   settings
 }: {
   items: ReturnType<typeof analyzeRecords>["focusRankings"];
+  onOpenSource: OpenDashboardSource;
   settings: AppSettings;
 }) {
   const maxScore = Math.max(1, ...items.map((item) => item.score));
@@ -724,12 +876,18 @@ function FocusRank({
         meta={`Top ${visibleItems.length}${hiddenCount ? ` / ${items.length}` : ""} · ${weightLabel}`}
         title="工作重心排行"
         tone="orange"
+        onSource={() => onOpenSource("工作重心全部来源", { kind: "all" }, "重心分数由配置中的当量、工时和记录数权重计算，不代表工作价值评分。")}
       />
       <div className="focus-rank-list">
         {visibleItems.map((item, index) => {
           const width = Math.max(6, (item.score / maxScore) * 100);
           return (
-            <article className="focus-rank-item" key={item.label}>
+            <button
+              className="focus-rank-item"
+              key={item.label}
+              onClick={() => onOpenSource(`工作重心：${item.label}`, { kind: "project", value: item.label }, "该项目的重心分数由当量、工时和记录数占比加权得到。")}
+              type="button"
+            >
               <em>{String(index + 1).padStart(2, "0")}</em>
               <div>
                 <div className="focus-rank-title">
@@ -739,7 +897,7 @@ function FocusRank({
                 <span>{formatMetric(item.workload)} 当量 / {formatMetric(item.timeHours)}h / {item.count} 条</span>
                 <i style={{ width: `${width}%` }} />
               </div>
-            </article>
+            </button>
           );
         })}
         {!items.length && <div className="empty-state">暂无重心数据。</div>}
@@ -749,26 +907,34 @@ function FocusRank({
   );
 }
 
-function ProductMatrix({ items }: { items: DistributionItem[] }) {
+function ProductMatrix({ items, onOpenSource }: { items: DistributionItem[]; onOpenSource: OpenDashboardSource }) {
   const visibleItems = items.slice(0, 8);
   const maxValue = Math.max(1, ...visibleItems.map(metricValue));
 
   return (
     <section className="dashboard-card product-matrix-card">
-      <CardHeading icon={Layers3} meta={`${items.length} 类`} title="产品系统分布" tone="green" />
+      <CardHeading
+        icon={Layers3}
+        meta={`${items.length} 类`}
+        title="产品系统分布"
+        tone="green"
+        onSource={() => onOpenSource("产品系统全部来源", { kind: "all" })}
+      />
       <div className="product-matrix">
         {visibleItems.length ? (
           visibleItems.map((item, index) => {
             const scale = Math.max(0.58, metricValue(item) / maxValue);
             return (
-              <article
+              <button
                 key={item.label}
+                onClick={() => onOpenSource(`产品系统：${item.label}`, { kind: "product", value: item.label })}
                 style={{ "--matrix-scale": scale, "--matrix-color": chartColors[index % chartColors.length] } as CSSProperties}
+                type="button"
               >
                 <strong>{item.label}</strong>
                 <span>{item.count} 条</span>
                 <em>{formatMetric(item.workload)} 当量</em>
-              </article>
+              </button>
             );
           })
         ) : (
@@ -779,7 +945,7 @@ function ProductMatrix({ items }: { items: DistributionItem[] }) {
   );
 }
 
-function ProjectCards({ projects }: { projects: ProjectSummary[] }) {
+function ProjectCards({ projects, onOpenSource }: { projects: ProjectSummary[]; onOpenSource: OpenDashboardSource }) {
   return (
     <section className="panel project-summary-panel">
       <div className="panel-heading">
@@ -789,7 +955,19 @@ function ProjectCards({ projects }: { projects: ProjectSummary[] }) {
       <div className="project-summary-grid">
         {projects.length ? (
           projects.slice(0, 9).map((project) => (
-            <article className="project-summary-card" key={project.projectName}>
+            <article
+              className="project-summary-card"
+              key={project.projectName}
+              onClick={() => onOpenSource(`项目：${project.projectName}`, { kind: "project", value: project.projectName })}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenSource(`项目：${project.projectName}`, { kind: "project", value: project.projectName });
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
               <div className="project-summary-top">
                 <strong>{project.projectName}</strong>
                 <span>{formatMetric(project.workload)} 当量</span>
@@ -822,7 +1000,17 @@ function ProjectCards({ projects }: { projects: ProjectSummary[] }) {
 
 export function ReportDashboard({ records, trend, activeLabel }: ReportDashboardProps) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [sourceView, setSourceView] = useState<DashboardSourceView | null>(null);
+  const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const analysis = useMemo(() => analyzeRecords(records, settings), [records, settings]);
+  const sourceRecords = useMemo(
+    () => sourceView ? filterDashboardSourceRecords(records, sourceView.filter) : [],
+    [records, sourceView]
+  );
+
+  const openSource: OpenDashboardSource = (title, filter, description = "来源为当前报告周期内符合该条件的日报，记录按 ID 去重。") => {
+    setSourceView({ title, filter, description });
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -840,62 +1028,78 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
     };
   }, []);
 
+  useEffect(() => {
+    if (sourceView) sourcePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [sourceView]);
+
   return (
     <>
       <section className="dashboard-ledger">
-        <article>
+        <button onClick={() => openSource("参与项目来源", { kind: "projectRecords" })} type="button">
           <BriefcaseBusiness size={18} />
           <span>参与项目</span>
           <strong>{analysis.projectCount}</strong>
-        </article>
-        <article>
+        </button>
+        <button onClick={() => openSource("原始工作当量来源", { kind: "all" })} type="button">
           <Activity size={18} />
           <span>工作当量</span>
           <strong>{formatMetric(analysis.totalWorkload)}</strong>
-        </article>
-        <article>
+        </button>
+        <button onClick={() => openSource("投入时间来源", { kind: "all" })} type="button">
           <Clock3 size={18} />
           <span>投入时间</span>
           <strong>{formatMetric(analysis.totalTimeHours)}h</strong>
-        </article>
-        <article>
+        </button>
+        <button onClick={() => openSource(`主要业务：${analysis.topBusinessLabel}`, { kind: "business", value: analysis.topBusinessLabel })} type="button">
           <PieChart size={18} />
           <span>主要业务</span>
           <strong>{analysis.topBusinessLabel}</strong>
-        </article>
-        <article>
+        </button>
+        <button onClick={() => openSource(`主要类型：${analysis.topWorkTypeLabel}`, { kind: "workType", value: analysis.topWorkTypeLabel })} type="button">
           <Workflow size={18} />
           <span>主要类型</span>
           <strong>{analysis.topWorkTypeLabel}</strong>
-        </article>
-        <article>
+        </button>
+        <button onClick={() => openSource("活跃周期来源", { kind: "all" })} type="button">
           <CalendarCheck size={18} />
           <span>活跃周期</span>
           <strong>{activeLabel}</strong>
-        </article>
+        </button>
       </section>
+
+      {sourceView && (
+        <div ref={sourcePanelRef}>
+          <DashboardSourcePanel
+            key={`${sourceView.title}:${JSON.stringify(sourceView.filter)}`}
+            description={sourceView.description}
+            records={sourceRecords}
+            title={sourceView.title}
+            onClose={() => setSourceView(null)}
+          />
+        </div>
+      )}
 
       <section className="dashboard-grid mixed">
         <div className="dashboard-row dashboard-row-three">
-          <BusinessCategoryDonut items={analysis.businessDistribution} />
-          <TrendChart points={trend} />
-          <ProjectRank projects={analysis.projectSummaries} />
+          <BusinessCategoryDonut items={analysis.businessDistribution} onOpenSource={openSource} />
+          <TrendChart points={trend} onOpenSource={openSource} />
+          <ProjectRank projects={analysis.projectSummaries} onOpenSource={openSource} />
         </div>
 
         <div className="dashboard-row dashboard-row-two dashboard-row-ability">
-          <AbilityRadarChart items={analysis.abilityDistribution} />
-          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} />
+          <AbilityRadarChart items={analysis.abilityDistribution} onOpenSource={openSource} />
+          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={openSource} />
         </div>
 
         <div className="dashboard-row dashboard-row-two">
-          <WorkTypeProfileChart items={analysis.workTypeDistribution} />
-          <ProductMatrix items={analysis.productDistribution} />
+          <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={openSource} />
+          <ProductMatrix items={analysis.productDistribution} onOpenSource={openSource} />
         </div>
 
         <div className="dashboard-row dashboard-row-two dashboard-row-focus">
-          <FocusRank items={analysis.focusRankings} settings={settings} />
+          <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
           <section className="dashboard-card insight-card">
-            <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" />
+            <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" onSource={() => openSource("本期观察全部来源", { kind: "all" })} />
             <div className="insight-lines">
               <p>项目投入集中在 <strong>{analysis.projectSummaries[0]?.projectName ?? "暂无项目"}</strong></p>
               <p>主要业务方向为 <strong>{analysis.topBusinessLabel}</strong></p>
@@ -906,7 +1110,7 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
         </div>
       </section>
 
-      <ProjectCards projects={analysis.projectSummaries} />
+      <ProjectCards projects={analysis.projectSummaries} onOpenSource={openSource} />
     </>
   );
 }

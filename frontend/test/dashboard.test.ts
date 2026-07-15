@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRecords } from "../src/lib/analysis.ts";
+import { analyzeRecords, filterDashboardSourceRecords } from "../src/lib/analysis.ts";
 import type { WorkRecord } from "../src/types.ts";
 
 const baseRecord: WorkRecord = {
@@ -231,4 +231,73 @@ test("analyzeRecords accepts configurable focus scoring weights", () => {
       ["Alpha", 20]
     ]
   );
+});
+
+test("dashboard source filters return exact records without duplicate ability evidence", () => {
+  const records = [
+    {
+      ...baseRecord,
+      id: "a",
+      date: "2026-07-02",
+      businessCategory: "三新业务",
+      projectName: "Alpha",
+      abilityDimension: "工程技术,项目管理与推进",
+      abilityAllocations: [
+        { abilityId: "engineering", abilityName: "工程技术", percentage: 60, allocatedWorkload: 3, allocatedTimeHours: 1.2 },
+        { abilityId: "management", abilityName: "项目管理与推进", percentage: 40, allocatedWorkload: 2, allocatedTimeHours: 0.8 }
+      ]
+    },
+    {
+      ...baseRecord,
+      id: "b",
+      date: "2026-07-09",
+      businessCategory: "传统业务",
+      projectName: "Beta",
+      abilityDimension: "工程技术"
+    }
+  ] as WorkRecord[];
+
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "business", value: "三新业务" }).map((record) => record.id),
+    ["a"]
+  );
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "ability", value: "工程技术" }).map((record) => record.id),
+    ["b", "a"]
+  );
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "businessAbility", business: "三新业务", ability: "工程技术" }).map((record) => record.id),
+    ["a"]
+  );
+});
+
+test("dashboard source filters align project and trend selections with displayed groups", () => {
+  const records = [
+    { ...baseRecord, id: "a", date: "2026-07-02", projectId: "alpha", projectRelation: "project", projectName: "Alpha" },
+    { ...baseRecord, id: "b", date: "2026-07-09", projectId: "alpha", projectRelation: "project", projectName: "Alpha" },
+    { ...baseRecord, id: "c", date: "2026-08-01", projectId: null, projectRelation: "non_project", projectName: "" }
+  ] as WorkRecord[];
+
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "project", value: "Alpha" }).map((record) => record.id),
+    ["b", "a"]
+  );
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "trend", value: "2026-07-W2" }).map((record) => record.id),
+    ["b"]
+  );
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "trend", value: "2026-07" }).map((record) => record.id),
+    ["b", "a"]
+  );
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "trend", value: "2026-08-01" }).map((record) => record.id),
+    ["c"]
+  );
+  assert.deepEqual(
+    filterDashboardSourceRecords(records, { kind: "projectRecords" }).map((record) => record.id),
+    ["b", "a"]
+  );
+  assert.equal(analyzeRecords(records).projectCount, 1);
+  assert.equal(analyzeRecords(records).projectSummaries.some((project) => project.projectName === "非项目事项"), true);
 });

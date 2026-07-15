@@ -179,6 +179,15 @@ test("report dashboard modules are grouped into four full-width rows", () => {
   assert.match(styles, /\.dashboard-row-two \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
 });
 
+test("dashboard metrics and chart groups can return to deduplicated source records", () => {
+  assert.equal(reportDashboard.includes("function DashboardSourcePanel"), true);
+  assert.equal(reportDashboard.includes("filterDashboardSourceRecords(records, sourceView.filter)"), true);
+  assert.equal(reportDashboard.includes("dashboard-source-button"), true);
+  assert.equal(reportDashboard.includes("一条多能力日报在来源列表中只出现一次"), true);
+  assert.match(styles, /\.dashboard-source-list \{[\s\S]*display: grid;/);
+  assert.match(styles, /\.dashboard-ledger button \{[\s\S]*text-align: left;/);
+});
+
 test("desktop sidebar stays fixed while workspace scrolls", () => {
   assert.match(styles, /\.app-shell \{[\s\S]*display: block;[\s\S]*overflow: visible;/);
   assert.match(styles, /\.sidebar \{[\s\S]*position: fixed;[\s\S]*height: 100vh;[\s\S]*overflow-y: auto;/);
