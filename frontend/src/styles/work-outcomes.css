@@ -594,6 +594,86 @@
   font-size: 15px;
 }
 
+.project-closure-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.project-closure-dialog > label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.project-closure-dialog input,
+.project-closure-dialog textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.project-closure-evidence {
+  display: grid;
+  gap: 12px;
+}
+
+.project-closure-evidence dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border-block: 1px solid var(--line);
+}
+
+.project-closure-evidence dl > div {
+  min-width: 0;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+
+.project-closure-evidence dl > div:last-child {
+  border-right: 0;
+}
+
+.project-closure-evidence dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.project-closure-evidence dd {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 760;
+}
+
+.project-closure-reminders {
+  display: grid;
+  gap: 5px;
+}
+
+.project-closure-reminders p,
+.project-completion-summary p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.project-closure-reminders p,
+.project-completion-summary span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.project-completion-summary {
+  border-left: 3px solid var(--green);
+  padding-left: 14px;
+}
+
 .project-detail-section > ul:not(.project-breakdown-list) {
   display: grid;
   gap: 6px;
@@ -730,6 +810,10 @@
   .project-detail-actions {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .project-closure-evidence dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .project-filter-field {

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { buildProjectClosureSnapshot } from "../src/lib/projectClosure.ts";
+import type { Project, ProjectSummary } from "../src/types.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -197,4 +199,47 @@ test("project management workspace exposes filters, lifecycle actions and detail
     mergeSource,
     /合并后，来源项目的工作记录将关联到目标项目，历史项目名称快照保持不变。确认继续吗？/
   );
+});
+
+test("project closure snapshot keeps project totals and reports evidence gaps without judging value", () => {
+  const project = { ...activeProject, endDate: "", completionSummary: "" } as Project;
+  const summary = {
+    recordCount: 2,
+    activeDays: 2,
+    timeHours: 10,
+    workload: 12,
+    records: [{ id: "r1" }, { id: "r2" }],
+    outcomes: [
+      {
+        id: "o1", type: "deliverable", status: "completed", title: "交付成果", recordIds: ["r1"],
+        reportSummary: "完成交付", valueImpact: "支撑验收", contribution: "负责实施"
+      },
+      {
+        id: "o2", type: "problem_resolution", status: "stage_result", title: "问题解决", recordIds: ["outside"],
+        reportSummary: "", valueImpact: "", contribution: ""
+      }
+    ],
+    currentFocus: [], businessCategories: [], products: [], abilities: [], lastActiveDate: "2026-07-01"
+  } as ProjectSummary;
+
+  const snapshot = buildProjectClosureSnapshot(project, summary);
+
+  assert.deepEqual(snapshot.metrics, { recordCount: 2, activeDays: 2, timeHours: 10, workload: 12, outcomeCount: 2, reportableOutcomeCount: 2 });
+  assert.equal(snapshot.gaps.missingEndDate, true);
+  assert.equal(snapshot.gaps.missingCompletionSummary, true);
+  assert.equal(snapshot.gaps.missingSourceCount, 1);
+  assert.equal(snapshot.gaps.missingReportSummaryCount, 1);
+  assert.equal(snapshot.gaps.missingValueImpactCount, 1);
+  assert.equal(snapshot.gaps.missingContributionCount, 1);
+  assert.doesNotMatch(snapshot.reminders.join(" "), /价值低|效率低|投入不合理/);
+});
+
+test("project page exposes an explicit closure flow backed by existing project fields", () => {
+  const pageSource = readSource("../src/pages/ProjectsPage.tsx");
+  assert.match(pageSource, /项目结项/);
+  assert.match(pageSource, /结项总结/);
+  assert.match(pageSource, /completionSummary/);
+  assert.match(pageSource, /status: "completed"/);
+  assert.match(pageSource, /buildProjectClosureSnapshot/);
+  assert.match(readSource("../src/components/ProjectEditor.tsx"), /label="结项总结"/);
 });

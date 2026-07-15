@@ -1,4 +1,4 @@
-import { Archive, GitMerge, Pencil, Plus, RotateCcw } from "lucide-react";
+import { Archive, CheckCircle2, GitMerge, Pencil, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { ProjectEditor } from "../components/ProjectEditor";
@@ -12,6 +12,8 @@ import {
   updateProject
 } from "../lib/projectApi";
 import type { OutcomeSeed, Project, ProjectInput, ProjectStatus, ProjectSummary } from "../types";
+import { buildProjectClosureSnapshot } from "../lib/projectClosure";
+import { todayKey } from "../lib/date";
 import {
   Button,
   DataTable,
@@ -64,6 +66,10 @@ export function ProjectsPage({ onNotify, onCreateOutcome }: ProjectsPageProps) {
   const [editorProject, setEditorProject] = useState<Project | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [mergeSourceId, setMergeSourceId] = useState("");
+  const [closureProject, setClosureProject] = useState<Project | null>(null);
+  const [closureEndDate, setClosureEndDate] = useState("");
+  const [closureSummary, setClosureSummary] = useState("");
+  const [closureSaving, setClosureSaving] = useState(false);
 
   const loadProjects = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -142,6 +148,32 @@ export function ProjectsPage({ onNotify, onCreateOutcome }: ProjectsPageProps) {
     }
   }
 
+  function openClosure(project: Project): void {
+    setClosureProject(project);
+    setClosureEndDate(project.endDate || todayKey());
+    setClosureSummary(project.completionSummary || "");
+  }
+
+  async function completeProject(): Promise<void> {
+    if (!closureProject || !closureEndDate || !closureSummary.trim()) return;
+    setClosureSaving(true);
+    try {
+      await updateProject(closureProject.id, {
+        status: "completed",
+        endDate: closureEndDate,
+        completionSummary: closureSummary.trim()
+      });
+      setClosureProject(null);
+      setSelectedProject(null);
+      onNotify("项目已结项，投入、成果和历史记录保持不变");
+      await loadProjects();
+    } catch (reason) {
+      onNotify(reason instanceof Error ? reason.message : "项目结项失败");
+    } finally {
+      setClosureSaving(false);
+    }
+  }
+
   const columns = useMemo<DataTableColumn<Project>[]>(() => [
     { id: "project", header: "项目", width: "19%", cell: (project) => <strong>{project.name}</strong> },
     { id: "status", header: "状态", width: "9%", cell: (project) => <StatusBadge tone={statusTones[project.status]}>{statusLabels[project.status]}</StatusBadge> },
@@ -217,6 +249,9 @@ export function ProjectsPage({ onNotify, onCreateOutcome }: ProjectsPageProps) {
               setSelectedProject(null);
               setEditorProject(selectedProject);
             }}>编辑</Button>
+            {!['completed', 'archived'].includes(selectedProject.status) && (
+              <Button leadingIcon={<CheckCircle2 size={16} />} variant="primary" onClick={() => openClosure(selectedProject)}>项目结项</Button>
+            )}
             <Button leadingIcon={<GitMerge size={16} />} onClick={() => {
               setSelectedProject(null);
               setMergeSourceId(selectedProject.id);
@@ -235,6 +270,21 @@ export function ProjectsPage({ onNotify, onCreateOutcome }: ProjectsPageProps) {
 
       <ModalDialog open={editorProject !== undefined} title={editorProject ? "编辑项目" : "新建项目"} size="large" onClose={() => setEditorProject(undefined)}>
         <ProjectEditor project={editorProject ?? undefined} busy={saving} onCancel={() => setEditorProject(undefined)} onSubmit={saveProject} />
+      </ModalDialog>
+
+      <ModalDialog open={Boolean(closureProject)} title="项目结项" size="large" onClose={() => setClosureProject(null)}>
+        {closureProject && summaries[closureProject.id] && (
+          <div className="project-closure-dialog">
+            <ProjectClosureEvidence project={closureProject} summary={summaries[closureProject.id]} />
+            <label><span>结束日期</span><input type="date" value={closureEndDate} onChange={(event) => setClosureEndDate(event.target.value)} /></label>
+            <label><span>结项总结</span><textarea rows={6} placeholder="总结项目目标完成情况、关键成果、个人贡献和后续安排" value={closureSummary} onChange={(event) => setClosureSummary(event.target.value)} /></label>
+            <p className="field-hint">结项只更新项目状态、结束日期和人工总结，不修改日报、成果或原始工作当量。</p>
+            <div className="project-editor-actions">
+              <Button onClick={() => setClosureProject(null)}>取消</Button>
+              <Button disabled={!closureEndDate || !closureSummary.trim()} loading={closureSaving} variant="primary" onClick={() => void completeProject()}>确认结项</Button>
+            </div>
+          </div>
+        )}
       </ModalDialog>
 
       <ProjectMergeDialog
@@ -315,6 +365,32 @@ function ProjectDetail({ project, summary, onCreateOutcome }: {
           </ol>
         ) : <EmptyState compact title="尚无工作记录" />}
       </section>
+      {project.status === "completed" && (
+        <section className="project-detail-section project-completion-summary">
+          <h3>结项总结</h3>
+          <p>{project.completionSummary || "尚未填写结项总结"}</p>
+          <span>结束日期：{project.endDate || "未填写"}</span>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function ProjectClosureEvidence({ project, summary }: { project: Project; summary: ProjectSummary }) {
+  const snapshot = buildProjectClosureSnapshot(project, summary);
+  return (
+    <div className="project-closure-evidence">
+      <dl>
+        <div><dt>工作记录</dt><dd>{snapshot.metrics.recordCount}</dd></div>
+        <div><dt>投入工时</dt><dd>{metric(snapshot.metrics.timeHours, 1)} h</dd></div>
+        <div><dt>原始工作当量</dt><dd>{metric(snapshot.metrics.workload, 2)}</dd></div>
+        <div><dt>可汇报成果</dt><dd>{snapshot.metrics.reportableOutcomeCount}</dd></div>
+      </dl>
+      <div className="project-closure-reminders">
+        {snapshot.reminders.map((message) => <p key={message}>{message}</p>)}
+        {!snapshot.reminders.length && <p>项目成果来源、价值影响、个人贡献和汇报表述已填写完整。</p>}
+      </div>
+      <p className="field-hint">以上为材料完整度检查，不评价项目价值或个人绩效。</p>
     </div>
   );
 }

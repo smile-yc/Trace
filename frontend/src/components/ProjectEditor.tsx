@@ -72,6 +72,11 @@ export function ProjectEditor({ project, busy = false, onCancel, onSubmit }: Pro
       <FormField label="项目说明">
         <textarea rows={3} value={input.description ?? ""} onChange={(event) => update("description", event.target.value)} />
       </FormField>
+      {(project?.status === "completed" || input.status === "completed") && (
+        <FormField label="结项总结">
+          <textarea rows={5} value={input.completionSummary ?? ""} onChange={(event) => update("completionSummary", event.target.value)} />
+        </FormField>
+      )}
       <div className="project-editor-actions">
         <Button disabled={busy} onClick={onCancel}>取消</Button>
         <Button loading={busy} type="submit" variant="primary">{project ? "保存" : "新建项目"}</Button>
