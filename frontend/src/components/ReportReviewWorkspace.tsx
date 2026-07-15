@@ -100,7 +100,7 @@ export function ReportReviewWorkspace({ reportType, periodKey, currentRecords, p
       </div>
       <div className="report-judgement-grid">
         <details><summary><span>投入集中度</span><strong>{insights.concentration.share}%</strong><small>{insights.concentration.projectName}</small></summary><ul>{insights.concentration.records.map((record) => <li key={record.id}>{record.date} · {record.title}</li>)}</ul></details>
-        <details><summary><span>投入产出</span><strong>{insights.output.completedOutcomeCount} 项成果</strong><small>{insights.output.completedOutcomeCount ? `每项约 ${insights.output.workloadPerOutcome} 当量` : "尚无成果证据"}</small></summary><ul>{insights.output.outcomes.map((outcome) => <li key={outcome.id}>{outcome.completedDate || outcome.updateDate} · {outcome.title}</li>)}</ul></details>
+        <details><summary><span>投入产出</span><strong>{insights.output.completedOutcomeCount} 项成果</strong><small>{insights.output.completedOutcomeCount ? (insights.output.linkedRecordCount ? `${insights.output.linkedRecordCount} 条来源 / ${valueLabel(insights.output.linkedWorkload)} 关联当量` : "缺少当前周期关联记录") : "尚无成果证据"}</small></summary><ul>{insights.output.outcomes.map((outcome) => <li key={outcome.id}>{outcome.completedDate || outcome.updateDate} · {outcome.title}</li>)}</ul></details>
       </div>
       <div className="report-reminders"><h3>下一步提醒</h3>{insights.reminders.map((message) => <p key={message}>{message}</p>)}{!insights.reminders.length && <p>当前没有需要特别处理的提醒。</p>}</div>
     </> : <>

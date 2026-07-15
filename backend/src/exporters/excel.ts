@@ -171,6 +171,27 @@ function createDistributionSheet(workbook: ExcelJS.Workbook, name: string, rows:
   styleSheet(sheet);
 }
 
+function createAbilityDistributionSheet(workbook: ExcelJS.Workbook, rows: ExportSummaryItem[]): void {
+  const sheet = workbook.addWorksheet("能力维度汇总", {
+    views: [{ state: "frozen", ySplit: 1 }]
+  });
+  sheet.columns = [
+    { header: "能力维度", key: "label", width: 28 },
+    { header: "来源记录数", key: "count", width: 14 },
+    { header: "分配后当量", key: "workload", width: 14 },
+    { header: "分配后时间", key: "timeHours", width: 14 },
+    { header: "投入占比", key: "ratio", width: 12 }
+  ];
+  rows.forEach((item) => sheet.addRow({
+    label: item.label,
+    count: item.count,
+    workload: item.workload,
+    timeHours: item.timeHours,
+    ratio: `${item.ratio}%`
+  }));
+  styleSheet(sheet);
+}
+
 function createWorkloadSheet(workbook: ExcelJS.Workbook, rows: ExportSummaryItem[]): void {
   const sheet = workbook.addWorksheet("当量统计表", {
     views: [{ state: "frozen", ySplit: 1 }]
@@ -389,7 +410,7 @@ export async function buildExcel(payload: ExportPayload): Promise<Buffer> {
   createRawSheet(workbook, payload);
   createDistributionSheet(workbook, "业务分类汇总", analysis.businessSummary);
   createDistributionSheet(workbook, "工作类型汇总", analysis.workTypeSummary);
-  createDistributionSheet(workbook, "能力维度汇总", analysis.abilitySummary);
+  createAbilityDistributionSheet(workbook, analysis.abilitySummary);
   createDistributionSheet(workbook, "项目汇总", analysis.projectSummary);
   createDistributionSheet(workbook, "产品系统汇总", analysis.productSummary);
   createWorkloadSheet(workbook, analysis.dateSummary);

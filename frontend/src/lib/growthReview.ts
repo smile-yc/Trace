@@ -124,21 +124,66 @@ function targetEntries(settings?: Partial<AppSettings>): Array<[string, number]>
 }
 
 function workloadShareByAbility(records: WorkRecord[]): Record<string, number> {
-  const totalWorkload = records.reduce((total, record) => total + numberValue(record.workload), 0);
-  const totalCount = records.length || 1;
   const values = new Map<string, number>();
+  let totalWorkload = 0;
+  let totalWeightedCount = 0;
 
   records.forEach((record) => {
-    const labels = parseAbilityDimensions(record.abilityDimension);
-    const finalLabels = labels.length ? labels : ["未填写能力"];
-    const value = totalWorkload > 0 ? numberValue(record.workload) : 1;
-    finalLabels.forEach((label) => values.set(label, (values.get(label) ?? 0) + value));
+    resolveAbilityMetrics(record).forEach((allocation) => {
+      totalWorkload += allocation.allocatedWorkload;
+      totalWeightedCount += allocation.percentage / 100;
+      values.set(allocation.abilityName, (values.get(allocation.abilityName) ?? 0) + allocation.allocatedWorkload);
+    });
   });
 
   return Array.from(values.entries()).reduce<Record<string, number>>((shares, [label, value]) => {
-    shares[label] = totalWorkload > 0 ? (value / totalWorkload) * 100 : (value / totalCount) * 100;
+    if (totalWorkload > 0) {
+      shares[label] = (value / totalWorkload) * 100;
+      return shares;
+    }
+    const weightedCount = records.reduce((sum, record) => sum + resolveAbilityMetrics(record)
+      .filter((allocation) => allocation.abilityName === label)
+      .reduce((recordSum, allocation) => recordSum + allocation.percentage / 100, 0), 0);
+    shares[label] = totalWeightedCount > 0 ? (weightedCount / totalWeightedCount) * 100 : 0;
     return shares;
   }, {});
+}
+
+function resolveAbilityMetrics(record: WorkRecord): Array<{ abilityName: string; percentage: number; allocatedTimeHours: number; allocatedWorkload: number }> {
+  const stored = (record.abilityAllocations ?? []).filter(
+    (item) => item.abilityName.trim() && Number.isFinite(item.percentage) && item.percentage > 0
+  );
+  if (stored.length) {
+    return stored.map((item) => ({
+      abilityName: item.abilityName.trim(),
+      percentage: item.percentage,
+      allocatedTimeHours: item.allocatedTimeHours ?? Number((numberValue(record.timeHours) * item.percentage / 100).toFixed(4)),
+      allocatedWorkload: item.allocatedWorkload ?? Number((numberValue(record.workload) * item.percentage / 100).toFixed(4))
+    }));
+  }
+  const labels = parseAbilityDimensions(record.abilityDimension);
+  const fallback = labels.length ? labels : ["未填写能力"];
+  const percentage = 100 / fallback.length;
+  return fallback.map((abilityName) => ({
+    abilityName,
+    percentage,
+    allocatedTimeHours: Number((numberValue(record.timeHours) / fallback.length).toFixed(4)),
+    allocatedWorkload: Number((numberValue(record.workload) / fallback.length).toFixed(4))
+  }));
+}
+
+function topAbilityGroup(records: WorkRecord[]): { label: string; count: number; workload: number; timeHours: number } | null {
+  const groups = new Map<string, { count: number; workload: number; timeHours: number }>();
+  records.forEach((record) => resolveAbilityMetrics(record).forEach((allocation) => {
+    const current = groups.get(allocation.abilityName) ?? { count: 0, workload: 0, timeHours: 0 };
+    current.count += 1;
+    current.workload += allocation.allocatedWorkload;
+    current.timeHours += allocation.allocatedTimeHours;
+    groups.set(allocation.abilityName, current);
+  }));
+  return Array.from(groups.entries())
+    .map(([label, value]) => ({ label, count: value.count, workload: roundMetric(value.workload), timeHours: roundMetric(value.timeHours) }))
+    .sort((a, b) => b.workload - a.workload || b.timeHours - a.timeHours || b.count - a.count || a.label.localeCompare(b.label, "zh-CN"))[0] ?? null;
 }
 
 export function buildGrowthWarnings(
@@ -153,7 +198,7 @@ export function buildGrowthWarnings(
 
   targetEntries(settings).forEach(([label, targetPercent]) => {
     const relatedRecords = records
-      .filter((record) => parseAbilityDimensions(record.abilityDimension).includes(label))
+      .filter((record) => resolveAbilityMetrics(record).some((allocation) => allocation.abilityName === label))
       .slice()
       .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -234,16 +279,7 @@ export function buildMonthlyReview(
   assets: KnowledgeAsset[] = []
 ): MonthlyReview {
   const topProject = topGroup(records, getProjectName);
-  const topAbility = topGroup(
-    records.flatMap((record) => {
-      const abilities = parseAbilityDimensions(record.abilityDimension);
-      return (abilities.length ? abilities : ["未填写能力"]).map((ability) => ({
-        ...record,
-        abilityDimension: ability
-      }));
-    }),
-    (record) => record.abilityDimension || "未填写能力"
-  );
+  const topAbility = topAbilityGroup(records);
   const milestoneSummaries = summarizeMilestones(milestones);
   const assetSummary = summarizeKnowledgeAssets(assets);
   const lines = [

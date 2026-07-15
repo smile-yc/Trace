@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { analyzeExport } from "../src/exporters/analysis.ts";
+import type { WorkRecord } from "../src/types.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -50,4 +52,38 @@ test("all export formats include unified outcomes without legacy links", () => {
     assert.match(source, /payload\.outcomes/);
     assert.match(source, /outcome\.reportSummary/);
   }
+});
+
+test("export ability summary uses allocated metrics without duplicating record totals", () => {
+  const record = {
+    id: "record",
+    date: "2026-07-01",
+    title: "record",
+    abilityDimension: "工程技术,知识沉淀",
+    workload: 10,
+    timeHours: 5,
+    abilityAllocations: [
+      { abilityId: "engineering", abilityName: "工程技术", percentage: 70, allocatedWorkload: 7, allocatedTimeHours: 3.5 },
+      { abilityId: "knowledge", abilityName: "知识沉淀", percentage: 30, allocatedWorkload: 3, allocatedTimeHours: 1.5 }
+    ]
+  } as WorkRecord;
+
+  const analysis = analyzeExport([record]);
+
+  assert.deepEqual(
+    analysis.abilitySummary.map((item) => [item.label, item.workload, item.timeHours, item.ratio]),
+    [
+      ["工程技术", 7, 3.5, 70],
+      ["知识沉淀", 3, 1.5, 30]
+    ]
+  );
+});
+
+test("Excel exports ability allocation metrics without a duplicated quantity column", () => {
+  const excel = readExporter("excel.ts");
+
+  assert.match(excel, /function createAbilityDistributionSheet/);
+  assert.match(excel, /分配后当量/);
+  assert.match(excel, /分配后时间/);
+  assert.match(excel, /投入占比/);
 });

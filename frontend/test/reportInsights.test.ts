@@ -24,3 +24,31 @@ test("high input without completed output produces an action reminder", () => {
   const insights = buildReportInsights([record("a", "Alpha", 10, 8)], [], []);
   assert.ok(insights.reminders.some((message) => message.includes("成果")));
 });
+
+test("report insights only attribute workload from records linked to completed outcomes", () => {
+  const current = [record("linked", "Alpha", 10, 8), record("unrelated", "Beta", 90, 20)];
+  const outcomes = [
+    { id: "outcome-a", status: "completed", recordIds: ["linked"] },
+    { id: "outcome-b", status: "stage_result", recordIds: ["linked"] }
+  ] as Outcome[];
+
+  const insights = buildReportInsights(current, [], outcomes);
+
+  assert.equal(insights.output.completedOutcomeCount, 2);
+  assert.equal(insights.output.linkedRecordCount, 1);
+  assert.equal(insights.output.linkedWorkload, 10);
+  assert.equal(insights.output.unlinkedOutcomeCount, 0);
+});
+
+test("report insights flag completed outcomes without current-period record evidence", () => {
+  const insights = buildReportInsights(
+    [record("current", "Alpha", 10, 8)],
+    [],
+    [{ id: "outcome", status: "completed", recordIds: ["outside-period"] }] as Outcome[]
+  );
+
+  assert.equal(insights.output.linkedRecordCount, 0);
+  assert.equal(insights.output.linkedWorkload, 0);
+  assert.equal(insights.output.unlinkedOutcomeCount, 1);
+  assert.ok(insights.reminders.some((message) => message.includes("无法计算成果关联投入")));
+});

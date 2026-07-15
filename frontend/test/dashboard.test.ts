@@ -85,8 +85,34 @@ test("analyzeRecords splits comma separated ability dimensions", () => {
   assert.deepEqual(
     analysis.abilityDistribution.map((item) => [item.label, item.count, item.workload, item.timeHours]),
     [
-      ["知识沉淀", 2, 8, 3],
-      ["工程技术", 1, 6, 2]
+      ["知识沉淀", 2, 5, 2],
+      ["工程技术", 1, 3, 1]
+    ]
+  );
+  assert.equal(analysis.abilityDistribution.reduce((sum, item) => sum + item.ratio, 0), 100);
+});
+
+test("analyzeRecords uses stored ability allocation percentages without duplicating input", () => {
+  const analysis = analyzeRecords([
+    {
+      ...baseRecord,
+      id: "allocated",
+      businessCategory: "三新业务",
+      abilityDimension: "工程技术,知识沉淀",
+      workload: 10,
+      timeHours: 5,
+      abilityAllocations: [
+        { abilityId: "engineering", abilityName: "工程技术", percentage: 70, allocatedWorkload: 7, allocatedTimeHours: 3.5 },
+        { abilityId: "knowledge", abilityName: "知识沉淀", percentage: 30, allocatedWorkload: 3, allocatedTimeHours: 1.5 }
+      ]
+    }
+  ]);
+
+  assert.deepEqual(
+    analysis.abilityDistribution.map((item) => [item.label, item.workload, item.timeHours, item.ratio]),
+    [
+      ["工程技术", 7, 3.5, 70],
+      ["知识沉淀", 3, 1.5, 30]
     ]
   );
 });
@@ -122,8 +148,8 @@ test("analyzeRecords builds business ability relation matrix", () => {
   assert.deepEqual(
     analysis.businessAbilityRelations.map((item) => [item.businessLabel, item.abilityLabel, item.count, item.workload, item.businessShare]),
     [
-      ["三新业务", "工程技术", 1, 10, 71],
-      ["三新业务", "项目管理与推进", 1, 10, 71],
+      ["三新业务", "工程技术", 1, 5, 36],
+      ["三新业务", "项目管理与推进", 1, 5, 36],
       ["三新业务", "未填写能力", 1, 4, 29],
       ["传统业务", "工程技术", 1, 2, 100]
     ]

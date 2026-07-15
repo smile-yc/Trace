@@ -12,6 +12,8 @@ test("weekly monthly and yearly reports share the persisted review workspace", (
   assert.match(workspace, /确认定稿/);
   assert.match(workspace, /清空手工内容/);
   assert.match(workspace, /buildReportInsights/);
+  assert.match(workspace, /关联当量/);
+  assert.doesNotMatch(workspace, /每项约/);
   for (const page of ["WeeklyPage.tsx", "MonthlyPage.tsx", "YearlyPage.tsx"]) {
     assert.match(source(`pages/${page}`), /ReportReviewWorkspace/);
   }

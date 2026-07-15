@@ -98,6 +98,33 @@ test("buildGrowthWarnings matches targets inside multi ability records", () => {
   assert.equal(warnings.some((warning) => warning.type === "stale-ability" && warning.label === "知识沉淀"), false);
 });
 
+test("buildGrowthWarnings uses allocated workload for multi ability target shares", () => {
+  const warnings = buildGrowthWarnings(
+    [
+      {
+        ...baseRecord,
+        id: "allocated",
+        date: "2026-07-01",
+        abilityDimension: "工程技术,知识沉淀",
+        workload: 100,
+        timeHours: 20,
+        abilityAllocations: [
+          { abilityId: "engineering", abilityName: "工程技术", percentage: 25, allocatedWorkload: 25, allocatedTimeHours: 5 },
+          { abilityId: "knowledge", abilityName: "知识沉淀", percentage: 75, allocatedWorkload: 75, allocatedTimeHours: 15 }
+        ]
+      }
+    ],
+    {
+      warningRules: { abilityNoRecordDays: 20, targetShareDeviationPercent: 0 },
+      abilityTargets: { 工程技术: 30 }
+    },
+    "2026-07-06"
+  );
+
+  const warning = warnings.find((item) => item.type === "target-gap" && item.label === "工程技术");
+  assert.equal(warning?.actualPercent, 25);
+});
+
 test("buildGrowthWarnings does not warn when actual share exactly reaches target with zero deviation", () => {
   const warnings = buildGrowthWarnings(
     [
@@ -190,6 +217,24 @@ test("buildMonthlyReview enriches monthly narrative with milestones and knowledg
   assert.match(review.text, /Alpha/);
   assert.match(review.text, /完成PHM方案/);
   assert.match(review.text, /PHM方案模板/);
+});
+
+test("buildMonthlyReview identifies the top ability from allocated metrics", () => {
+  const review = buildMonthlyReview([
+    {
+      ...baseRecord,
+      id: "allocated",
+      abilityDimension: "工程技术,知识沉淀",
+      workload: 10,
+      timeHours: 5,
+      abilityAllocations: [
+        { abilityId: "engineering", abilityName: "工程技术", percentage: 10, allocatedWorkload: 1, allocatedTimeHours: 0.5 },
+        { abilityId: "knowledge", abilityName: "知识沉淀", percentage: 90, allocatedWorkload: 9, allocatedTimeHours: 4.5 }
+      ]
+    }
+  ]);
+
+  assert.match(review.text, /能力维度集中在 知识沉淀，对应 9 当量、4\.50 小时/);
 });
 
 test("summaries expose milestone progress and knowledge asset counts", () => {

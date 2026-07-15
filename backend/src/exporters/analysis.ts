@@ -56,6 +56,61 @@ function splitLabels(value: string | null | undefined): string[] {
     });
 }
 
+function resolvedAbilityMetrics(record: WorkRecord): Array<{ label: string; percentage: number; workload: number; timeHours: number }> {
+  const stored = (record.abilityAllocations ?? []).filter(
+    (item) => item.abilityName.trim() && Number.isFinite(item.percentage) && item.percentage > 0
+  );
+  if (stored.length) {
+    return stored.map((item) => ({
+      label: item.abilityName.trim(),
+      percentage: item.percentage,
+      workload: item.allocatedWorkload === null ? numberValue(record.workload) * item.percentage / 100 : numberValue(item.allocatedWorkload),
+      timeHours: item.allocatedTimeHours === null ? numberValue(record.timeHours) * item.percentage / 100 : numberValue(item.allocatedTimeHours)
+    }));
+  }
+
+  const labels = splitLabels(record.abilityDimension);
+  const fallback = labels.length ? labels : ["未填写能力"];
+  const percentage = 100 / fallback.length;
+  return fallback.map((label) => ({
+    label,
+    percentage,
+    workload: numberValue(record.workload) / fallback.length,
+    timeHours: numberValue(record.timeHours) / fallback.length
+  }));
+}
+
+function buildAbilitySummary(records: WorkRecord[]): ExportSummaryItem[] {
+  const groups = new Map<string, { count: number; workload: number; timeHours: number; weightedCount: number }>();
+  records.forEach((record) => resolvedAbilityMetrics(record).forEach((allocation) => {
+    const current = groups.get(allocation.label) ?? { count: 0, workload: 0, timeHours: 0, weightedCount: 0 };
+    current.count += 1;
+    current.workload += allocation.workload;
+    current.timeHours += allocation.timeHours;
+    current.weightedCount += allocation.percentage / 100;
+    groups.set(allocation.label, current);
+  }));
+  const totalWorkload = Array.from(groups.values()).reduce((sum, item) => sum + item.workload, 0);
+  const totalTime = Array.from(groups.values()).reduce((sum, item) => sum + item.timeHours, 0);
+  const totalWeightedCount = Array.from(groups.values()).reduce((sum, item) => sum + item.weightedCount, 0) || 1;
+
+  return Array.from(groups.entries())
+    .map(([label, value]) => {
+      const ratio = totalWorkload > 0
+        ? value.workload / totalWorkload
+        : totalTime > 0 ? value.timeHours / totalTime : value.weightedCount / totalWeightedCount;
+      return {
+        label,
+        count: value.count,
+        quantity: 0,
+        workload: roundMetric(value.workload),
+        timeHours: roundMetric(value.timeHours),
+        ratio: Number((ratio * 100).toFixed(1))
+      };
+    })
+    .sort((a, b) => b.workload - a.workload || b.timeHours - a.timeHours || b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
+}
+
 function getProjectName(record: WorkRecord): string {
   const firstTag = String(record.tags || "")
     .split(/[,，、\s]+/)
@@ -129,7 +184,7 @@ export function analyzeExport(records: WorkRecord[]): ExportAnalysis {
   const dates = Array.from(new Set(sortedRecords.map((record) => record.date))).sort();
   const businessSummary = buildSummary(records, (record) => record.businessCategory || record.category, "其他");
   const workTypeSummary = buildSummary(records, (record) => record.workType, "其他项");
-  const abilitySummary = buildMultiSummary(records, (record) => splitLabels(record.abilityDimension), "未填写能力");
+  const abilitySummary = buildAbilitySummary(records);
   const projectSummary = buildSummary(records, getProjectName, "未归属项目");
   const productSummary = buildSummary(records, (record) => record.productSystem, "未填写产品");
   const dateSummary = buildSummary(records, (record) => record.date, "未填写日期").sort((a, b) =>

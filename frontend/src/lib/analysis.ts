@@ -195,25 +195,77 @@ export function buildMultiDistribution(
     .sort((a, b) => b.workload - a.workload || b.timeHours - a.timeHours || b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
 }
 
+function resolveAbilityMetrics(record: WorkRecord): Array<{ abilityName: string; percentage: number; allocatedTimeHours: number; allocatedWorkload: number }> {
+  const stored = (record.abilityAllocations ?? []).filter(
+    (item) => item.abilityName.trim() && Number.isFinite(item.percentage) && item.percentage > 0
+  );
+  if (stored.length) {
+    return stored.map((item) => ({
+      abilityName: item.abilityName.trim(),
+      percentage: item.percentage,
+      allocatedTimeHours: item.allocatedTimeHours ?? Number((timeOf(record) * item.percentage / 100).toFixed(4)),
+      allocatedWorkload: item.allocatedWorkload ?? Number((workloadOf(record) * item.percentage / 100).toFixed(4))
+    }));
+  }
+  const labels = parseAbilityDimensions(record.abilityDimension);
+  const fallback = labels.length ? labels : ["未填写能力"];
+  const percentage = 100 / fallback.length;
+  return fallback.map((abilityName) => ({
+    abilityName,
+    percentage,
+    allocatedTimeHours: Number((timeOf(record) / fallback.length).toFixed(4)),
+    allocatedWorkload: Number((workloadOf(record) / fallback.length).toFixed(4))
+  }));
+}
+
+function buildAbilityDistribution(records: WorkRecord[]): DistributionItem[] {
+  const groups = new Map<string, { count: number; workload: number; timeHours: number; weightedCount: number }>();
+  records.forEach((record) => {
+    resolveAbilityMetrics(record).forEach((allocation) => {
+      const current = groups.get(allocation.abilityName) ?? { count: 0, workload: 0, timeHours: 0, weightedCount: 0 };
+      current.count += 1;
+      current.workload += allocation.allocatedWorkload;
+      current.timeHours += allocation.allocatedTimeHours;
+      current.weightedCount += allocation.percentage / 100;
+      groups.set(allocation.abilityName, current);
+    });
+  });
+  const totalWorkload = Array.from(groups.values()).reduce((sum, item) => sum + item.workload, 0);
+  const totalTime = Array.from(groups.values()).reduce((sum, item) => sum + item.timeHours, 0);
+  const totalWeightedCount = Array.from(groups.values()).reduce((sum, item) => sum + item.weightedCount, 0) || 1;
+
+  return Array.from(groups.entries())
+    .map(([label, value]) => {
+      const ratio = totalWorkload > 0
+        ? value.workload / totalWorkload
+        : totalTime > 0 ? value.timeHours / totalTime : value.weightedCount / totalWeightedCount;
+      return {
+        label,
+        count: value.count,
+        workload: roundMetric(value.workload),
+        timeHours: roundMetric(value.timeHours),
+        ratio: Number((ratio * 100).toFixed(1))
+      };
+    })
+    .sort((a, b) => b.workload - a.workload || b.timeHours - a.timeHours || b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
+}
+
 export function buildBusinessAbilityRelations(records: WorkRecord[]): BusinessAbilityRelationItem[] {
   const groups = new Map<string, { businessLabel: string; abilityLabel: string; count: number; workload: number; timeHours: number }>();
   const businessTotals = new Map<string, number>();
 
   records.forEach((record) => {
     const businessLabel = (record.businessCategory || record.category || "其他").trim() || "其他";
-    const abilities = parseAbilityDimensions(record.abilityDimension);
-    const finalAbilities = abilities.length ? abilities : ["未填写能力"];
     const workload = workloadOf(record);
-    const timeHours = timeOf(record);
 
     businessTotals.set(businessLabel, (businessTotals.get(businessLabel) ?? 0) + workload);
 
-    finalAbilities.forEach((abilityLabel) => {
-      const key = `${businessLabel}\u0000${abilityLabel}`;
-      const current = groups.get(key) ?? { businessLabel, abilityLabel, count: 0, workload: 0, timeHours: 0 };
+    resolveAbilityMetrics(record).forEach((allocation) => {
+      const key = `${businessLabel}\u0000${allocation.abilityName}`;
+      const current = groups.get(key) ?? { businessLabel, abilityLabel: allocation.abilityName, count: 0, workload: 0, timeHours: 0 };
       current.count += 1;
-      current.workload += workload;
-      current.timeHours += timeHours;
+      current.workload += allocation.allocatedWorkload;
+      current.timeHours += allocation.allocatedTimeHours;
       groups.set(key, current);
     });
   });
@@ -305,7 +357,7 @@ export function analyzeRecords(records: WorkRecord[], options?: AnalysisOptions 
     "其他"
   );
   const workTypeDistribution = buildDistribution(records, (record) => record.workType, "其他项");
-  const abilityDistribution = buildMultiDistribution(records, (record) => parseAbilityDimensions(record.abilityDimension), "未填写能力");
+  const abilityDistribution = buildAbilityDistribution(records);
   const productDistribution = buildDistribution(records, (record) => record.productSystem, "未填写产品");
   const businessAbilityRelations = buildBusinessAbilityRelations(records);
 
