@@ -29,6 +29,24 @@ test("yearly adjustment is preview-only and passed explicitly to export", () => 
   assert.doesNotMatch(yearly, /record\.workload\s*=/);
 });
 
+test("annual outcome package prioritizes reportable results, evidence and material gaps", () => {
+  const yearly = source("pages/YearlyPage.tsx");
+  const styles = source("styles/visual-refresh.css");
+
+  assert.match(yearly, /className="annual-package-heading"/);
+  assert.match(yearly, /className="annual-package-highlight"/);
+  assert.match(yearly, /annualPackage\.metrics\.reportableOutcomeCount/);
+  assert.match(yearly, /annualPackage\.metrics\.linkedWorkload/);
+  assert.match(yearly, /annualNeedsAttention = annualPackage\.reminders\.length > 0/);
+  assert.match(yearly, /className="annual-project-rank"/);
+  assert.match(yearly, /className="annual-gap-grid"/);
+  assert.match(yearly, /annualPackage\.gaps\.missingValueImpactCount/);
+  assert.match(styles, /\.annual-package-highlight \{[\s\S]*background: var\(--color-sidebar\);/);
+  assert.match(styles, /\.annual-package-side \{[\s\S]*grid-template-columns: minmax\(260px, 0\.65fr\) minmax\(0, 1\.35fr\);/);
+  assert.match(styles, /\.annual-gap-item\.has-gap \{[\s\S]*var\(--color-warning-soft\);/);
+  assert.match(styles, /@media \(max-width: 800px\)[\s\S]*\.annual-package-heading \{[\s\S]*flex-direction: column;/);
+});
+
 test("annual output package uses linked in-year records once and exposes evidence gaps", () => {
   const records = [
     { id: "r1", projectName: "Alpha", workload: 8, timeHours: 6 },

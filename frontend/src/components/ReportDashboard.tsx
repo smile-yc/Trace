@@ -80,6 +80,12 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function densityClass(count: number, sparseThreshold = 2): "is-empty" | "is-sparse" | "is-regular" {
+  if (count === 0) return "is-empty";
+  if (count <= sparseThreshold) return "is-sparse";
+  return "is-regular";
+}
+
 function splitLabel(label: string, chunkSize = 5): string[] {
   if (label.length <= chunkSize) return [label];
   return [label.slice(0, chunkSize), label.slice(chunkSize)];
@@ -314,7 +320,7 @@ function BusinessCategoryDonut({ items, onOpenSource }: { items: DistributionIte
   const secondPercent = secondItem ? percentOf(metricValue(secondItem), total) : 0;
 
   return (
-    <section className="dashboard-card business-donut-card">
+    <section className={`dashboard-card business-donut-card ${densityClass(items.length)}`}>
       <CardHeading
         icon={PieChart}
         meta={`${items.length} 类`}
@@ -389,7 +395,7 @@ function AbilityRadarChart({ items, onOpenSource }: { items: DistributionItem[];
     : [];
 
   return (
-    <section className="dashboard-card ability-radar-card">
+    <section className={`dashboard-card ability-radar-card ${densityClass(items.length)}`}>
       <CardHeading
         icon={Radar}
         meta={`${items.length} 类`}
@@ -519,7 +525,7 @@ function WorkTypeProfileChart({ items, onOpenSource }: { items: DistributionItem
   const secondPercent = secondItem ? percentOf(metricValue(secondItem), total) : 0;
 
   return (
-    <section className="dashboard-card worktype-profile-card">
+    <section className={`dashboard-card worktype-profile-card ${densityClass(items.length)}`}>
       <CardHeading
         icon={Workflow}
         meta={`${items.length} 类`}
@@ -600,7 +606,7 @@ function BusinessAbilityMatrix({ relations, onOpenSource }: { relations: Busines
   const topRelation = relations.slice().sort((a, b) => b.workload - a.workload || b.count - a.count)[0];
 
   return (
-    <section className="dashboard-card business-ability-card">
+    <section className={`dashboard-card business-ability-card ${densityClass(relations.length, 3)}`}>
       <CardHeading
         icon={GitBranch}
         meta="矩阵视图"
@@ -695,6 +701,7 @@ function BusinessAbilityMatrix({ relations, onOpenSource }: { relations: Busines
 
 function TrendChart({ points, onOpenSource }: { points: TrendPoint[]; onOpenSource: OpenDashboardSource }) {
   const [tooltip, setTooltip] = useState<TrendTooltipState | null>(null);
+  const activePointCount = points.filter((point) => point.workload > 0 || point.timeHours > 0).length;
   const maxValue = Math.max(1, ...points.map((point) => Math.max(point.workload, point.timeHours)));
   const chartWidth = Math.max(520, points.length * 58 + 76);
   const chartHeight = 232;
@@ -712,7 +719,7 @@ function TrendChart({ points, onOpenSource }: { points: TrendPoint[]; onOpenSour
   };
 
   return (
-    <section className="dashboard-card trend-card">
+    <section className={`dashboard-card trend-card ${densityClass(activePointCount, 1)}`}>
       <CardHeading
         icon={Activity}
         meta="当量 / 时间"
@@ -821,7 +828,7 @@ function ProjectRank({ projects, onOpenSource }: { projects: ProjectSummary[]; o
   const maxValue = Math.max(1, ...projects.map((project) => Math.max(project.count, project.workload)));
 
   return (
-    <section className="dashboard-card project-rank-card">
+    <section className={`dashboard-card project-rank-card ${densityClass(projects.length)}`}>
       <CardHeading
         icon={BriefcaseBusiness}
         meta={`${projects.length} 个项目`}
@@ -870,7 +877,7 @@ function FocusRank({
   const hiddenCount = Math.max(0, items.length - visibleItems.length);
 
   return (
-    <section className="dashboard-card focus-rank-card">
+    <section className={`dashboard-card focus-rank-card ${densityClass(items.length)}`}>
       <CardHeading
         icon={Trophy}
         meta={`Top ${visibleItems.length}${hiddenCount ? ` / ${items.length}` : ""} · ${weightLabel}`}
@@ -912,7 +919,7 @@ function ProductMatrix({ items, onOpenSource }: { items: DistributionItem[]; onO
   const maxValue = Math.max(1, ...visibleItems.map(metricValue));
 
   return (
-    <section className="dashboard-card product-matrix-card">
+    <section className={`dashboard-card product-matrix-card ${densityClass(items.length)}`}>
       <CardHeading
         icon={Layers3}
         meta={`${items.length} 类`}
@@ -1079,19 +1086,15 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
         </div>
       )}
 
+      <section className="dashboard-wide-row">
+        <TrendChart points={trend} onOpenSource={openSource} />
+      </section>
+
       <section className="dashboard-grid mixed dashboard-masonry">
         <div className="dashboard-column dashboard-column-primary">
           <BusinessCategoryDonut items={analysis.businessDistribution} onOpenSource={openSource} />
-          <ProjectRank projects={analysis.projectSummaries} onOpenSource={openSource} />
           <AbilityRadarChart items={analysis.abilityDistribution} onOpenSource={openSource} />
           <ProductMatrix items={analysis.productDistribution} onOpenSource={openSource} />
-        </div>
-
-        <div className="dashboard-column dashboard-column-analysis">
-          <TrendChart points={trend} onOpenSource={openSource} />
-          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={openSource} />
-          <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={openSource} />
-          <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
           <section className="dashboard-card insight-card">
             <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" onSource={() => openSource("本期观察全部来源", { kind: "all" })} />
             <div className="insight-lines">
@@ -1101,6 +1104,13 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
               <p>能力投入集中在 <strong>{analysis.abilityDistribution[0]?.label ?? "暂无能力维度"}</strong></p>
             </div>
           </section>
+        </div>
+
+        <div className="dashboard-column dashboard-column-analysis">
+          <ProjectRank projects={analysis.projectSummaries} onOpenSource={openSource} />
+          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={openSource} />
+          <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={openSource} />
+          <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
         </div>
       </section>
 

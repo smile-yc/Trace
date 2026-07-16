@@ -110,6 +110,17 @@ test("dashboard uses independent vertical lanes without cross-card row gaps", ()
   assert.match(visualRefreshStyles, /@media \(max-width: 620px\)[\s\S]*\.trend-combo-svg \{[\s\S]*min-width: 480px;/);
 });
 
+test("report dashboard keeps trend full width and compacts sparse data cards", () => {
+  assert.match(reportDashboard, /function densityClass\(count: number/);
+  assert.match(reportDashboard, /<section className="dashboard-wide-row">[\s\S]*<TrendChart/);
+  assert.match(reportDashboard, /business-donut-card \$\{densityClass\(items\.length\)\}/);
+  assert.match(reportDashboard, /project-rank-card \$\{densityClass\(projects\.length\)\}/);
+  assert.match(reportDashboard, /focus-rank-card \$\{densityClass\(items\.length\)\}/);
+  assert.match(visualRefreshStyles, /\.dashboard-wide-row \{[\s\S]*margin-bottom: 14px;/);
+  assert.match(visualRefreshStyles, /\.dashboard-card\.is-sparse \{[\s\S]*padding-bottom: 14px;/);
+  assert.match(visualRefreshStyles, /\.dashboard-card\.is-empty \.empty-state \{[\s\S]*min-height: 72px;/);
+});
+
 test("ability focus decoration stays behind readable content", () => {
   assert.match(visualRefreshStyles, /\.ability-focus-card > :not\(\.ability-focus-wave\) \{[\s\S]*position: relative;[\s\S]*z-index: 1;/);
   assert.match(visualRefreshStyles, /\.ability-focus-wave \{[\s\S]*bottom: -34px;[\s\S]*z-index: 0;[\s\S]*opacity: 0\.28;[\s\S]*pointer-events: none;/);
@@ -194,11 +205,11 @@ test("segmented donut external labels keep natural positions inside a padded cha
 test("report dashboard modules are balanced across two independent columns", () => {
   assert.match(
     reportDashboard,
-    /<div className="dashboard-column dashboard-column-primary">[\s\S]*<BusinessCategoryDonut[\s\S]*<ProjectRank[\s\S]*<AbilityRadarChart[\s\S]*<ProductMatrix/
+    /<div className="dashboard-column dashboard-column-primary">[\s\S]*<BusinessCategoryDonut[\s\S]*<AbilityRadarChart[\s\S]*<ProductMatrix[\s\S]*insight-card/
   );
   assert.match(
     reportDashboard,
-    /<div className="dashboard-column dashboard-column-analysis">[\s\S]*<TrendChart[\s\S]*<BusinessAbilityMatrix[\s\S]*<WorkTypeProfileChart[\s\S]*<FocusRank[\s\S]*insight-card/
+    /<div className="dashboard-column dashboard-column-analysis">[\s\S]*<ProjectRank[\s\S]*<BusinessAbilityMatrix[\s\S]*<WorkTypeProfileChart[\s\S]*<FocusRank/
   );
   assert.match(reportDashboard, /<section className="dashboard-grid mixed dashboard-masonry">/);
 });

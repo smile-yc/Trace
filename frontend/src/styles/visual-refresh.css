@@ -490,6 +490,15 @@ body,
   margin-bottom: 16px;
 }
 
+.dashboard-wide-row {
+  display: grid;
+  margin-bottom: 14px;
+}
+
+.dashboard-wide-row .dashboard-card {
+  width: 100%;
+}
+
 .dashboard-masonry {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
@@ -524,6 +533,28 @@ body,
   border-top: 3px solid var(--dashboard-accent);
   background: var(--color-surface);
   box-shadow: 0 8px 22px rgba(53, 65, 59, 0.06);
+}
+
+.dashboard-card.is-sparse {
+  padding-bottom: 14px;
+}
+
+.dashboard-card.is-empty {
+  padding-bottom: 12px;
+}
+
+.dashboard-card.is-empty .dashboard-card-heading {
+  margin-bottom: 10px;
+}
+
+.dashboard-card.is-empty .empty-state {
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
 }
 
 .business-donut-card,
@@ -604,10 +635,32 @@ body,
   min-height: 220px;
 }
 
+.dashboard-card.is-sparse .business-donut-stage,
+.dashboard-card.is-sparse .segmented-donut-stage {
+  min-height: 176px;
+}
+
+.dashboard-card.is-sparse .segmented-donut-chart {
+  width: min(100%, 284px);
+}
+
+.dashboard-card.is-sparse .business-donut-main {
+  grid-template-columns: minmax(170px, 0.72fr) minmax(180px, 1fr);
+  gap: 14px;
+}
+
 .trend-combo-chart {
   min-height: 250px;
   flex: 0 1 auto;
   background: var(--color-surface-muted);
+}
+
+.dashboard-wide-row .trend-combo-chart {
+  min-height: 220px;
+}
+
+.dashboard-wide-row .trend-card.is-sparse .trend-combo-chart {
+  min-height: 186px;
 }
 
 .trend-combo-svg {
@@ -633,6 +686,20 @@ body,
   min-height: 160px;
   padding: 16px;
   box-shadow: none;
+}
+
+.dashboard-card.is-sparse .ability-radar-layout {
+  grid-template-columns: minmax(150px, 0.62fr) minmax(180px, 1fr);
+  gap: 12px;
+}
+
+.dashboard-card.is-sparse .ability-focus-card {
+  min-height: 132px;
+  padding: 14px;
+}
+
+.dashboard-card.is-sparse .ability-radar-fallback {
+  padding: 14px;
 }
 
 .dashboard-column .ability-radar-plot svg {
@@ -710,6 +777,10 @@ body,
   min-height: 300px;
 }
 
+.dashboard-card.is-sparse .business-ability-matrix {
+  min-height: 190px;
+}
+
 .matrix-ability-label {
   background: rgba(75, 127, 139, 0.09);
 }
@@ -723,12 +794,447 @@ body,
   background: var(--color-surface-muted);
 }
 
+.dashboard-card.is-sparse .product-matrix button {
+  min-height: 64px;
+}
+
 .insight-lines {
   gap: 8px;
 }
 
 .insight-lines strong {
   color: var(--color-brand);
+}
+
+.annual-package-panel {
+  padding: 0;
+  overflow: hidden;
+  border-top: 3px solid var(--color-brand);
+}
+
+.annual-package-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.annual-package-heading h2,
+.annual-package-heading p,
+.annual-section-heading h3,
+.annual-section-heading p {
+  margin: 0;
+}
+
+.annual-package-heading h2 {
+  margin-top: 5px;
+  color: var(--color-title);
+  font-size: 21px;
+}
+
+.annual-package-heading p {
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.annual-package-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-brand);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.annual-package-status {
+  min-width: 152px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-success);
+  border-radius: var(--radius-control);
+  background: var(--color-success-soft);
+}
+
+.annual-package-status svg {
+  grid-row: 1 / 3;
+  color: var(--color-success);
+}
+
+.annual-package-status span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.annual-package-status strong {
+  color: var(--color-title);
+  font-size: 14px;
+}
+
+.annual-package-status.needs-attention {
+  border-left-color: var(--color-accent-warm);
+  background: var(--color-warning-soft);
+}
+
+.annual-package-status.needs-attention svg {
+  color: var(--color-warning);
+}
+
+.annual-package-overview {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.annual-package-highlight {
+  min-width: 0;
+  padding: 22px;
+  background: var(--color-sidebar);
+  color: #ffffff;
+}
+
+.annual-package-highlight > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.annual-package-highlight > strong {
+  display: block;
+  margin-top: 8px;
+  color: #ffffff;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+}
+
+.annual-package-highlight > p {
+  max-width: 360px;
+  margin: 8px 0 17px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.annual-evidence-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.annual-evidence-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+}
+
+.annual-evidence-summary b {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.annual-package-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 0;
+}
+
+.annual-package-metrics > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: center;
+  gap: 4px 9px;
+  padding: 17px 20px;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.annual-package-metrics > div:nth-child(2n) {
+  border-right: 0;
+}
+
+.annual-package-metrics > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.annual-package-metrics svg {
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--color-brand);
+}
+
+.annual-package-metrics span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.annual-package-metrics strong {
+  color: var(--color-title);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.annual-package-content {
+  display: grid;
+}
+
+.annual-project-section {
+  min-width: 0;
+  padding: 22px;
+}
+
+.annual-package-side {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.65fr) minmax(0, 1.35fr);
+  border-top: 1px solid var(--color-border);
+}
+
+.annual-outcome-section,
+.annual-gap-section {
+  padding: 20px;
+}
+
+.annual-outcome-section {
+  border-right: 1px solid var(--color-border);
+}
+
+.annual-section-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.annual-section-heading h3 {
+  color: var(--color-title);
+  font-size: 15px;
+}
+
+.annual-section-heading p {
+  margin-top: 3px;
+  color: var(--color-text-faint);
+  font-size: 11px;
+}
+
+.annual-section-heading > span {
+  color: var(--color-brand);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.annual-project-rank {
+  display: grid;
+  gap: 0;
+}
+
+.annual-project-rank > article {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.annual-project-rank > article:last-child {
+  border-bottom: 0;
+}
+
+.annual-project-index {
+  color: var(--color-accent-warm);
+  font-size: 12px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+}
+
+.annual-project-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.annual-project-copy strong {
+  overflow: hidden;
+  color: var(--color-title);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.annual-project-copy span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.annual-project-copy i,
+.annual-outcome-breakdown i {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-surface-muted);
+}
+
+.annual-project-copy i::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--project-share);
+  background: var(--color-brand);
+  content: "";
+}
+
+.annual-project-values {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 1px 5px;
+  text-align: right;
+}
+
+.annual-project-values strong {
+  color: var(--color-title);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.annual-project-values span {
+  color: var(--color-text-faint);
+  font-size: 10px;
+}
+
+.annual-outcome-breakdown {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.annual-outcome-breakdown > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+  padding: 0;
+  border: 0;
+}
+
+.annual-outcome-breakdown dt {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.annual-outcome-breakdown dd {
+  margin: 0;
+  color: var(--color-title);
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.annual-outcome-breakdown i {
+  grid-column: 1 / -1;
+}
+
+.annual-outcome-breakdown i::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--outcome-share);
+  background: var(--color-growth);
+  content: "";
+}
+
+.annual-gap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.annual-gap-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 6px;
+  padding: 9px;
+  border-left: 3px solid var(--color-success);
+  border-radius: var(--radius-control);
+  background: var(--color-success-soft);
+}
+
+.annual-gap-item svg {
+  grid-row: 1 / 3;
+  color: var(--color-success);
+}
+
+.annual-gap-item span,
+.annual-gap-item small {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.annual-gap-item strong {
+  justify-self: end;
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--color-title);
+  font-size: 14px;
+}
+
+.annual-gap-item small {
+  grid-column: 2;
+}
+
+.annual-gap-item.has-gap {
+  border-left-color: var(--color-accent-warm);
+  background: var(--color-warning-soft);
+}
+
+.annual-gap-item.has-gap svg {
+  color: var(--color-warning);
+}
+
+.annual-package-reminders {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.annual-package-reminders p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.annual-package-reminders p::before {
+  color: var(--color-accent-warm);
+  content: "· ";
+  font-weight: 800;
+}
+
+.annual-package-note {
+  margin: 0;
+  padding: 10px 22px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-faint);
+  font-size: 11px;
 }
 
 @media (max-width: 1180px) {
@@ -742,6 +1248,15 @@ body,
 
   .ledger-page .ui-filter-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .annual-package-side {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-outcome-section {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
   }
 }
 
@@ -774,6 +1289,28 @@ body,
   .dashboard-card,
   .panel {
     padding: 16px;
+  }
+
+  .annual-package-panel {
+    padding: 0;
+  }
+
+  .annual-package-heading,
+  .annual-package-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-package-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .annual-package-overview {
+    display: grid;
+  }
+
+  .annual-package-status {
+    width: 100%;
   }
 
   :is(.app-shell, .ui-modal, .ui-detail-panel, .modal) input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"])),
@@ -811,6 +1348,40 @@ body,
 
   .trend-combo-svg {
     min-width: 480px;
+  }
+
+  .annual-package-heading,
+  .annual-package-highlight,
+  .annual-project-section,
+  .annual-outcome-section,
+  .annual-gap-section {
+    padding: 16px;
+  }
+
+  .annual-package-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-package-metrics > div,
+  .annual-package-metrics > div:nth-child(2n),
+  .annual-package-metrics > div:nth-last-child(-n + 2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .annual-package-metrics > div:last-child {
+    border-bottom: 0;
+  }
+
+  .annual-project-rank > article {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .annual-project-values {
+    grid-column: 2;
+    grid-template-columns: auto auto auto auto;
+    justify-content: start;
+    text-align: left;
   }
 }
 
