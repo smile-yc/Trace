@@ -123,6 +123,19 @@ test("ledger filters render as one compact segmented toolbar", () => {
   assert.match(visualRefreshStyles, /\.ledger-page \.ledger-filter-field:focus-within,[\s\S]*\.ledger-page \.ledger-filter-grid label:focus-within \{[\s\S]*box-shadow: inset 0 -2px 0 var\(--color-brand\);/);
 });
 
+test("form controls share a themed surface and complete interaction states", () => {
+  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:not\(\[type="checkbox"\]\)[\s\S]*:not\(\[type="radio"\]\)/);
+  assert.doesNotMatch(visualRefreshStyles, /:not\(\[type="checkbox"\]\)\s+:not\(\[type="radio"\]\)/);
+  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) select,[\s\S]*:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) textarea \{[\s\S]*border-left: 3px solid var\(--color-control-accent\);[\s\S]*background: var\(--color-control\);[\s\S]*box-shadow: var\(--shadow-control\);/);
+  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) \.ui-select-trigger,[\s\S]*:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) \.ability-picker-trigger \{[\s\S]*background: var\(--color-control\);/);
+  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:hover,[\s\S]*background: var\(--color-control-hover\);/);
+  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:focus,[\s\S]*box-shadow: 0 0 0 3px rgba\(75, 127, 139, 0\.16\);/);
+  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:disabled,[\s\S]*background: var\(--color-control-disabled\);/);
+  assert.match(visualRefreshStyles, /\.ui-field\.has-error input,[\s\S]*\[aria-invalid="true"\] \{[\s\S]*border-left-color: var\(--color-danger\);/);
+  assert.match(visualRefreshStyles, /\.ui-select-search input \{[\s\S]*border: 0;[\s\S]*box-shadow: none;/);
+  assert.match(visualRefreshStyles, /input\[type="checkbox"\],[\s\S]*input\[type="radio"\] \{[\s\S]*width: 16px;[\s\S]*min-height: 16px;[\s\S]*accent-color: var\(--color-brand\);/);
+});
+
 test("workload trend is workload bar plus time line without record count", () => {
   assert.equal(reportDashboard.includes("trend-bar-pair"), false);
   assert.equal(reportDashboard.includes("className=\"count\""), false);

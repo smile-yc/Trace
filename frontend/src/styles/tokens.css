@@ -23,6 +23,10 @@
   --color-warning-soft: #f3ede5;
   --color-danger: #a34f4b;
   --color-danger-soft: #f6e9e8;
+  --color-control: #f7f9f7;
+  --color-control-hover: #ffffff;
+  --color-control-disabled: #e9eeea;
+  --color-control-accent: #91adb3;
   --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
   --font-numeric: tabular-nums;
   --text-xs: 12px;
@@ -40,6 +44,7 @@
   --radius-control: 6px;
   --radius-surface: 8px;
   --shadow-overlay: 0 12px 36px rgba(24, 33, 38, 0.14);
+  --shadow-control: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(53, 65, 59, 0.08);
   --sidebar-width: 216px;
   --control-height: 36px;
   --touch-target: 44px;

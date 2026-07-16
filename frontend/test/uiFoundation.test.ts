@@ -43,6 +43,10 @@ test("design tokens use the approved ink-and-teal Trace palette and compact geom
   assert.match(tokens, /--color-border: #d6ddd9;/i);
   assert.match(tokens, /--color-accent-warm: #b29065;/i);
   assert.match(tokens, /--color-growth: #769377;/i);
+  assert.match(tokens, /--color-control: #f7f9f7;/i);
+  assert.match(tokens, /--color-control-hover: #ffffff;/i);
+  assert.match(tokens, /--color-control-disabled: #e9eeea;/i);
+  assert.match(tokens, /--color-control-accent: #91adb3;/i);
   assert.match(tokens, /--radius-control: 6px;/i);
   assert.match(tokens, /--radius-surface: 8px;/i);
   assert.match(tokens, /--sidebar-width: 216px;/i);
