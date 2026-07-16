@@ -107,16 +107,19 @@ test("dashboard uses independent vertical lanes without cross-card row gaps", ()
   assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-masonry \{[\s\S]*grid-template-columns: 1fr;/);
   assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-column > \.dashboard-card \{[\s\S]*overflow: hidden;/);
   assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.business-ability-coordinate \{[\s\S]*overflow-x: auto;/);
-  assert.match(visualRefreshStyles, /@media \(max-width: 620px\)[\s\S]*\.trend-combo-svg \{[\s\S]*min-width: 480px;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 620px\)[\s\S]*\.trend-combo-svg \{[\s\S]*min-width: 680px;/);
 });
 
 test("report dashboard keeps trend full width and compacts sparse data cards", () => {
   assert.match(reportDashboard, /function densityClass\(count: number/);
   assert.match(reportDashboard, /<section className="dashboard-wide-row">[\s\S]*<TrendChart/);
+  assert.match(reportDashboard, /const chartWidth = Math\.max\(760,/);
+  assert.match(reportDashboard, /const chartHeight = 176;/);
   assert.match(reportDashboard, /business-donut-card \$\{densityClass\(items\.length\)\}/);
   assert.match(reportDashboard, /project-rank-card \$\{densityClass\(projects\.length\)\}/);
   assert.match(reportDashboard, /focus-rank-card \$\{densityClass\(items\.length\)\}/);
   assert.match(visualRefreshStyles, /\.dashboard-wide-row \{[\s\S]*margin-bottom: 14px;/);
+  assert.match(visualRefreshStyles, /\.dashboard-wide-row \.trend-combo-chart \{[\s\S]*min-height: 176px;/);
   assert.match(visualRefreshStyles, /\.dashboard-card\.is-sparse \{[\s\S]*padding-bottom: 14px;/);
   assert.match(visualRefreshStyles, /\.dashboard-card\.is-empty \.empty-state \{[\s\S]*min-height: 72px;/);
 });
@@ -205,13 +208,16 @@ test("segmented donut external labels keep natural positions inside a padded cha
 test("report dashboard modules are balanced across two independent columns", () => {
   assert.match(
     reportDashboard,
-    /<div className="dashboard-column dashboard-column-primary">[\s\S]*<BusinessCategoryDonut[\s\S]*<AbilityRadarChart[\s\S]*<ProductMatrix[\s\S]*insight-card/
+    /<div className="dashboard-column dashboard-column-primary">[\s\S]*<BusinessCategoryDonut[\s\S]*<AbilityRadarChart[\s\S]*<ProductMatrix/
   );
   assert.match(
     reportDashboard,
-    /<div className="dashboard-column dashboard-column-analysis">[\s\S]*<ProjectRank[\s\S]*<BusinessAbilityMatrix[\s\S]*<WorkTypeProfileChart[\s\S]*<FocusRank/
+    /<div className="dashboard-column dashboard-column-analysis">[\s\S]*<ProjectRank[\s\S]*<BusinessAbilityMatrix[\s\S]*<WorkTypeProfileChart/
   );
   assert.match(reportDashboard, /<section className="dashboard-grid mixed dashboard-masonry">/);
+  assert.match(reportDashboard, /<section className="dashboard-bottom-row">[\s\S]*insight-card[\s\S]*<FocusRank/);
+  assert.match(visualRefreshStyles, /\.dashboard-bottom-row \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*align-items: stretch;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-bottom-row \{[\s\S]*grid-template-columns: 1fr;/);
 });
 
 test("dashboard metrics and chart groups can return to deduplicated source records", () => {

@@ -703,9 +703,9 @@ function TrendChart({ points, onOpenSource }: { points: TrendPoint[]; onOpenSour
   const [tooltip, setTooltip] = useState<TrendTooltipState | null>(null);
   const activePointCount = points.filter((point) => point.workload > 0 || point.timeHours > 0).length;
   const maxValue = Math.max(1, ...points.map((point) => Math.max(point.workload, point.timeHours)));
-  const chartWidth = Math.max(520, points.length * 58 + 76);
-  const chartHeight = 232;
-  const padding = { top: 22, right: 28, bottom: 36, left: 38 };
+  const chartWidth = Math.max(760, points.length * 58 + 76);
+  const chartHeight = 176;
+  const padding = { top: 18, right: 28, bottom: 32, left: 38 };
   const plotWidth = chartWidth - padding.left - padding.right;
   const plotHeight = chartHeight - padding.top - padding.bottom;
   const bottom = padding.top + plotHeight;
@@ -1095,23 +1095,26 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
           <BusinessCategoryDonut items={analysis.businessDistribution} onOpenSource={openSource} />
           <AbilityRadarChart items={analysis.abilityDistribution} onOpenSource={openSource} />
           <ProductMatrix items={analysis.productDistribution} onOpenSource={openSource} />
-          <section className="dashboard-card insight-card">
-            <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" onSource={() => openSource("本期观察全部来源", { kind: "all" })} />
-            <div className="insight-lines">
-              <p>项目投入集中在 <strong>{analysis.projectSummaries[0]?.projectName ?? "暂无项目"}</strong></p>
-              <p>主要业务方向为 <strong>{analysis.topBusinessLabel}</strong></p>
-              <p>主要工作类型为 <strong>{analysis.topWorkTypeLabel}</strong></p>
-              <p>能力投入集中在 <strong>{analysis.abilityDistribution[0]?.label ?? "暂无能力维度"}</strong></p>
-            </div>
-          </section>
         </div>
 
         <div className="dashboard-column dashboard-column-analysis">
           <ProjectRank projects={analysis.projectSummaries} onOpenSource={openSource} />
           <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={openSource} />
           <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={openSource} />
-          <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
         </div>
+      </section>
+
+      <section className="dashboard-bottom-row">
+        <section className="dashboard-card insight-card">
+          <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" onSource={() => openSource("本期观察全部来源", { kind: "all" })} />
+          <div className="insight-lines">
+            <p>项目投入集中在 <strong>{analysis.projectSummaries[0]?.projectName ?? "暂无项目"}</strong></p>
+            <p>主要业务方向为 <strong>{analysis.topBusinessLabel}</strong></p>
+            <p>主要工作类型为 <strong>{analysis.topWorkTypeLabel}</strong></p>
+            <p>能力投入集中在 <strong>{analysis.abilityDistribution[0]?.label ?? "暂无能力维度"}</strong></p>
+          </div>
+        </section>
+        <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
       </section>
 
       <ProjectCards projects={analysis.projectSummaries} onOpenSource={openSource} />
