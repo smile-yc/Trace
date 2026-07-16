@@ -147,6 +147,111 @@ body,
   font-size: 17px;
 }
 
+.ledger-page .ui-filter-bar {
+  position: relative;
+  margin-bottom: 16px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+  box-shadow: 0 8px 22px rgba(53, 65, 59, 0.06);
+}
+
+.ledger-page .ui-filter-bar::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
+  background: var(--color-brand);
+  content: "";
+}
+
+.ledger-page .ui-filter-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 54px;
+  align-items: end;
+  gap: 10px;
+  padding: 9px 12px 9px 15px;
+}
+
+.ledger-page .ui-filter-controls {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(110px, 0.72fr) minmax(180px, 1fr) minmax(220px, 1.3fr) minmax(130px, 0.78fr);
+  gap: 1px;
+  border-radius: var(--radius-control);
+  background: var(--color-border);
+}
+
+.ledger-page .ui-filter-more {
+  width: 100%;
+  margin-top: 0;
+  padding: 1px 0 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-border);
+}
+
+.ledger-page .ledger-filter-grid {
+  width: 100%;
+  grid-template-columns: minmax(130px, 0.72fr) minmax(190px, 1fr) minmax(220px, 1.25fr) minmax(150px, 0.78fr);
+  gap: 1px;
+}
+
+.ledger-page .ledger-filter-field,
+.ledger-page .ledger-filter-grid label {
+  min-width: 0;
+  gap: 2px;
+  padding: 9px 12px;
+  background: var(--color-surface);
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.ledger-page .ledger-filter-field > span,
+.ledger-page .ledger-filter-grid label > span {
+  color: var(--color-text-faint);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.ledger-page .ledger-filter-field input,
+.ledger-page .ledger-filter-field select,
+.ledger-page .ledger-filter-grid input,
+.ledger-page .ledger-filter-grid select,
+.ledger-page .ledger-custom-range input,
+.ledger-page .ledger-project-filter .ui-select-trigger {
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-title);
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.ledger-page .ledger-project-filter {
+  width: auto;
+}
+
+.ledger-page .ledger-project-filter .ui-search-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.ledger-page .ledger-filter-field:focus-within,
+.ledger-page .ledger-filter-grid label:focus-within {
+  background: var(--color-brand-selected);
+  box-shadow: inset 0 -2px 0 var(--color-brand);
+}
+
+.ledger-page .ui-active-filters {
+  margin: 0;
+  padding: 8px 12px 10px 15px;
+  border-top: 1px solid var(--color-border);
+}
+
 .dashboard-ledger {
   gap: 10px;
   margin: 0 0 14px;
@@ -217,22 +322,20 @@ body,
   margin-bottom: 16px;
 }
 
-.dashboard-row {
-  gap: 14px;
-  align-items: start;
-}
-
-.dashboard-row-three {
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1.28fr) minmax(240px, 0.82fr);
-}
-
-.dashboard-row-two,
-.dashboard-row-ability,
-.dashboard-row-focus {
+.dashboard-masonry {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
 }
 
-.dashboard-row > .dashboard-card {
+.dashboard-column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 14px;
+}
+
+.dashboard-column > .dashboard-card {
   width: 100%;
   min-height: 0;
   height: auto;
@@ -242,11 +345,32 @@ body,
   overflow: visible;
 }
 
+.dashboard-column .ability-radar-card {
+  grid-column: auto;
+}
+
 .dashboard-card {
+  --dashboard-accent: var(--color-brand);
   padding: 18px;
-  border-color: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--dashboard-accent);
   background: var(--color-surface);
-  box-shadow: none;
+  box-shadow: 0 8px 22px rgba(53, 65, 59, 0.06);
+}
+
+.business-donut-card,
+.product-matrix-card {
+  --dashboard-accent: var(--color-sidebar);
+}
+
+.project-rank-card,
+.business-ability-card {
+  --dashboard-accent: var(--color-growth);
+}
+
+.worktype-profile-card,
+.focus-rank-card {
+  --dashboard-accent: var(--color-accent-warm);
 }
 
 .dashboard-card-heading {
@@ -269,16 +393,19 @@ body,
 .heading-icon.navy {
   width: 28px;
   height: 28px;
-  background: var(--color-brand);
+  background: var(--color-brand-selected);
+  color: var(--color-brand);
   box-shadow: none;
 }
 
 .heading-icon.green {
-  background: var(--color-growth);
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 
 .heading-icon.orange {
-  background: var(--color-accent-warm);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 .dashboard-source-button {
@@ -287,25 +414,25 @@ body,
   color: var(--color-text-muted);
 }
 
-.dashboard-row .business-donut-layout,
-.dashboard-row .ability-radar-layout,
-.dashboard-row .worktype-profile-layout,
-.dashboard-row .product-matrix,
-.dashboard-row .insight-lines {
+.dashboard-column .business-donut-layout,
+.dashboard-column .ability-radar-layout,
+.dashboard-column .worktype-profile-layout,
+.dashboard-column .product-matrix,
+.dashboard-column .insight-lines {
   flex: 0 1 auto;
   overflow: visible;
   overscroll-behavior: auto;
 }
 
-.dashboard-row .project-rank-list,
-.dashboard-row .focus-rank-list {
+.dashboard-column .project-rank-list,
+.dashboard-column .focus-rank-list {
   flex: 0 1 auto;
   overflow: visible;
   overscroll-behavior: auto;
 }
 
 .business-donut-stage,
-.dashboard-row .business-donut-card .business-donut-stage {
+.dashboard-column .business-donut-card .business-donut-stage {
   min-height: 220px;
 }
 
@@ -324,23 +451,23 @@ body,
   filter: none;
 }
 
-.dashboard-row .ability-radar-layout {
+.dashboard-column .ability-radar-layout {
   grid-template-columns: minmax(150px, 0.72fr) minmax(220px, 1fr);
   gap: 14px;
 }
 
-.dashboard-row .ability-radar-list,
-.dashboard-row .ability-radar-insight {
+.dashboard-column .ability-radar-list,
+.dashboard-column .ability-radar-insight {
   grid-column: 1 / -1;
 }
 
-.dashboard-row .ability-radar-card .ability-focus-card {
+.dashboard-column .ability-radar-card .ability-focus-card {
   min-height: 160px;
   padding: 16px;
   box-shadow: none;
 }
 
-.dashboard-row .ability-radar-plot svg {
+.dashboard-column .ability-radar-plot svg {
   width: min(100%, 250px);
 }
 
@@ -363,7 +490,7 @@ body,
   fill: var(--color-brand);
 }
 
-.dashboard-row .worktype-profile-main {
+.dashboard-column .worktype-profile-main {
   grid-template-columns: minmax(190px, 0.82fr) minmax(220px, 1fr);
   gap: 16px;
   align-items: center;
@@ -389,6 +516,21 @@ body,
 
 .worktype-type-cards article:nth-child(2) em {
   color: var(--color-warning);
+}
+
+.ability-focus-card > :not(.ability-focus-wave) {
+  position: relative;
+  z-index: 1;
+}
+
+.ability-focus-wave {
+  right: -18px;
+  bottom: -34px;
+  z-index: 0;
+  width: 70%;
+  max-width: 210px;
+  opacity: 0.28;
+  pointer-events: none;
 }
 
 .business-insight-card {
@@ -426,32 +568,25 @@ body,
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .dashboard-row-three {
+  .ledger-page .ledger-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-row-three > :last-child {
-    grid-column: 1 / -1;
+  .ledger-page .ui-filter-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 900px) {
-  .dashboard-row-three,
-  .dashboard-row-two,
-  .dashboard-row-ability,
-  .dashboard-row-focus {
+  .dashboard-masonry {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-row-three > :last-child {
-    grid-column: auto;
-  }
-
-  .dashboard-row {
+  .dashboard-column {
     min-width: 0;
   }
 
-  .dashboard-row > .dashboard-card {
+  .dashboard-column > .dashboard-card {
     min-width: 0;
     overflow: hidden;
   }
@@ -479,14 +614,23 @@ body,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-row .ability-radar-layout,
-  .dashboard-row .worktype-profile-main {
+  .dashboard-column .ability-radar-layout,
+  .dashboard-column .worktype-profile-main {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-row .ability-radar-list,
-  .dashboard-row .ability-radar-insight {
+  .dashboard-column .ability-radar-list,
+  .dashboard-column .ability-radar-insight {
     grid-column: auto;
+  }
+
+  .ledger-page .ledger-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-page .ui-filter-main,
+  .ledger-page .ui-filter-controls {
+    grid-template-columns: 1fr;
   }
 
   .trend-combo-svg {

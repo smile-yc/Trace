@@ -96,15 +96,31 @@ test("report dashboard includes business ability relation insight matrix", () =>
   assert.match(styles, /\.relation-bubble \{[\s\S]*border-radius: 50%;/);
 });
 
-test("dashboard rows are content-driven and avoid sparse equal-height cards", () => {
-  assert.match(visualRefreshStyles, /\.dashboard-row \{[\s\S]*align-items: start;/);
-  assert.match(visualRefreshStyles, /\.dashboard-row > \.dashboard-card \{[\s\S]*min-height: 0;[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
-  assert.match(visualRefreshStyles, /\.dashboard-row \.project-rank-list,[\s\S]*\.dashboard-row \.focus-rank-list \{[\s\S]*overflow: visible;/);
+test("dashboard uses independent vertical lanes without cross-card row gaps", () => {
+  assert.match(visualRefreshStyles, /\.dashboard-masonry \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*align-items: start;/);
+  assert.match(visualRefreshStyles, /\.dashboard-column \{[\s\S]*align-content: start;[\s\S]*gap: 14px;/);
+  assert.match(visualRefreshStyles, /\.dashboard-column > \.dashboard-card \{[\s\S]*min-height: 0;[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
+  assert.match(visualRefreshStyles, /\.dashboard-column \.ability-radar-card \{[\s\S]*grid-column: auto;/);
+  assert.match(visualRefreshStyles, /\.dashboard-column \.project-rank-list,[\s\S]*\.dashboard-column \.focus-rank-list \{[\s\S]*overflow: visible;/);
   assert.match(visualRefreshStyles, /\.trend-combo-chart \{[\s\S]*min-height: 250px;/);
   assert.match(visualRefreshStyles, /\.trend-combo-svg \{[\s\S]*min-width: 0;/);
-  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-row > \.dashboard-card \{[\s\S]*overflow: hidden;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-masonry \{[\s\S]*grid-template-columns: 1fr;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-column > \.dashboard-card \{[\s\S]*overflow: hidden;/);
   assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.business-ability-coordinate \{[\s\S]*overflow-x: auto;/);
   assert.match(visualRefreshStyles, /@media \(max-width: 620px\)[\s\S]*\.trend-combo-svg \{[\s\S]*min-width: 480px;/);
+});
+
+test("ability focus decoration stays behind readable content", () => {
+  assert.match(visualRefreshStyles, /\.ability-focus-card > :not\(\.ability-focus-wave\) \{[\s\S]*position: relative;[\s\S]*z-index: 1;/);
+  assert.match(visualRefreshStyles, /\.ability-focus-wave \{[\s\S]*bottom: -34px;[\s\S]*z-index: 0;[\s\S]*opacity: 0\.28;[\s\S]*pointer-events: none;/);
+});
+
+test("ledger filters render as one compact segmented toolbar", () => {
+  assert.match(visualRefreshStyles, /\.ledger-page \.ui-filter-bar \{[\s\S]*border: 1px solid var\(--color-border\);[\s\S]*background: var\(--color-surface\);/);
+  assert.match(visualRefreshStyles, /\.ledger-page \.ui-filter-more \{[\s\S]*width: 100%;/);
+  assert.match(visualRefreshStyles, /\.ledger-page \.ui-filter-controls \{[\s\S]*display: grid;[\s\S]*grid-template-columns: minmax\(110px, 0\.72fr\) minmax\(180px, 1fr\) minmax\(220px, 1\.3fr\) minmax\(130px, 0\.78fr\);/);
+  assert.match(visualRefreshStyles, /\.ledger-page \.ledger-filter-grid \{[\s\S]*grid-template-columns: minmax\(130px, 0\.72fr\) minmax\(190px, 1fr\) minmax\(220px, 1\.25fr\) minmax\(150px, 0\.78fr\);/);
+  assert.match(visualRefreshStyles, /\.ledger-page \.ledger-filter-field:focus-within,[\s\S]*\.ledger-page \.ledger-filter-grid label:focus-within \{[\s\S]*box-shadow: inset 0 -2px 0 var\(--color-brand\);/);
 });
 
 test("workload trend is workload bar plus time line without record count", () => {
@@ -162,26 +178,16 @@ test("segmented donut external labels keep natural positions inside a padded cha
   assert.equal(reportDashboard.includes('y={segment.labelValueY}'), true);
 });
 
-test("report dashboard modules are grouped into four full-width rows", () => {
+test("report dashboard modules are balanced across two independent columns", () => {
   assert.match(
     reportDashboard,
-    /<div className="dashboard-row dashboard-row-three">[\s\S]*<BusinessCategoryDonut[\s\S]*<TrendChart[\s\S]*<ProjectRank/
+    /<div className="dashboard-column dashboard-column-primary">[\s\S]*<BusinessCategoryDonut[\s\S]*<ProjectRank[\s\S]*<AbilityRadarChart[\s\S]*<ProductMatrix/
   );
   assert.match(
     reportDashboard,
-    /<div className="dashboard-row dashboard-row-two dashboard-row-ability">[\s\S]*<AbilityRadarChart[\s\S]*<BusinessAbilityMatrix/
+    /<div className="dashboard-column dashboard-column-analysis">[\s\S]*<TrendChart[\s\S]*<BusinessAbilityMatrix[\s\S]*<WorkTypeProfileChart[\s\S]*<FocusRank[\s\S]*insight-card/
   );
-  assert.match(
-    reportDashboard,
-    /<div className="dashboard-row dashboard-row-two">[\s\S]*<WorkTypeProfileChart[\s\S]*<ProductMatrix/
-  );
-  assert.match(
-    reportDashboard,
-    /<div className="dashboard-row dashboard-row-two dashboard-row-focus">[\s\S]*<FocusRank[\s\S]*insight-card/
-  );
-  assert.match(styles, /\.dashboard-grid \{[\s\S]*grid-template-columns: 1fr;/);
-  assert.match(styles, /\.dashboard-row-three \{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
-  assert.match(styles, /\.dashboard-row-two \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(reportDashboard, /<section className="dashboard-grid mixed dashboard-masonry">/);
 });
 
 test("dashboard metrics and chart groups can return to deduplicated source records", () => {

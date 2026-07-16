@@ -1079,24 +1079,18 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
         </div>
       )}
 
-      <section className="dashboard-grid mixed">
-        <div className="dashboard-row dashboard-row-three">
+      <section className="dashboard-grid mixed dashboard-masonry">
+        <div className="dashboard-column dashboard-column-primary">
           <BusinessCategoryDonut items={analysis.businessDistribution} onOpenSource={openSource} />
-          <TrendChart points={trend} onOpenSource={openSource} />
           <ProjectRank projects={analysis.projectSummaries} onOpenSource={openSource} />
-        </div>
-
-        <div className="dashboard-row dashboard-row-two dashboard-row-ability">
           <AbilityRadarChart items={analysis.abilityDistribution} onOpenSource={openSource} />
-          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={openSource} />
-        </div>
-
-        <div className="dashboard-row dashboard-row-two">
-          <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={openSource} />
           <ProductMatrix items={analysis.productDistribution} onOpenSource={openSource} />
         </div>
 
-        <div className="dashboard-row dashboard-row-two dashboard-row-focus">
+        <div className="dashboard-column dashboard-column-analysis">
+          <TrendChart points={trend} onOpenSource={openSource} />
+          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={openSource} />
+          <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={openSource} />
           <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
           <section className="dashboard-card insight-card">
             <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" onSource={() => openSource("本期观察全部来源", { kind: "all" })} />
