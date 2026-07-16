@@ -31,16 +31,18 @@ async function importSource<T>(path: string): Promise<Partial<T>> {
   }
 }
 
-test("design tokens use the approved light Trace palette and compact geometry", () => {
+test("design tokens use the approved ink-and-teal Trace palette and compact geometry", () => {
   const tokens = readSource("../src/styles/tokens.css");
 
-  assert.match(tokens, /--color-brand: #176b68;/i);
-  assert.match(tokens, /--color-brand-hover: #125a57;/i);
-  assert.match(tokens, /--color-brand-selected: #e7f2f0;/i);
-  assert.match(tokens, /--color-page: #f5f6f7;/i);
-  assert.match(tokens, /--color-sidebar: #fafbfb;/i);
+  assert.match(tokens, /--color-brand: #4b7f8b;/i);
+  assert.match(tokens, /--color-brand-hover: #3f6d77;/i);
+  assert.match(tokens, /--color-brand-selected: #e4ecee;/i);
+  assert.match(tokens, /--color-page: #f3f5f3;/i);
+  assert.match(tokens, /--color-sidebar: #555243;/i);
   assert.match(tokens, /--color-surface: #ffffff;/i);
-  assert.match(tokens, /--color-border: #d9e0e3;/i);
+  assert.match(tokens, /--color-border: #d6ddd9;/i);
+  assert.match(tokens, /--color-accent-warm: #b29065;/i);
+  assert.match(tokens, /--color-growth: #769377;/i);
   assert.match(tokens, /--radius-control: 6px;/i);
   assert.match(tokens, /--radius-surface: 8px;/i);
   assert.match(tokens, /--sidebar-width: 216px;/i);
@@ -53,7 +55,7 @@ test("loaded styles reserve round geometry for semantic data marks and indicator
   const stylesheets = getLoadedStylesheets();
   const semanticRoundSelectors = new Set([".nav-item::before", ".relation-bubble"]);
 
-  assert.ok(stylesheets.length >= 8, "foundation and three domain style entries must all be loaded");
+  assert.ok(stylesheets.length >= 9, "foundation, domain, and visual refresh style entries must all be loaded");
   for (const stylesheet of stylesheets) {
     assert.ok(stylesheet.source.length > 0, `${stylesheet.path} must resolve to a stylesheet`);
     assert.equal(/(?:linear|radial|conic)-gradient\s*\(/i.test(stylesheet.source), false, `${stylesheet.path} contains a gradient`);

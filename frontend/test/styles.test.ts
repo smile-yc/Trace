@@ -6,6 +6,9 @@ import test from "node:test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const styles = readFileSync(resolve(__dirname, "../src/styles.css"), "utf8");
+const tokens = readFileSync(resolve(__dirname, "../src/styles/tokens.css"), "utf8");
+const visualRefreshStyles = readFileSync(resolve(__dirname, "../src/styles/visual-refresh.css"), "utf8");
+const main = readFileSync(resolve(__dirname, "../src/main.tsx"), "utf8");
 const workOutcomesStyles = readFileSync(resolve(__dirname, "../src/styles/work-outcomes.css"), "utf8");
 const reportDashboard = readFileSync(resolve(__dirname, "../src/components/ReportDashboard.tsx"), "utf8");
 
@@ -14,16 +17,16 @@ test("combo toggle styles do not leak into menu option buttons", () => {
   assert.equal(styles.includes(".combo-input-wrap > button {"), true);
 });
 
-test("dashboard ledger palette and shell tokens are present", () => {
-  assert.equal(styles.includes("--bg: #f5f7fb;"), true);
-  assert.equal(styles.includes("--ink: #0b1026;"), true);
-  assert.equal(styles.includes("--navy: #101638;"), true);
-  assert.equal(styles.includes("--purple: #6f4ed8;"), true);
-  assert.equal(styles.includes("--cyan: #20b8c5;"), true);
-  assert.equal(styles.includes("--orange: #f2764b;"), true);
-  assert.equal(styles.includes("--green: #4ca66a;"), true);
+test("dashboard ledger uses the approved ink, teal, sage, and warm accent palette", () => {
+  assert.equal(tokens.includes("--color-sidebar: #555243;"), true);
+  assert.equal(tokens.includes("--color-brand: #4b7f8b;"), true);
+  assert.equal(tokens.includes("--color-growth: #769377;"), true);
+  assert.equal(tokens.includes("--color-accent-warm: #b29065;"), true);
   assert.equal(styles.includes(".app-shell {"), true);
   assert.match(styles, /\.app-shell \{[\s\S]*width: 100%;[\s\S]*min-height: 100vh;[\s\S]*margin: 0;/);
+  assert.match(main, /import "\.\/styles\/settings-data\.css";\s*import "\.\/styles\/visual-refresh\.css";/);
+  assert.match(reportDashboard, /const chartColors = \["#4b7f8b", "#769377", "#b29065", "#555243"/i);
+  assert.doesNotMatch(reportDashboard, /#0c0c24|#f2764b|#7a3e8e/i);
 });
 
 test("global page chrome has no decorative outer background", () => {
@@ -93,13 +96,15 @@ test("report dashboard includes business ability relation insight matrix", () =>
   assert.match(styles, /\.relation-bubble \{[\s\S]*border-radius: 50%;/);
 });
 
-test("dashboard rows use stable equal-height ranges with internal overflow", () => {
-  assert.match(styles, /\.dashboard-row \{[\s\S]*--row-min-height:[\s\S]*align-items: stretch;/);
-  assert.match(styles, /\.dashboard-row-three \{[\s\S]*--row-min-height: clamp\(/);
-  assert.match(styles, /\.dashboard-row-ability \{[\s\S]*--row-min-height: clamp\(/);
-  assert.match(styles, /\.dashboard-row-focus \{[\s\S]*--row-min-height: clamp\(/);
-  assert.match(styles, /\.dashboard-row > \.dashboard-card \{[\s\S]*min-height: var\(--row-min-height\);[\s\S]*max-height: var\(--row-max-height\);[\s\S]*display: flex;/);
-  assert.match(styles, /\.project-rank-list,[\s\S]*\.focus-rank-list \{[\s\S]*overflow-y: auto;/);
+test("dashboard rows are content-driven and avoid sparse equal-height cards", () => {
+  assert.match(visualRefreshStyles, /\.dashboard-row \{[\s\S]*align-items: start;/);
+  assert.match(visualRefreshStyles, /\.dashboard-row > \.dashboard-card \{[\s\S]*min-height: 0;[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
+  assert.match(visualRefreshStyles, /\.dashboard-row \.project-rank-list,[\s\S]*\.dashboard-row \.focus-rank-list \{[\s\S]*overflow: visible;/);
+  assert.match(visualRefreshStyles, /\.trend-combo-chart \{[\s\S]*min-height: 250px;/);
+  assert.match(visualRefreshStyles, /\.trend-combo-svg \{[\s\S]*min-width: 0;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-row > \.dashboard-card \{[\s\S]*overflow: hidden;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.business-ability-coordinate \{[\s\S]*overflow-x: auto;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 620px\)[\s\S]*\.trend-combo-svg \{[\s\S]*min-width: 480px;/);
 });
 
 test("workload trend is workload bar plus time line without record count", () => {

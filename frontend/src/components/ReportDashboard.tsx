@@ -36,10 +36,10 @@ interface ReportDashboardProps {
   activeLabel: string;
 }
 
-const chartColors = ["#0c0c24", "#5dbac0", "#7a3e8e", "#f2764b", "#78a943", "#2f6f88"];
-const businessColors = ["#0c0c24", "#5dbac0", "#f2764b", "#78a943", "#7a3e8e", "#2f6f88"];
-const abilityColors = ["#7a3e8e", "#5dbac0", "#78a943", "#f2764b", "#0c0c24", "#2f6f88"];
-const workTypeColors = ["#0c0c24", "#f2764b", "#5dbac0", "#78a943", "#7a3e8e", "#2f6f88"];
+const chartColors = ["#4b7f8b", "#769377", "#b29065", "#555243", "#6f8f98", "#8a765c"];
+const businessColors = ["#555243", "#4b7f8b", "#769377", "#b29065", "#6f8f98", "#8a765c"];
+const abilityColors = ["#4b7f8b", "#769377", "#b29065", "#555243", "#6f8f98", "#8a765c"];
+const workTypeColors = ["#4b7f8b", "#b29065", "#769377", "#555243", "#6f8f98", "#8a765c"];
 
 interface ChartPoint {
   x: number;
