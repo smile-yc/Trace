@@ -654,7 +654,7 @@ body,
 }
 
 .dashboard-card.is-sparse .segmented-donut-chart {
-  width: min(100%, 284px);
+  width: min(100%, 220px);
 }
 
 .dashboard-card.is-sparse .business-donut-main {
@@ -1253,6 +1253,17 @@ body,
 @media (max-width: 1180px) {
   .dashboard-ledger {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dashboard-column .business-donut-card .business-donut-main,
+  .dashboard-column .worktype-profile-main {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-column .business-donut-legend,
+  .dashboard-column .worktype-metric-scroll {
+    width: 100%;
+    min-width: 0;
   }
 
   .ledger-page .ledger-filter-grid {

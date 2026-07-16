@@ -185,24 +185,28 @@ test("business ability insight is a coordinate matrix with x and y axes", () => 
   assert.equal(styles.includes(".business-ability-axis-y"), true);
 });
 
-test("business and work type proportions use segmented donut with leader labels", () => {
+test("business and work type proportions use segmented donuts with bounded adjacent legends", () => {
   assert.equal(reportDashboard.includes("function SegmentedDonutChart"), true);
   assert.equal(reportDashboard.includes("donut-segment-path"), true);
-  assert.equal(reportDashboard.includes("donut-label-line"), true);
-  assert.equal(reportDashboard.includes("donut-label-value"), true);
+  assert.equal(reportDashboard.includes("donut-external-label"), false);
+  assert.equal(reportDashboard.includes("donut-label-line"), false);
+  assert.equal(reportDashboard.includes("donut-label-value"), false);
+  assert.match(reportDashboard, /<title>\{`\$\{segment\.item\.label\}: \$\{formatMetric\(segment\.value\)\} \| \$\{segment\.percent\}%`\}<\/title>/);
   assert.match(reportDashboard, /<SegmentedDonutChart[\s\S]*colors=\{businessColors\}/);
   assert.match(reportDashboard, /<SegmentedDonutChart[\s\S]*colors=\{workTypeColors\}/);
   assert.equal(styles.includes(".segmented-donut-chart"), true);
   assert.equal(styles.includes("stroke-linecap: round;"), true);
 });
 
-test("segmented donut external labels keep natural positions inside a padded chart viewport", () => {
-  assert.equal(reportDashboard.includes('viewBox="0 -24 360 320"'), true);
-  assert.equal(reportDashboard.includes("const lineEndY = clamp"), false);
-  assert.equal(reportDashboard.includes("labelTextY: lineEnd.y - 4"), true);
-  assert.equal(reportDashboard.includes("labelValueY: lineEnd.y + 18"), true);
-  assert.equal(reportDashboard.includes('y={segment.labelTextY}'), true);
-  assert.equal(reportDashboard.includes('y={segment.labelValueY}'), true);
+test("segmented donut crops to the ring instead of drawing outside its card", () => {
+  assert.equal(reportDashboard.includes('viewBox="60 20 240 240"'), true);
+  assert.match(styles, /\.segmented-donut-stage \{[\s\S]*overflow: hidden;/);
+  assert.match(styles, /\.segmented-donut-chart \{[\s\S]*width: min\(100%, 236px\);[\s\S]*overflow: hidden;/);
+  assert.match(visualRefreshStyles, /\.dashboard-card\.is-sparse \.segmented-donut-chart \{[\s\S]*width: min\(100%, 220px\);/);
+  assert.match(
+    visualRefreshStyles,
+    /@media \(max-width: 1180px\)[\s\S]*\.dashboard-column \.business-donut-card \.business-donut-main,[\s\S]*\.dashboard-column \.worktype-profile-main \{[\s\S]*grid-template-columns: 1fr;/
+  );
 });
 
 test("report dashboard modules are balanced across two independent columns", () => {

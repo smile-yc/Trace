@@ -145,8 +145,6 @@ function SegmentedDonutChart({
   const cx = 180;
   const cy = 140;
   const radius = 88;
-  const labelRadius = 116;
-  const labelCount = Math.min(2, items.length);
   const segmentGap = items.length > 1 ? 5 : 0;
   let cursor = -90;
 
@@ -165,31 +163,18 @@ function SegmentedDonutChart({
 
     cursor += sweep;
 
-    const lineStart = polarPoint(cx, cy, labelRadius - 10, midpoint);
-    const lineBend = polarPoint(cx, cy, labelRadius + 13, midpoint);
-    const isRight = lineBend.x >= cx;
-    const lineEnd = { x: lineBend.x + (isRight ? 26 : -26), y: lineBend.y };
-    const textAnchor: "start" | "end" = isRight ? "start" : "end";
-
     return {
       color: colors[index % colors.length],
       item,
-      labelTextY: lineEnd.y - 4,
-      labelValueY: lineEnd.y + 18,
-      lineBend,
-      lineEnd,
-      lineStart,
       path: roundedArcPath(cx, cy, radius, startAngle, endAngle),
       percent: percentOf(value, total),
-      textAnchor,
-      textX: lineEnd.x + (isRight ? 8 : -8),
       value
     };
   });
 
   return (
     <div className={`segmented-donut-stage ${className}`.trim()}>
-      <svg className="segmented-donut-chart" viewBox="0 -24 360 320" role="img" aria-label={ariaLabel}>
+      <svg className="segmented-donut-chart" viewBox="60 20 240 240" role="img" aria-label={ariaLabel}>
         <circle className="donut-base-path" cx={cx} cy={cy} r={radius} />
         {segments.map((segment) => (
           <path
@@ -197,22 +182,9 @@ function SegmentedDonutChart({
             d={segment.path}
             key={segment.item.label}
             stroke={segment.color}
-          />
-        ))}
-        {segments.slice(0, labelCount).map((segment) => (
-          <g className="donut-external-label" key={`${segment.item.label}-label`}>
-            <polyline
-              className="donut-label-line"
-              points={`${segment.lineStart.x},${segment.lineStart.y} ${segment.lineBend.x},${segment.lineBend.y} ${segment.lineEnd.x},${segment.lineEnd.y}`}
-              stroke={segment.color}
-            />
-            <text className="donut-label-text" x={segment.textX} y={segment.labelTextY} textAnchor={segment.textAnchor}>
-              {segment.item.label}
-            </text>
-            <text className="donut-label-value" x={segment.textX} y={segment.labelValueY} textAnchor={segment.textAnchor}>
-              {formatMetric(segment.value)}当量 | {segment.percent}%
-            </text>
-          </g>
+          >
+            <title>{`${segment.item.label}: ${formatMetric(segment.value)} | ${segment.percent}%`}</title>
+          </path>
         ))}
       </svg>
       <div className="segmented-donut-center">
