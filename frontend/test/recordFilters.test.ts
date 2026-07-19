@@ -113,6 +113,7 @@ test("work ledger exposes period modes and filters report generation scope", () 
 test("monthly page archives only raw details by week", () => {
   assert.equal(monthlySource.includes('type="week"'), true);
   assert.equal(monthlySource.includes("filterReportDetailRecords"), true);
+  assert.match(monthlySource, /min=\{firstDetailWeek\}/);
   assert.match(monthlySource, /SummaryGroups groups=\{detailGroups\}/);
   assert.match(monthlySource, /onGenerateReport\(monthlyRecords/);
   assert.match(monthlySource, /records=\{monthlyRecords\}[\s\S]*periodType="month"/);

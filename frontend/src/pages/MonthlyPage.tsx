@@ -34,6 +34,10 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
     () => getDefaultReportDetailPeriod("month", range.monthKey, "week", todayKey()),
     [range.monthKey]
   );
+  const firstDetailWeek = useMemo(
+    () => getDefaultReportDetailPeriod("month", range.monthKey, "week", range.start),
+    [range.monthKey, range.start]
+  );
   const [detailWeek, setDetailWeek] = useState(() =>
     getDefaultReportDetailPeriod("month", todayKey().slice(0, 7), "week", todayKey())
   );
@@ -174,7 +178,7 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
         <div className="report-detail-archive">
           <label>
             <span>按周归档</span>
-            <input min={defaultDetailWeek} max={lastDetailWeek} type="week" value={detailWeek} onChange={(event) => setDetailWeek(event.target.value)} />
+            <input min={firstDetailWeek} max={lastDetailWeek} type="week" value={detailWeek} onChange={(event) => setDetailWeek(event.target.value)} />
           </label>
         </div>
         <SummaryGroups groups={detailGroups} emptyText="该周暂无记录。" />

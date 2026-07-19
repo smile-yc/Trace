@@ -88,12 +88,17 @@ test("report dashboard dense proportion cards stay bounded and readable", () => 
 });
 
 test("report dashboard includes business ability relation insight matrix", () => {
+  const businessAbilityLegendBlock = styles.match(/\.business-ability-legend \{[^}]+\}/)?.[0] ?? "";
+  const legendGroupBlock = styles.match(/\.legend-group \{[^}]+\}/)?.[0] ?? "";
+
   assert.equal(reportDashboard.includes("function BusinessAbilityMatrix"), true);
   assert.equal(reportDashboard.includes("businessAbilityRelations"), true);
   assert.equal(styles.includes(".business-ability-card"), true);
   assert.equal(styles.includes(".business-ability-matrix"), true);
   assert.equal(styles.includes(".relation-bubble"), true);
   assert.match(styles, /\.relation-bubble \{[\s\S]*border-radius: 50%;/);
+  assert.match(businessAbilityLegendBlock, /flex-direction: column;/);
+  assert.match(legendGroupBlock, /width: 100%;/);
 });
 
 test("dashboard uses independent vertical lanes without cross-card row gaps", () => {
