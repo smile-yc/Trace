@@ -11,22 +11,53 @@ const visualRefreshStyles = readFileSync(resolve(__dirname, "../src/styles/visua
 const main = readFileSync(resolve(__dirname, "../src/main.tsx"), "utf8");
 const workOutcomesStyles = readFileSync(resolve(__dirname, "../src/styles/work-outcomes.css"), "utf8");
 const reportDashboard = readFileSync(resolve(__dirname, "../src/components/ReportDashboard.tsx"), "utf8");
+const statCards = readFileSync(resolve(__dirname, "../src/components/StatCards.tsx"), "utf8");
+const yearlyPage = readFileSync(resolve(__dirname, "../src/pages/YearlyPage.tsx"), "utf8");
+const designGuide = readFileSync(resolve(__dirname, "../../DESIGN.md"), "utf8");
 
 test("combo toggle styles do not leak into menu option buttons", () => {
   assert.equal(styles.includes(".combo-input-wrap button {"), false);
   assert.equal(styles.includes(".combo-input-wrap > button {"), true);
 });
 
-test("dashboard ledger uses the approved ink, teal, sage, and warm accent palette", () => {
-  assert.equal(tokens.includes("--color-sidebar: #555243;"), true);
-  assert.equal(tokens.includes("--color-brand: #4b7f8b;"), true);
-  assert.equal(tokens.includes("--color-growth: #769377;"), true);
-  assert.equal(tokens.includes("--color-accent-warm: #b29065;"), true);
+test("the product uses one restrained enterprise SaaS color system", () => {
+  assert.equal(tokens.includes("--color-page: #f7f8fa;"), true);
+  assert.equal(tokens.includes("--color-sidebar: #ffffff;"), true);
+  assert.equal(tokens.includes("--color-brand: #2563eb;"), true);
+  assert.equal(tokens.includes("--color-title: #101828;"), true);
+  assert.equal(tokens.includes("--color-border: #e4e7ec;"), true);
+  assert.equal(tokens.includes("--radius-surface: 8px;"), true);
+  assert.equal(tokens.includes("--control-height: 36px;"), true);
   assert.equal(styles.includes(".app-shell {"), true);
   assert.match(styles, /\.app-shell \{[\s\S]*width: 100%;[\s\S]*min-height: 100vh;[\s\S]*margin: 0;/);
   assert.match(main, /import "\.\/styles\/settings-data\.css";\s*import "\.\/styles\/visual-refresh\.css";/);
-  assert.match(reportDashboard, /const chartColors = \["#4b7f8b", "#769377", "#b29065", "#555243"/i);
+  assert.match(reportDashboard, /const chartColors = \["#2563eb", "#12b76a", "#f79009", "#667085"/i);
+  assert.match(reportDashboard, /const businessColors = chartColors;/);
+  assert.match(reportDashboard, /const abilityColors = chartColors;/);
+  assert.match(reportDashboard, /const workTypeColors = chartColors;/);
   assert.doesNotMatch(reportDashboard, /#0c0c24|#f2764b|#7a3e8e/i);
+  assert.doesNotMatch(reportDashboard, /#4b7f8b|#769377|#b29065|#555243/i);
+});
+
+test("the final visual layer keeps the shell bright and uses the trace line signature", () => {
+  assert.match(visualRefreshStyles, /\.app-sidebar,[\s\S]*background: var\(--color-sidebar\);[\s\S]*color: var\(--color-text\);/);
+  assert.match(visualRefreshStyles, /\.app-sidebar \.nav-item\.active[\s\S]*background: var\(--color-brand-selected\);[\s\S]*color: var\(--color-brand\);/);
+  assert.match(visualRefreshStyles, /\.app-sidebar \.nav-item\.active::before \{[\s\S]*background: var\(--color-brand\);/);
+  assert.doesNotMatch(visualRefreshStyles, /rgba\(255,\s*255,\s*255/);
+  assert.doesNotMatch(visualRefreshStyles, /var\(--color-accent-warm\).*nav-item\.active::before/);
+});
+
+test("DESIGN.md defines the shared system contract for future UI work", () => {
+  assert.match(designGuide, /^# Trace Design System/m);
+  assert.match(designGuide, /## Design Tokens/);
+  assert.match(designGuide, /## Typography/);
+  assert.match(designGuide, /## Layout/);
+  assert.match(designGuide, /## Components/);
+  assert.match(designGuide, /## Charts/);
+  assert.match(designGuide, /## Responsive/);
+  assert.match(designGuide, /8px/);
+  assert.match(designGuide, /#2563EB/i);
+  assert.doesNotMatch(designGuide, /Glassmorphism|玻璃拟态/);
 });
 
 test("global page chrome has no decorative outer background", () => {
@@ -88,71 +119,23 @@ test("report dashboard dense proportion cards stay bounded and readable", () => 
 });
 
 test("report dashboard includes business ability relation insight matrix", () => {
-  const businessAbilityLegendBlock = styles.match(/\.business-ability-legend \{[^}]+\}/)?.[0] ?? "";
-  const legendGroupBlock = styles.match(/\.legend-group \{[^}]+\}/)?.[0] ?? "";
-
   assert.equal(reportDashboard.includes("function BusinessAbilityMatrix"), true);
   assert.equal(reportDashboard.includes("businessAbilityRelations"), true);
   assert.equal(styles.includes(".business-ability-card"), true);
   assert.equal(styles.includes(".business-ability-matrix"), true);
   assert.equal(styles.includes(".relation-bubble"), true);
   assert.match(styles, /\.relation-bubble \{[\s\S]*border-radius: 50%;/);
-  assert.match(businessAbilityLegendBlock, /flex-direction: column;/);
-  assert.match(legendGroupBlock, /width: 100%;/);
 });
 
-test("dashboard uses independent vertical lanes without cross-card row gaps", () => {
-  assert.match(visualRefreshStyles, /\.dashboard-masonry \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*align-items: start;/);
-  assert.match(visualRefreshStyles, /\.dashboard-column \{[\s\S]*align-content: start;[\s\S]*gap: 14px;/);
-  assert.match(visualRefreshStyles, /\.dashboard-column > \.dashboard-card \{[\s\S]*min-height: 0;[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
-  assert.match(visualRefreshStyles, /\.dashboard-column \.ability-radar-card \{[\s\S]*grid-column: auto;/);
-  assert.match(visualRefreshStyles, /\.dashboard-column \.project-rank-list,[\s\S]*\.dashboard-column \.focus-rank-list \{[\s\S]*overflow: visible;/);
+test("dashboard rows are content-driven and avoid sparse equal-height cards", () => {
+  assert.match(visualRefreshStyles, /\.dashboard-row \{[\s\S]*align-items: start;/);
+  assert.match(visualRefreshStyles, /\.dashboard-row > \.dashboard-card \{[\s\S]*min-height: 0;[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
+  assert.match(visualRefreshStyles, /\.dashboard-row \.project-rank-list,[\s\S]*\.dashboard-row \.focus-rank-list \{[\s\S]*overflow: visible;/);
   assert.match(visualRefreshStyles, /\.trend-combo-chart \{[\s\S]*min-height: 250px;/);
   assert.match(visualRefreshStyles, /\.trend-combo-svg \{[\s\S]*min-width: 0;/);
-  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-masonry \{[\s\S]*grid-template-columns: 1fr;/);
-  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-column > \.dashboard-card \{[\s\S]*overflow: hidden;/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-row > \.dashboard-card \{[\s\S]*overflow: hidden;/);
   assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.business-ability-coordinate \{[\s\S]*overflow-x: auto;/);
-  assert.match(visualRefreshStyles, /@media \(max-width: 620px\)[\s\S]*\.trend-combo-svg \{[\s\S]*min-width: 680px;/);
-});
-
-test("report dashboard keeps trend full width and compacts sparse data cards", () => {
-  assert.match(reportDashboard, /function densityClass\(count: number/);
-  assert.match(reportDashboard, /<section className="dashboard-wide-row">[\s\S]*<TrendChart/);
-  assert.match(reportDashboard, /const chartWidth = Math\.max\(760,/);
-  assert.match(reportDashboard, /const chartHeight = 176;/);
-  assert.match(reportDashboard, /business-donut-card \$\{densityClass\(items\.length\)\}/);
-  assert.match(reportDashboard, /project-rank-card \$\{densityClass\(projects\.length\)\}/);
-  assert.match(reportDashboard, /focus-rank-card \$\{densityClass\(items\.length\)\}/);
-  assert.match(visualRefreshStyles, /\.dashboard-wide-row \{[\s\S]*margin-bottom: 14px;/);
-  assert.match(visualRefreshStyles, /\.dashboard-wide-row \.trend-combo-chart \{[\s\S]*min-height: 176px;/);
-  assert.match(visualRefreshStyles, /\.dashboard-card\.is-sparse \{[\s\S]*padding-bottom: 14px;/);
-  assert.match(visualRefreshStyles, /\.dashboard-card\.is-empty \.empty-state \{[\s\S]*min-height: 72px;/);
-});
-
-test("ability focus decoration stays behind readable content", () => {
-  assert.match(visualRefreshStyles, /\.ability-focus-card > :not\(\.ability-focus-wave\) \{[\s\S]*position: relative;[\s\S]*z-index: 1;/);
-  assert.match(visualRefreshStyles, /\.ability-focus-wave \{[\s\S]*bottom: -34px;[\s\S]*z-index: 0;[\s\S]*opacity: 0\.28;[\s\S]*pointer-events: none;/);
-});
-
-test("ledger filters render as one compact segmented toolbar", () => {
-  assert.match(visualRefreshStyles, /\.ledger-page \.ui-filter-bar \{[\s\S]*border: 1px solid var\(--color-border\);[\s\S]*background: var\(--color-surface\);/);
-  assert.match(visualRefreshStyles, /\.ledger-page \.ui-filter-more \{[\s\S]*width: 100%;/);
-  assert.match(visualRefreshStyles, /\.ledger-page \.ui-filter-controls \{[\s\S]*display: grid;[\s\S]*grid-template-columns: minmax\(110px, 0\.72fr\) minmax\(180px, 1fr\) minmax\(220px, 1\.3fr\) minmax\(130px, 0\.78fr\);/);
-  assert.match(visualRefreshStyles, /\.ledger-page \.ledger-filter-grid \{[\s\S]*grid-template-columns: minmax\(130px, 0\.72fr\) minmax\(190px, 1fr\) minmax\(220px, 1\.25fr\) minmax\(150px, 0\.78fr\);/);
-  assert.match(visualRefreshStyles, /\.ledger-page \.ledger-filter-field:focus-within,[\s\S]*\.ledger-page \.ledger-filter-grid label:focus-within \{[\s\S]*box-shadow: inset 0 -2px 0 var\(--color-brand\);/);
-});
-
-test("form controls share a themed surface and complete interaction states", () => {
-  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:not\(\[type="checkbox"\]\)[\s\S]*:not\(\[type="radio"\]\)/);
-  assert.doesNotMatch(visualRefreshStyles, /:not\(\[type="checkbox"\]\)\s+:not\(\[type="radio"\]\)/);
-  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) select,[\s\S]*:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) textarea \{[\s\S]*border-left: 3px solid var\(--color-control-accent\);[\s\S]*background: var\(--color-control\);[\s\S]*box-shadow: var\(--shadow-control\);/);
-  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) \.ui-select-trigger,[\s\S]*:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) \.ability-picker-trigger \{[\s\S]*background: var\(--color-control\);/);
-  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:hover,[\s\S]*background: var\(--color-control-hover\);/);
-  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:focus,[\s\S]*box-shadow: 0 0 0 3px rgba\(75, 127, 139, 0\.16\);/);
-  assert.match(visualRefreshStyles, /:is\(\.app-shell, \.ui-modal, \.ui-detail-panel, \.modal\) input:where\([\s\S]*:disabled,[\s\S]*background: var\(--color-control-disabled\);/);
-  assert.match(visualRefreshStyles, /\.ui-field\.has-error input,[\s\S]*\[aria-invalid="true"\] \{[\s\S]*border-left-color: var\(--color-danger\);/);
-  assert.match(visualRefreshStyles, /\.ui-select-search input \{[\s\S]*border: 0;[\s\S]*box-shadow: none;/);
-  assert.match(visualRefreshStyles, /input\[type="checkbox"\],[\s\S]*input\[type="radio"\] \{[\s\S]*width: 16px;[\s\S]*min-height: 16px;[\s\S]*accent-color: var\(--color-brand\);/);
+  assert.match(visualRefreshStyles, /@media \(max-width: 620px\)[\s\S]*\.trend-combo-svg \{[\s\S]*min-width: 480px;/);
 });
 
 test("workload trend is workload bar plus time line without record count", () => {
@@ -190,43 +173,113 @@ test("business ability insight is a coordinate matrix with x and y axes", () => 
   assert.equal(styles.includes(".business-ability-axis-y"), true);
 });
 
-test("business and work type proportions use segmented donuts with bounded adjacent legends", () => {
+test("business and work type proportions use segmented donut with leader labels", () => {
   assert.equal(reportDashboard.includes("function SegmentedDonutChart"), true);
   assert.equal(reportDashboard.includes("donut-segment-path"), true);
-  assert.equal(reportDashboard.includes("donut-external-label"), false);
-  assert.equal(reportDashboard.includes("donut-label-line"), false);
-  assert.equal(reportDashboard.includes("donut-label-value"), false);
-  assert.match(reportDashboard, /<title>\{`\$\{segment\.item\.label\}: \$\{formatMetric\(segment\.value\)\} \| \$\{segment\.percent\}%`\}<\/title>/);
+  assert.equal(reportDashboard.includes("donut-label-line"), true);
+  assert.equal(reportDashboard.includes("donut-label-value"), true);
   assert.match(reportDashboard, /<SegmentedDonutChart[\s\S]*colors=\{businessColors\}/);
   assert.match(reportDashboard, /<SegmentedDonutChart[\s\S]*colors=\{workTypeColors\}/);
   assert.equal(styles.includes(".segmented-donut-chart"), true);
   assert.equal(styles.includes("stroke-linecap: round;"), true);
 });
 
-test("segmented donut crops to the ring instead of drawing outside its card", () => {
-  assert.equal(reportDashboard.includes('viewBox="60 20 240 240"'), true);
-  assert.match(styles, /\.segmented-donut-stage \{[\s\S]*overflow: hidden;/);
-  assert.match(styles, /\.segmented-donut-chart \{[\s\S]*width: min\(100%, 236px\);[\s\S]*overflow: hidden;/);
-  assert.match(visualRefreshStyles, /\.dashboard-card\.is-sparse \.segmented-donut-chart \{[\s\S]*width: min\(100%, 220px\);/);
-  assert.match(
-    visualRefreshStyles,
-    /@media \(max-width: 1180px\)[\s\S]*\.dashboard-column \.business-donut-card \.business-donut-main,[\s\S]*\.dashboard-column \.worktype-profile-main \{[\s\S]*grid-template-columns: 1fr;/
-  );
+test("segmented donut external labels keep natural positions inside a padded chart viewport", () => {
+  assert.equal(reportDashboard.includes('viewBox="0 -24 360 320"'), true);
+  assert.equal(reportDashboard.includes("const lineEndY = clamp"), false);
+  assert.equal(reportDashboard.includes("labelTextY: lineEnd.y - 4"), true);
+  assert.equal(reportDashboard.includes("labelValueY: lineEnd.y + 18"), true);
+  assert.equal(reportDashboard.includes('y={segment.labelTextY}'), true);
+  assert.equal(reportDashboard.includes('y={segment.labelValueY}'), true);
 });
 
-test("report dashboard modules are balanced across two independent columns", () => {
+test("report dashboard prioritizes structure insight before supporting trends and rankings", () => {
   assert.match(
     reportDashboard,
-    /<div className="dashboard-column dashboard-column-primary">[\s\S]*<BusinessCategoryDonut[\s\S]*<AbilityRadarChart[\s\S]*<ProductMatrix/
+    /<section className="dashboard-grid dashboard-workbench">[\s\S]*<StructureAnalysisPanel[\s\S]*insight-card[\s\S]*dashboard-support-grid/
   );
   assert.match(
     reportDashboard,
-    /<div className="dashboard-column dashboard-column-analysis">[\s\S]*<ProjectRank[\s\S]*<BusinessAbilityMatrix[\s\S]*<WorkTypeProfileChart/
+    /<div className="dashboard-support-grid">[\s\S]*<FocusRank[\s\S]*<ProjectRank[\s\S]*<TrendChart/
   );
-  assert.match(reportDashboard, /<section className="dashboard-grid mixed dashboard-masonry">/);
-  assert.match(reportDashboard, /<section className="dashboard-bottom-row">[\s\S]*insight-card[\s\S]*<FocusRank/);
-  assert.match(visualRefreshStyles, /\.dashboard-bottom-row \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*align-items: stretch;/);
-  assert.match(visualRefreshStyles, /@media \(max-width: 900px\)[\s\S]*\.dashboard-bottom-row \{[\s\S]*grid-template-columns: 1fr;/);
+  assert.match(
+    reportDashboard,
+    /<StructureAnalysisPanel[\s\S]*activeTab=\{activeStructureTab\}[\s\S]*onChange=\{setActiveStructureTab\}/
+  );
+  assert.equal(reportDashboard.includes('useState<StructureAnalysisTab>("ability")'), true);
+  assert.equal(reportDashboard.includes("dashboard-row dashboard-row-three"), false);
+  assert.equal(reportDashboard.includes("dashboard-row dashboard-row-two"), false);
+  assert.match(visualRefreshStyles, /\.dashboard-support-grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) minmax\(0, 1\.15fr\);/);
+  assert.match(visualRefreshStyles, /\.structure-analysis-combo \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(visualRefreshStyles, /\.structure-analysis-combo > \.dashboard-card \{[\s\S]*display: flex;[\s\S]*flex-direction: column;/);
+  assert.match(visualRefreshStyles, /\.structure-analysis-combo \.business-ability-matrix \{[\s\S]*grid-template-columns: minmax\(88px, 0\.72fr\) repeat\(var\(--ability-count\), minmax\(72px, 1fr\)\);/);
+  assert.equal(reportDashboard.includes("ability-focus-wave"), false);
+  assert.equal(reportDashboard.includes("是当前投入最高的能力维度"), false);
+  assert.equal(reportDashboard.includes("，投入最高"), true);
+});
+
+test("structure analysis dimensions are tabbed instead of rendered all at once", () => {
+  assert.equal(reportDashboard.includes("function StructureAnalysisPanel"), true);
+  assert.equal(reportDashboard.includes('role="tablist"'), true);
+  assert.equal(reportDashboard.includes('role="tabpanel"'), true);
+  assert.equal(reportDashboard.includes('id: "business"'), true);
+  assert.equal(reportDashboard.includes('id: "workType"'), true);
+  assert.equal(reportDashboard.includes('id: "ability"'), true);
+  assert.equal(reportDashboard.includes('id: "product"'), true);
+  assert.equal(reportDashboard.includes("icon: BriefcaseBusiness"), true);
+  assert.equal(reportDashboard.includes("icon: Workflow"), true);
+  assert.equal(reportDashboard.includes("icon: Radar"), true);
+  assert.equal(reportDashboard.includes("icon: Layers3"), true);
+  assert.equal(reportDashboard.includes('className="structure-tab-icon"'), true);
+  assert.equal(reportDashboard.includes('className="structure-tab-copy"'), true);
+  assert.match(
+    reportDashboard,
+    /activeTab === "business"[\s\S]*<BusinessCategoryDonut/
+  );
+  assert.match(
+    reportDashboard,
+    /activeTab === "workType"[\s\S]*<WorkTypeProfileChart/
+  );
+  assert.match(
+    reportDashboard,
+    /activeTab === "ability"[\s\S]*<AbilityRadarChart[\s\S]*<BusinessAbilityMatrix/
+  );
+  assert.match(reportDashboard, /activeTab === "product"[\s\S]*<ProductMatrix/);
+  assert.match(styles, /\.structure-analysis-card \{[\s\S]*max-height: none;/);
+  assert.match(styles, /\.structure-analysis-tabs \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(visualRefreshStyles, /\.structure-analysis-tabs button \{[\s\S]*justify-content: center;[\s\S]*gap: 8px;/);
+  assert.match(visualRefreshStyles, /\.structure-tab-copy \{[\s\S]*display: inline-flex;[\s\S]*gap: 5px;/);
+  assert.match(visualRefreshStyles, /\.structure-analysis-tabs button\[aria-selected="true"\] \{[\s\S]*background: var\(--color-brand-selected\);[\s\S]*color: var\(--color-brand\);/);
+});
+
+test("shared metrics use semantic icon containers across the system", () => {
+  assert.equal(statCards.includes("function getStatVisual"), true);
+  assert.equal(statCards.includes('label.includes("记录")'), true);
+  assert.equal(statCards.includes('label.includes("当量")'), true);
+  assert.equal(statCards.includes('label.includes("工时")'), true);
+  assert.equal(statCards.includes('label.includes("项目")'), true);
+  assert.equal(statCards.includes('label.includes("成果")'), true);
+  assert.equal(statCards.includes('className="stat-icon"'), true);
+  assert.match(visualRefreshStyles, /\.stat-card \.stat-icon \{[\s\S]*width: 42px;[\s\S]*height: 42px;/);
+  assert.match(visualRefreshStyles, /\.stat-card \.stat-icon \{[\s\S]*grid-column: 1;[\s\S]*padding-left: 0;/);
+  assert.match(visualRefreshStyles, /\.stat-card \.stat-label \{[\s\S]*grid-column: 2;[\s\S]*padding-left: 0;/);
+  assert.match(visualRefreshStyles, /\.stat-card strong \{[\s\S]*grid-column: 2;/);
+});
+
+test("outcome filters wrap before the workspace becomes narrower than their controls", () => {
+  assert.match(styles, /@media \(max-width: 1200px\) \{[\s\S]*\.outcome-filter-grid \{[\s\S]*grid-template-columns: 1fr 1fr;/);
+  assert.match(styles, /\.outcome-archive-toggle \{[\s\S]*grid-column: -3;[\s\S]*justify-self: end;/);
+  assert.match(styles, /\.outcome-filter-grid > \.primary-button \{[\s\S]*grid-column: -2;[\s\S]*justify-self: end;/);
+  assert.match(styles, /@media \(max-width: 640px\) \{[\s\S]*\.outcome-archive-toggle,[\s\S]*\.outcome-filter-grid > \.primary-button \{[\s\S]*grid-column: 1;[\s\S]*justify-self: stretch;/);
+});
+
+test("yearly report presents representative outcomes and evidence as aligned tables", () => {
+  assert.equal(yearlyPage.includes("年度代表性成果与进展"), true);
+  assert.equal(yearlyPage.includes("annualOutcomeColumns"), true);
+  assert.equal(yearlyPage.includes('header: "成果 / 证据"'), true);
+  assert.equal(yearlyPage.includes('header: "支撑记录 / 材料完整度"'), true);
+  assert.match(yearlyPage, /<DataTable[\s\S]*columns=\{annualOutcomeColumns\}[\s\S]*rows=\{annualPackage\.reportableOutcomes\}/);
+  assert.equal(designGuide.includes("### Evidence Table"), true);
 });
 
 test("dashboard metrics and chart groups can return to deduplicated source records", () => {

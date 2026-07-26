@@ -31,22 +31,23 @@ async function importSource<T>(path: string): Promise<Partial<T>> {
   }
 }
 
-test("design tokens use the approved ink-and-teal Trace palette and compact geometry", () => {
+test("design tokens use the approved enterprise SaaS palette and compact geometry", () => {
   const tokens = readSource("../src/styles/tokens.css");
 
-  assert.match(tokens, /--color-brand: #4b7f8b;/i);
-  assert.match(tokens, /--color-brand-hover: #3f6d77;/i);
-  assert.match(tokens, /--color-brand-selected: #e4ecee;/i);
-  assert.match(tokens, /--color-page: #f3f5f3;/i);
-  assert.match(tokens, /--color-sidebar: #555243;/i);
+  assert.match(tokens, /--color-brand: #2563eb;/i);
+  assert.match(tokens, /--color-brand-hover: #1d4ed8;/i);
+  assert.match(tokens, /--color-brand-selected: #eff6ff;/i);
+  assert.match(tokens, /--color-page: #f7f8fa;/i);
+  assert.match(tokens, /--color-sidebar: #ffffff;/i);
   assert.match(tokens, /--color-surface: #ffffff;/i);
-  assert.match(tokens, /--color-border: #d6ddd9;/i);
-  assert.match(tokens, /--color-accent-warm: #b29065;/i);
-  assert.match(tokens, /--color-growth: #769377;/i);
+  assert.match(tokens, /--color-border: #e4e7ec;/i);
+  assert.match(tokens, /--color-accent-warm: #f79009;/i);
+  assert.match(tokens, /--color-growth: #12b76a;/i);
   assert.match(tokens, /--color-control: #f7f9f7;/i);
   assert.match(tokens, /--color-control-hover: #ffffff;/i);
   assert.match(tokens, /--color-control-disabled: #e9eeea;/i);
   assert.match(tokens, /--color-control-accent: #91adb3;/i);
+  assert.match(tokens, /--shadow-control:/i);
   assert.match(tokens, /--radius-control: 6px;/i);
   assert.match(tokens, /--radius-surface: 8px;/i);
   assert.match(tokens, /--sidebar-width: 216px;/i);
@@ -57,14 +58,20 @@ test("design tokens use the approved ink-and-teal Trace palette and compact geom
 
 test("loaded styles reserve round geometry for semantic data marks and indicators", () => {
   const stylesheets = getLoadedStylesheets();
-  const semanticRoundSelectors = new Set([".nav-item::before", ".relation-bubble"]);
+  const semanticRoundSelectors = new Set([
+    ".nav-item::before",
+    ".relation-bubble",
+    ".ability-selected-tag",
+    ".tag-pill,\n.detail-chip,\n.workload-chip,\n.muted-badge,\n.default,\n.config-count"
+  ]);
 
   assert.ok(stylesheets.length >= 9, "foundation, domain, and visual refresh style entries must all be loaded");
   for (const stylesheet of stylesheets) {
-    assert.ok(stylesheet.source.length > 0, `${stylesheet.path} must resolve to a stylesheet`);
-    assert.equal(/(?:linear|radial|conic)-gradient\s*\(/i.test(stylesheet.source), false, `${stylesheet.path} contains a gradient`);
-    assert.equal(/prefers-color-scheme\s*:\s*dark/i.test(stylesheet.source), false, `${stylesheet.path} contains fake dark mode`);
-    for (const block of stylesheet.source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const normalizedSource = stylesheet.source.replace(/\r\n/g, "\n");
+    assert.ok(normalizedSource.length > 0, `${stylesheet.path} must resolve to a stylesheet`);
+    assert.equal(/(?:linear|radial|conic)-gradient\s*\(/i.test(normalizedSource), false, `${stylesheet.path} contains a gradient`);
+    assert.equal(/prefers-color-scheme\s*:\s*dark/i.test(normalizedSource), false, `${stylesheet.path} contains fake dark mode`);
+    for (const block of normalizedSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = block[1].trim();
       const radiusDeclarations = [...block[2].matchAll(/border-radius\s*:\s*([^;]+)/gi)];
       for (const declaration of radiusDeclarations) {

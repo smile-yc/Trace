@@ -12,13 +12,15 @@ Trace 是一个个人工作台账与复盘系统，用来记录日报，按周�
 
 ## 文档说明
 
-根目录下保留 3 份主要文档：
+项目保留以下 5 份长期维护文档：
 
 - `README.md`：项目入口文档。用于快速了解项目是什么、怎么安装、怎么运行、怎么构建、数据存在哪里。
 - `PROJECT_ARCHITECTURE.md`：架构说明文档。用于理解前后端分层、目录职责、数据流、数据库和部署结构。
 - `REQUIREMENTS.md`：需求与任务文档。用于保存产品目标、功能规划、验收标准和后续迭代事项。
+- `DESIGN.md`：前端视觉与布局的唯一规范。用于约束设计令牌、组件样式、页面模板和响应式验收。
+- `docs/TRACE_FEATURE_INVENTORY.md`：基于当前代码维护的功能边界清单，用于核对系统已经具备的能力。
 
-建议这三份都保留。`README.md` 面向使用和启动，`PROJECT_ARCHITECTURE.md` 面向维护代码，`REQUIREMENTS.md` 面向后续开发计划。
+历史实施计划和阶段性设计截图不进入长期文档。UI 修改必须先读取 `DESIGN.md`，并同步维护其中的规范和对应测试。
 
 ## 技术栈
 
@@ -234,10 +236,13 @@ Trace/
 │  │  ├─ lib/               # API、统计、日期、复盘等工具
 │  │  └─ styles.css         # 全局样式
 │  └─ test/                 # 前端逻辑和样式约束测试
-├─ scripts/                 # 本地启动脚本
-├─ PROJECT_ARCHITECTURE.md  # 架构说明
-├─ REQUIREMENTS.md          # 需求与任务清单
-└─ README.md                # 项目入口说明
+  ├─ scripts/                 # 本地启动脚本
+  ├─ docs/
+  │  └─ TRACE_FEATURE_INVENTORY.md # 当前功能边界清单
+  ├─ DESIGN.md                # UI 设计系统与复现契约
+  ├─ PROJECT_ARCHITECTURE.md  # 架构说明
+  ├─ REQUIREMENTS.md          # 需求与任务清单
+  └─ README.md                # 项目入口说明
 ```
 
 更完整的结构说明见 `PROJECT_ARCHITECTURE.md`。

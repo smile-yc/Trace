@@ -36,10 +36,10 @@ interface ReportDashboardProps {
   activeLabel: string;
 }
 
-const chartColors = ["#4b7f8b", "#769377", "#b29065", "#555243", "#6f8f98", "#8a765c"];
-const businessColors = ["#555243", "#4b7f8b", "#769377", "#b29065", "#6f8f98", "#8a765c"];
-const abilityColors = ["#4b7f8b", "#769377", "#b29065", "#555243", "#6f8f98", "#8a765c"];
-const workTypeColors = ["#4b7f8b", "#b29065", "#769377", "#555243", "#6f8f98", "#8a765c"];
+const chartColors = ["#2563eb", "#12b76a", "#f79009", "#667085", "#98a2b3", "#0ea5e9"];
+const businessColors = chartColors;
+const abilityColors = chartColors;
+const workTypeColors = chartColors;
 
 interface ChartPoint {
   x: number;
@@ -59,6 +59,7 @@ interface DashboardSourceView {
 }
 
 type OpenDashboardSource = (title: string, filter: DashboardSourceFilter, description?: string) => void;
+type StructureAnalysisTab = "business" | "workType" | "ability" | "product";
 
 function formatMetric(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -78,12 +79,6 @@ function percentOf(value: number, total: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function densityClass(count: number, sparseThreshold = 2): "is-empty" | "is-sparse" | "is-regular" {
-  if (count === 0) return "is-empty";
-  if (count <= sparseThreshold) return "is-sparse";
-  return "is-regular";
 }
 
 function splitLabel(label: string, chunkSize = 5): string[] {
@@ -145,6 +140,8 @@ function SegmentedDonutChart({
   const cx = 180;
   const cy = 140;
   const radius = 88;
+  const labelRadius = 116;
+  const labelCount = Math.min(2, items.length);
   const segmentGap = items.length > 1 ? 5 : 0;
   let cursor = -90;
 
@@ -163,18 +160,31 @@ function SegmentedDonutChart({
 
     cursor += sweep;
 
+    const lineStart = polarPoint(cx, cy, labelRadius - 10, midpoint);
+    const lineBend = polarPoint(cx, cy, labelRadius + 13, midpoint);
+    const isRight = lineBend.x >= cx;
+    const lineEnd = { x: lineBend.x + (isRight ? 26 : -26), y: lineBend.y };
+    const textAnchor: "start" | "end" = isRight ? "start" : "end";
+
     return {
       color: colors[index % colors.length],
       item,
+      labelTextY: lineEnd.y - 4,
+      labelValueY: lineEnd.y + 18,
+      lineBend,
+      lineEnd,
+      lineStart,
       path: roundedArcPath(cx, cy, radius, startAngle, endAngle),
       percent: percentOf(value, total),
+      textAnchor,
+      textX: lineEnd.x + (isRight ? 8 : -8),
       value
     };
   });
 
   return (
     <div className={`segmented-donut-stage ${className}`.trim()}>
-      <svg className="segmented-donut-chart" viewBox="60 20 240 240" role="img" aria-label={ariaLabel}>
+      <svg className="segmented-donut-chart" viewBox="0 -24 360 320" role="img" aria-label={ariaLabel}>
         <circle className="donut-base-path" cx={cx} cy={cy} r={radius} />
         {segments.map((segment) => (
           <path
@@ -182,9 +192,22 @@ function SegmentedDonutChart({
             d={segment.path}
             key={segment.item.label}
             stroke={segment.color}
-          >
-            <title>{`${segment.item.label}: ${formatMetric(segment.value)} | ${segment.percent}%`}</title>
-          </path>
+          />
+        ))}
+        {segments.slice(0, labelCount).map((segment) => (
+          <g className="donut-external-label" key={`${segment.item.label}-label`}>
+            <polyline
+              className="donut-label-line"
+              points={`${segment.lineStart.x},${segment.lineStart.y} ${segment.lineBend.x},${segment.lineBend.y} ${segment.lineEnd.x},${segment.lineEnd.y}`}
+              stroke={segment.color}
+            />
+            <text className="donut-label-text" x={segment.textX} y={segment.labelTextY} textAnchor={segment.textAnchor}>
+              {segment.item.label}
+            </text>
+            <text className="donut-label-value" x={segment.textX} y={segment.labelValueY} textAnchor={segment.textAnchor}>
+              {formatMetric(segment.value)}当量 | {segment.percent}%
+            </text>
+          </g>
         ))}
       </svg>
       <div className="segmented-donut-center">
@@ -292,7 +315,7 @@ function BusinessCategoryDonut({ items, onOpenSource }: { items: DistributionIte
   const secondPercent = secondItem ? percentOf(metricValue(secondItem), total) : 0;
 
   return (
-    <section className={`dashboard-card business-donut-card ${densityClass(items.length)}`}>
+    <section className="dashboard-card business-donut-card">
       <CardHeading
         icon={PieChart}
         meta={`${items.length} 类`}
@@ -367,7 +390,7 @@ function AbilityRadarChart({ items, onOpenSource }: { items: DistributionItem[];
     : [];
 
   return (
-    <section className={`dashboard-card ability-radar-card ${densityClass(items.length)}`}>
+    <section className="dashboard-card ability-radar-card">
       <CardHeading
         icon={Radar}
         meta={`${items.length} 类`}
@@ -384,9 +407,6 @@ function AbilityRadarChart({ items, onOpenSource }: { items: DistributionItem[];
             <strong>{topPercent}%</strong>
             <em>{topItem?.label}</em>
             <small>{topItem ? formatMetric(metricValue(topItem)) : "0"} 当量 / {topItem?.count ?? 0} 条记录</small>
-            <svg className="ability-focus-wave" viewBox="0 0 220 70" aria-hidden="true">
-              <path d="M0 48 C28 18, 46 18, 68 42 S108 68, 136 32 S176 8, 220 40" />
-            </svg>
           </div>
 
           <div className="ability-radar-plot">
@@ -475,9 +495,9 @@ function AbilityRadarChart({ items, onOpenSource }: { items: DistributionItem[];
             <strong>洞察</strong>
             <span>
               {topItem
-                ? `${topItem.label}占 ${topPercent}%，是当前投入最高的能力维度`
+                ? `${topItem.label}占 ${topPercent}%，投入最高`
                 : "暂无能力维度数据"}
-              {visibleItems[1] ? `；${visibleItems[1].label}占 ${percentOf(metricValue(visibleItems[1]), total)}%，形成补充支撑。` : "。"}
+              {visibleItems[1] ? `；${visibleItems[1].label}占 ${percentOf(metricValue(visibleItems[1]), total)}%，形成补充。` : "。"}
             </span>
           </div>
         </div>
@@ -497,7 +517,7 @@ function WorkTypeProfileChart({ items, onOpenSource }: { items: DistributionItem
   const secondPercent = secondItem ? percentOf(metricValue(secondItem), total) : 0;
 
   return (
-    <section className={`dashboard-card worktype-profile-card ${densityClass(items.length)}`}>
+    <section className="dashboard-card worktype-profile-card">
       <CardHeading
         icon={Workflow}
         meta={`${items.length} 类`}
@@ -578,7 +598,7 @@ function BusinessAbilityMatrix({ relations, onOpenSource }: { relations: Busines
   const topRelation = relations.slice().sort((a, b) => b.workload - a.workload || b.count - a.count)[0];
 
   return (
-    <section className={`dashboard-card business-ability-card ${densityClass(relations.length, 3)}`}>
+    <section className="dashboard-card business-ability-card">
       <CardHeading
         icon={GitBranch}
         meta="矩阵视图"
@@ -673,11 +693,10 @@ function BusinessAbilityMatrix({ relations, onOpenSource }: { relations: Busines
 
 function TrendChart({ points, onOpenSource }: { points: TrendPoint[]; onOpenSource: OpenDashboardSource }) {
   const [tooltip, setTooltip] = useState<TrendTooltipState | null>(null);
-  const activePointCount = points.filter((point) => point.workload > 0 || point.timeHours > 0).length;
   const maxValue = Math.max(1, ...points.map((point) => Math.max(point.workload, point.timeHours)));
-  const chartWidth = Math.max(760, points.length * 58 + 76);
-  const chartHeight = 176;
-  const padding = { top: 18, right: 28, bottom: 32, left: 38 };
+  const chartWidth = Math.max(520, points.length * 58 + 76);
+  const chartHeight = 232;
+  const padding = { top: 22, right: 28, bottom: 36, left: 38 };
   const plotWidth = chartWidth - padding.left - padding.right;
   const plotHeight = chartHeight - padding.top - padding.bottom;
   const bottom = padding.top + plotHeight;
@@ -691,7 +710,7 @@ function TrendChart({ points, onOpenSource }: { points: TrendPoint[]; onOpenSour
   };
 
   return (
-    <section className={`dashboard-card trend-card ${densityClass(activePointCount, 1)}`}>
+    <section className="dashboard-card trend-card">
       <CardHeading
         icon={Activity}
         meta="当量 / 时间"
@@ -800,7 +819,7 @@ function ProjectRank({ projects, onOpenSource }: { projects: ProjectSummary[]; o
   const maxValue = Math.max(1, ...projects.map((project) => Math.max(project.count, project.workload)));
 
   return (
-    <section className={`dashboard-card project-rank-card ${densityClass(projects.length)}`}>
+    <section className="dashboard-card project-rank-card">
       <CardHeading
         icon={BriefcaseBusiness}
         meta={`${projects.length} 个项目`}
@@ -849,7 +868,7 @@ function FocusRank({
   const hiddenCount = Math.max(0, items.length - visibleItems.length);
 
   return (
-    <section className={`dashboard-card focus-rank-card ${densityClass(items.length)}`}>
+    <section className="dashboard-card focus-rank-card">
       <CardHeading
         icon={Trophy}
         meta={`Top ${visibleItems.length}${hiddenCount ? ` / ${items.length}` : ""} · ${weightLabel}`}
@@ -891,7 +910,7 @@ function ProductMatrix({ items, onOpenSource }: { items: DistributionItem[]; onO
   const maxValue = Math.max(1, ...visibleItems.map(metricValue));
 
   return (
-    <section className={`dashboard-card product-matrix-card ${densityClass(items.length)}`}>
+    <section className="dashboard-card product-matrix-card">
       <CardHeading
         icon={Layers3}
         meta={`${items.length} 类`}
@@ -918,6 +937,79 @@ function ProductMatrix({ items, onOpenSource }: { items: DistributionItem[]; onO
           })
         ) : (
           <div className="empty-state">暂无产品系统数据。</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StructureAnalysisPanel({
+  activeTab,
+  analysis,
+  onChange,
+  onOpenSource
+}: {
+  activeTab: StructureAnalysisTab;
+  analysis: ReturnType<typeof analyzeRecords>;
+  onChange: (tab: StructureAnalysisTab) => void;
+  onOpenSource: OpenDashboardSource;
+}) {
+  const tabs: Array<{ id: StructureAnalysisTab; label: string; count: number; icon: LucideIcon }> = [
+    { id: "business", label: "业务分类", count: analysis.businessDistribution.length, icon: BriefcaseBusiness },
+    { id: "workType", label: "工作类型", count: analysis.workTypeDistribution.length, icon: Workflow },
+    { id: "ability", label: "能力关联", count: analysis.abilityDistribution.length, icon: Radar },
+    { id: "product", label: "产品系统", count: analysis.productDistribution.length, icon: Layers3 }
+  ];
+
+  return (
+    <section className="structure-analysis-card" aria-labelledby="structure-analysis-title">
+      <div className="structure-analysis-toolbar">
+        <div>
+          <span className="structure-analysis-kicker">结构分析</span>
+          <h3 id="structure-analysis-title">按一个维度看清投入结构</h3>
+        </div>
+        <div className="structure-analysis-tabs" role="tablist" aria-label="结构分析维度">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                aria-controls={`structure-panel-${tab.id}`}
+                aria-selected={activeTab === tab.id}
+                className={activeTab === tab.id ? "active" : ""}
+                id={`structure-tab-${tab.id}`}
+                key={tab.id}
+                onClick={() => onChange(tab.id)}
+                role="tab"
+                type="button"
+              >
+                <Icon className="structure-tab-icon" size={16} />
+                <span className="structure-tab-copy"><span>{tab.label}</span><strong>{tab.count}</strong></span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div
+        className={`structure-analysis-panel ${activeTab}`}
+        id={`structure-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`structure-tab-${activeTab}`}
+      >
+        {activeTab === "business" && (
+          <BusinessCategoryDonut items={analysis.businessDistribution} onOpenSource={onOpenSource} />
+        )}
+        {activeTab === "workType" && (
+          <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={onOpenSource} />
+        )}
+        {activeTab === "ability" && (
+          <div className="structure-analysis-combo">
+            <AbilityRadarChart items={analysis.abilityDistribution} onOpenSource={onOpenSource} />
+            <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={onOpenSource} />
+          </div>
+        )}
+        {activeTab === "product" && (
+          <ProductMatrix items={analysis.productDistribution} onOpenSource={onOpenSource} />
         )}
       </div>
     </section>
@@ -980,6 +1072,7 @@ function ProjectCards({ projects, onOpenSource }: { projects: ProjectSummary[]; 
 export function ReportDashboard({ records, trend, activeLabel }: ReportDashboardProps) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [sourceView, setSourceView] = useState<DashboardSourceView | null>(null);
+  const [activeStructureTab, setActiveStructureTab] = useState<StructureAnalysisTab>("ability");
   const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const analysis = useMemo(() => analyzeRecords(records, settings), [records, settings]);
   const sourceRecords = useMemo(
@@ -1019,11 +1112,6 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
           <span>参与项目</span>
           <strong>{analysis.projectCount}</strong>
         </button>
-        <button onClick={() => openSource("原始工作当量来源", { kind: "all" })} type="button">
-          <Activity size={18} />
-          <span>工作当量</span>
-          <strong>{formatMetric(analysis.totalWorkload)}</strong>
-        </button>
         <button onClick={() => openSource("投入时间来源", { kind: "all" })} type="button">
           <Clock3 size={18} />
           <span>投入时间</span>
@@ -1039,11 +1127,10 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
           <span>主要类型</span>
           <strong>{analysis.topWorkTypeLabel}</strong>
         </button>
-        <button onClick={() => openSource("活跃周期来源", { kind: "all" })} type="button">
-          <CalendarCheck size={18} />
-          <span>活跃周期</span>
-          <strong>{activeLabel}</strong>
-        </button>
+        <span className="dashboard-period-context">
+          <CalendarCheck size={17} />
+          活跃周期 <strong>{activeLabel}</strong>
+        </span>
       </section>
 
       {sourceView && (
@@ -1058,25 +1145,14 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
         </div>
       )}
 
-      <section className="dashboard-wide-row">
-        <TrendChart points={trend} onOpenSource={openSource} />
-      </section>
+      <section className="dashboard-grid dashboard-workbench">
+        <StructureAnalysisPanel
+          activeTab={activeStructureTab}
+          analysis={analysis}
+          onChange={setActiveStructureTab}
+          onOpenSource={openSource}
+        />
 
-      <section className="dashboard-grid mixed dashboard-masonry">
-        <div className="dashboard-column dashboard-column-primary">
-          <BusinessCategoryDonut items={analysis.businessDistribution} onOpenSource={openSource} />
-          <AbilityRadarChart items={analysis.abilityDistribution} onOpenSource={openSource} />
-          <ProductMatrix items={analysis.productDistribution} onOpenSource={openSource} />
-        </div>
-
-        <div className="dashboard-column dashboard-column-analysis">
-          <ProjectRank projects={analysis.projectSummaries} onOpenSource={openSource} />
-          <BusinessAbilityMatrix relations={analysis.businessAbilityRelations} onOpenSource={openSource} />
-          <WorkTypeProfileChart items={analysis.workTypeDistribution} onOpenSource={openSource} />
-        </div>
-      </section>
-
-      <section className="dashboard-bottom-row">
         <section className="dashboard-card insight-card">
           <CardHeading icon={Layers3} meta="自动洞察" title="本期观察" tone="navy" onSource={() => openSource("本期观察全部来源", { kind: "all" })} />
           <div className="insight-lines">
@@ -1086,7 +1162,12 @@ export function ReportDashboard({ records, trend, activeLabel }: ReportDashboard
             <p>能力投入集中在 <strong>{analysis.abilityDistribution[0]?.label ?? "暂无能力维度"}</strong></p>
           </div>
         </section>
-        <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
+
+        <div className="dashboard-support-grid">
+          <FocusRank items={analysis.focusRankings} onOpenSource={openSource} settings={settings} />
+          <ProjectRank projects={analysis.projectSummaries} onOpenSource={openSource} />
+          <TrendChart points={trend} onOpenSource={openSource} />
+        </div>
       </section>
 
       <ProjectCards projects={analysis.projectSummaries} onOpenSource={openSource} />

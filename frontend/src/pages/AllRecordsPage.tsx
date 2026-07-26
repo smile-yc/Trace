@@ -1,4 +1,18 @@
-import { Download, Eraser, FileText, PackagePlus, RotateCcw, X } from "lucide-react";
+import {
+  BrainCircuit,
+  ClockAlert,
+  Download,
+  Eraser,
+  FileText,
+  FileWarning,
+  FolderX,
+  PackagePlus,
+  Percent,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
+  type LucideIcon
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { LedgerRecordList } from "../components/LedgerRecordList";
 import { PageHeader } from "../components/PageHeader";
@@ -39,6 +53,14 @@ const qualityLabels: Record<LedgerQualityCode, string> = {
   missing_time: "缺少工时",
   missing_coefficient: "缺少系数",
   missing_content: "缺少工作内容"
+};
+
+const qualityIcons: Record<LedgerQualityCode, LucideIcon> = {
+  missing_project: FolderX,
+  missing_ability: BrainCircuit,
+  missing_time: ClockAlert,
+  missing_coefficient: Percent,
+  missing_content: FileWarning
 };
 
 const coefficientLabels: Record<WorkRecord["coefficientSource"], string> = {
@@ -251,8 +273,11 @@ export function AllRecordsPage({ active, records, onEdit, onDelete, onClear, onG
       <section className="ledger-quality-band" aria-labelledby="ledger-quality-title">
         <div className="ledger-section-heading"><div><h2 id="ledger-quality-title">数据质量</h2><p>{quality.issueRecordCount ? `${quality.issueRecordCount} 条记录需要补充` : "当前范围未发现缺失项"}</p></div><button className="inline-clear" type="button" onClick={() => updateFilter("qualityCode", "")}><RotateCcw size={14} />查看全部</button></div>
         <div className="ledger-quality-actions">
-          {(Object.keys(qualityLabels) as LedgerQualityCode[]).map((code) => <button className={filters.qualityCode === code ? "is-active" : ""} key={code} type="button" onClick={() => updateFilter("qualityCode", code)}><span>{qualityLabels[code]}</span><strong>{quality.counts[code]}</strong></button>)}
-          <button className={filters.coefficientSource === "manual" ? "is-active" : ""} type="button" onClick={() => updateFilter("coefficientSource", "manual")}><span>手动系数</span><strong>{quality.manualCoefficientCount} · {quality.manualCoefficientPercent}%</strong></button>
+          {(Object.keys(qualityLabels) as LedgerQualityCode[]).map((code) => {
+            const Icon = qualityIcons[code];
+            return <button className={`ledger-quality-card quality-${code} ${filters.qualityCode === code ? "is-active" : ""}`} key={code} type="button" onClick={() => updateFilter("qualityCode", code)}><span className="ledger-quality-icon" aria-hidden="true"><Icon size={18} /></span><span className="ledger-quality-copy"><span>{qualityLabels[code]}</span><strong>{quality.counts[code]}</strong></span></button>;
+          })}
+          <button className={`ledger-quality-card quality-manual ${filters.coefficientSource === "manual" ? "is-active" : ""}`} type="button" onClick={() => updateFilter("coefficientSource", "manual")}><span className="ledger-quality-icon" aria-hidden="true"><SlidersHorizontal size={18} /></span><span className="ledger-quality-copy"><span>手动系数</span><strong>{quality.manualCoefficientCount}<small>{quality.manualCoefficientPercent}%</small></strong></span></button>
         </div>
         {(Object.values(quality.duplicateCategories).some((groups) => groups.length) || quality.duplicateProjects.length > 0) && <div className="ledger-duplicate-notices">
           {Object.entries(quality.duplicateCategories).flatMap(([key, groups]) => groups.map((group) => <button key={`${key}-${group.join("-")}`} type="button" onClick={() => updateFilter(key as keyof Pick<LedgerFilters, "businessCategory" | "workType" | "productSystem" | "subtask">, group[0])}>疑似重复分类：{group.join(" / ")}</button>))}

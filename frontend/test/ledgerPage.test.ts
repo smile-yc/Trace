@@ -39,6 +39,22 @@ test("ledger page exposes long-term filters, quality actions and scoped batch wo
   assert.match(page, /setFilters\(.*qualityCode/s);
 });
 
+test("ledger quality metrics use semantic KPI cards instead of table cells", () => {
+  const page = readSource("../src/pages/AllRecordsPage.tsx");
+  const styles = readSource("../src/styles/work-outcomes.css");
+
+  for (const symbol of [
+    "FolderX", "BrainCircuit", "ClockAlert", "Percent", "FileWarning", "SlidersHorizontal",
+    "qualityIcons", "ledger-quality-icon", "ledger-quality-copy"
+  ]) {
+    assert.ok(page.includes(symbol), `ledger quality KPI is missing ${symbol}`);
+  }
+
+  assert.match(styles, /\.ledger-quality-actions \{[\s\S]*gap: 10px;[\s\S]*border: 0;[\s\S]*background: transparent;/);
+  assert.match(styles, /\.ledger-quality-actions button \{[\s\S]*grid-template-columns: 36px minmax\(0, 1fr\);[\s\S]*border: 1px solid var\(--color-border\);[\s\S]*border-radius: var\(--radius-surface\);/);
+  assert.match(styles, /\.ledger-quality-icon \{[\s\S]*width: 36px;[\s\S]*height: 36px;/);
+});
+
 test("compact ledger list supports selection, expansion, edit and impact-aware deletion", () => {
   const component = readSource("../src/components/LedgerRecordList.tsx");
 

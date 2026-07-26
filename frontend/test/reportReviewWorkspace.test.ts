@@ -33,18 +33,17 @@ test("annual outcome package prioritizes reportable results, evidence and materi
   const yearly = source("pages/YearlyPage.tsx");
   const styles = source("styles/visual-refresh.css");
 
-  assert.match(yearly, /className="annual-package-heading"/);
-  assert.match(yearly, /className="annual-package-highlight"/);
+  assert.match(yearly, /className="panel annual-package-panel"/);
+  assert.match(yearly, /const annualOutcomeColumns:/);
   assert.match(yearly, /annualPackage\.metrics\.reportableOutcomeCount/);
-  assert.match(yearly, /annualPackage\.metrics\.linkedWorkload/);
-  assert.match(yearly, /annualNeedsAttention = annualPackage\.reminders\.length > 0/);
-  assert.match(yearly, /className="annual-project-rank"/);
-  assert.match(yearly, /className="annual-gap-grid"/);
-  assert.match(yearly, /annualPackage\.gaps\.missingValueImpactCount/);
-  assert.match(styles, /\.annual-package-highlight \{[\s\S]*background: var\(--color-sidebar\);/);
-  assert.match(styles, /\.annual-package-side \{[\s\S]*grid-template-columns: minmax\(260px, 0\.65fr\) minmax\(0, 1\.35fr\);/);
-  assert.match(styles, /\.annual-gap-item\.has-gap \{[\s\S]*var\(--color-warning-soft\);/);
-  assert.match(styles, /@media \(max-width: 800px\)[\s\S]*\.annual-package-heading \{[\s\S]*flex-direction: column;/);
+  assert.match(yearly, /columns=\{annualOutcomeColumns\}/);
+  assert.match(yearly, /rows=\{annualPackage\.reportableOutcomes\}/);
+  assert.match(yearly, /header: "支撑记录 \/ 材料完整度"/);
+  assert.match(yearly, /annualPackage\.reminders\.length/);
+  assert.match(yearly, /annualPackage\.projects\[0\]/);
+  assert.match(styles, /\.annual-package-metrics \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /\.annual-package-summary-grid \{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /\.annual-package-summary-grid \.has-warning strong \{[\s\S]*color: var\(--color-warning\);/);
 });
 
 test("annual output package uses linked in-year records once and exposes evidence gaps", () => {

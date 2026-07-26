@@ -7,6 +7,8 @@
 - `README.md` 负责说明项目是什么、怎么运行、怎么构建。
 - `PROJECT_ARCHITECTURE.md` 负责说明前后端分层、目录职责、数据流和部署结构。
 - `REQUIREMENTS.md` 负责保存产品需求、任务清单和后续迭代计划。
+- `DESIGN.md` 负责定义前端唯一设计语言、页面模板、响应式规则和视觉验收方式。
+- `docs/TRACE_FEATURE_INVENTORY.md` 负责记录当前代码已经实现的功能边界。
 
 ## 总体架构
 
@@ -98,6 +100,20 @@ trace-work-report-system/
 - `frontend/src/components/ProjectEditor.tsx` 与 `ProjectMergeDialog.tsx` 复用项目编辑、合并预览和确认流程。
 
 已经确认并清理的历史遗留组件：`Layout.tsx`、`EditRecordModal.tsx`、`Toast.tsx`。后续新增全局布局或 toast 时，应直接改造当前 `App.tsx` 和实际在用组件，避免重新引入并行实现。
+
+## 前端样式架构
+
+样式由 `frontend/src/main.tsx` 按固定顺序加载，后加载层可以在明确范围内覆盖前一层：
+
+1. `styles.css`：仍在使用的历史页面样式和兼容规则。
+2. `styles/tokens.css`：唯一设计令牌及旧变量兼容映射。
+3. `styles/base.css`：字体、画布和基础元素。
+4. `styles/layout.css`：应用外壳、侧栏、页面宽度和响应式布局。
+5. `styles/components.css`：按钮、表单、表格、弹窗等共享组件。
+6. `styles/work-outcomes.css`、`growth-reports.css`、`settings-data.css`：业务域样式。
+7. `styles/visual-refresh.css`：当前企业级视觉统一层，只允许使用 `tokens.css` 中的令牌。
+
+新增样式应优先进入共享组件层或对应业务域文件，不得在页面组件中增加行内视觉常量。跨页面规则以 `DESIGN.md` 为准，并由 `frontend/test/styles.test.ts` 和 `uiFoundation.test.ts` 固化。
 
 ## 数据流
 

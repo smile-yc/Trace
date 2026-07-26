@@ -1,18 +1,5 @@
-import {
-  Award,
-  BriefcaseBusiness,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-  FileWarning,
-  Gauge,
-  Link2,
-  RotateCcw,
-  Sparkles,
-  Tags
-} from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Award, BriefcaseBusiness, ChevronLeft, ChevronRight, Clock3, FileCheck2, Link2, RotateCcw, Tags } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { ExportPanel } from "../components/ExportPanel";
 import { PageHeader } from "../components/PageHeader";
 import { ReportDashboard } from "../components/ReportDashboard";
@@ -20,12 +7,13 @@ import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
 import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
+import { DataTable, StatusBadge, type DataTableColumn, type StatusTone } from "../components/ui";
 import type { Outcome, WorkRecord } from "../types";
 import { getYearRange, shiftYear, todayKey } from "../lib/date";
 import { buildYearMonthTrend, sumWorkload } from "../lib/dashboard";
 import { buildAnnualOutputPackage } from "../lib/annualOutput";
 import { fetchOutcomes } from "../lib/outcomeApi";
-import { filterOutcomesByRange } from "../lib/outcomes";
+import { filterOutcomesByRange, outcomeStatusLabels, outcomeTypeLabels } from "../lib/outcomes";
 import { countActiveMonths, countUniqueTags, filterByRange, groupByDate } from "../lib/records";
 import {
   filterReportDetailRecords,
@@ -39,6 +27,77 @@ interface YearlyPageProps {
   onGenerateReport: (records: WorkRecord[], title: string) => void;
   onNotify: (message: string) => void;
 }
+
+function getOutcomeStatusTone(status: Outcome["status"]): StatusTone {
+  if (status === "completed") return "success";
+  if (status === "stage_result") return "info";
+  if (status === "in_progress") return "warning";
+  return "neutral";
+}
+
+function getOutcomeCompleteness(outcome: Outcome): number {
+  return [
+    outcome.reportSummary,
+    outcome.valueImpact,
+    outcome.contribution,
+    outcome.recordIds.length ? "linked" : ""
+  ].filter((value) => value?.trim()).length;
+}
+
+const annualOutcomeColumns: ReadonlyArray<DataTableColumn<Outcome>> = [
+  {
+    id: "outcome",
+    header: "成果 / 证据",
+    width: "32%",
+    cell: (outcome) => (
+      <div className="annual-outcome-title">
+        <span className={`annual-outcome-icon tone-${outcome.type}`} aria-hidden="true"><FileCheck2 size={16} /></span>
+        <div>
+          <strong>{outcome.title}</strong>
+          <span>{outcomeTypeLabels[outcome.type]} · {outcome.reportSummary || outcome.completedWork || "待补充汇报表述"}</span>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: "project",
+    header: "关联项目",
+    width: "18%",
+    cell: (outcome) => outcome.projectName || "非项目成果"
+  },
+  {
+    id: "contribution",
+    header: "贡献 / 工作量",
+    width: "18%",
+    cell: (outcome) => (
+      <span className="annual-table-metric">
+        {outcome.workload} 当量
+        <small>{outcome.timeHours}h · {outcome.recordCount} 条记录</small>
+      </span>
+    )
+  },
+  {
+    id: "evidence",
+    header: "支撑记录 / 材料完整度",
+    width: "20%",
+    cell: (outcome) => (
+      <span className="annual-table-metric">
+        关联 {outcome.recordIds.length} 条来源记录
+        <small>完整度 {getOutcomeCompleteness(outcome)}/4</small>
+      </span>
+    )
+  },
+  {
+    id: "status",
+    header: "状态",
+    width: "12%",
+    cell: (outcome) => (
+      <StatusBadge tone={getOutcomeStatusTone(outcome.status)} icon={false}>
+        {outcomeStatusLabels[outcome.status]}
+      </StatusBadge>
+    )
+  }
+];
 
 export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPageProps) {
   const [date, setDate] = useState(todayKey());
@@ -75,22 +134,6 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
     () => buildAnnualOutputPackage(yearlyRecords, yearlyOutcomes, workloadAdjustmentPercent),
     [yearlyRecords, yearlyOutcomes, workloadAdjustmentPercent]
   );
-  const annualGapTotal = Object.values(annualPackage.gaps).reduce((sum, value) => sum + value, 0);
-  const annualNeedsAttention = annualPackage.reminders.length > 0;
-  const annualProjectMaxWorkload = Math.max(1, ...annualPackage.projects.map((project) => project.workload));
-  const annualOutcomeItems = [
-    { label: "正式交付", value: annualPackage.outcomeCounts.deliverable },
-    { label: "重要问题解决", value: annualPackage.outcomeCounts.problemResolution },
-    { label: "阶段性进展", value: annualPackage.outcomeCounts.stageProgress },
-    { label: "可复用资产", value: annualPackage.outcomeCounts.reusableAsset }
-  ];
-  const annualOutcomeTotal = Math.max(1, annualOutcomeItems.reduce((sum, item) => sum + item.value, 0));
-  const annualGapItems = [
-    { label: "成果来源", value: annualPackage.gaps.missingSourceCount },
-    { label: "汇报表述", value: annualPackage.gaps.missingReportSummaryCount },
-    { label: "价值影响", value: annualPackage.gaps.missingValueImpactCount },
-    { label: "个人贡献", value: annualPackage.gaps.missingContributionCount }
-  ];
   const detailRange = getArchiveRange(detailMode, detailPeriod || defaultDetailPeriod);
   const detailStart = detailRange && detailRange.start > range.start ? detailRange.start : range.start;
   const detailEnd = detailRange && detailRange.end < range.end ? detailRange.end : range.end;
@@ -164,99 +207,43 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
       <OutcomePeriodSection outcomes={yearlyOutcomes} title="年度代表性成果与进展" />
 
       <section className="panel annual-package-panel">
-        <div className="annual-package-heading">
+        <div className="panel-heading">
           <div>
-            <span className="annual-package-kicker"><Award size={16} />年度汇报资产</span>
             <h2>年度成果包</h2>
-            <p>把年度投入、成果证据和个人贡献整理为可直接用于总结与汇报的材料。</p>
+            <p>把成果、项目投入和来源记录组织成可核对、可汇报的年度证据。</p>
           </div>
-          <div className={`annual-package-status ${annualNeedsAttention ? "needs-attention" : "is-ready"}`}>
-            {annualNeedsAttention ? <FileWarning size={18} /> : <CheckCircle2 size={18} />}
-            <span>{annualNeedsAttention ? "材料待完善" : "材料状态"}</span>
-            <strong>{annualGapTotal ? `${annualGapTotal} 项缺口` : annualNeedsAttention ? "待形成成果" : "证据完整"}</strong>
+          <span>{annualPackage.metrics.reportableOutcomeCount} 项可汇报成果</span>
+        </div>
+        <div className="annual-package-metrics">
+          <div><span className="annual-metric-icon tone-violet"><BriefcaseBusiness size={17} /></span><strong>{annualPackage.metrics.projectCount}</strong><span>年度项目</span></div>
+          <div><span className="annual-metric-icon tone-orange"><Award size={17} /></span><strong>{annualPackage.metrics.rawWorkload}</strong><span>原始工作当量</span></div>
+          <div><span className="annual-metric-icon tone-blue"><Clock3 size={17} /></span><strong>{annualPackage.metrics.timeHours}</strong><span>投入小时</span></div>
+          <div><span className="annual-metric-icon tone-teal"><Link2 size={17} /></span><strong>{annualPackage.metrics.linkedRecordCount}</strong><span>成果来源记录</span></div>
+        </div>
+        <DataTable
+          columns={annualOutcomeColumns}
+          rows={annualPackage.reportableOutcomes}
+          rowKey={(outcome) => outcome.id}
+          empty={<div className="empty-state">本年度暂无可汇报成果，请先在成果管理中沉淀阶段成果或正式交付。</div>}
+        />
+        <div className="annual-package-summary-grid">
+          <div>
+            <span>成果结构</span>
+            <strong>{annualPackage.outcomeCounts.deliverable} 交付</strong>
+            <small>{annualPackage.outcomeCounts.problemResolution} 问题解决 · {annualPackage.outcomeCounts.stageProgress} 阶段进展 · {annualPackage.outcomeCounts.reusableAsset} 可复用资产</small>
+          </div>
+          <div>
+            <span>项目贡献</span>
+            <strong>{annualPackage.projects[0]?.name ?? "暂无项目投入"}</strong>
+            <small>{annualPackage.projects[0] ? `${annualPackage.projects[0].workload} 当量 · ${annualPackage.projects[0].timeHours} 小时` : "等待来源记录"}</small>
+          </div>
+          <div className={annualPackage.reminders.length ? "has-warning" : ""}>
+            <span>材料完整性</span>
+            <strong>{annualPackage.reminders.length ? `${annualPackage.reminders.length} 项待补充` : "材料完整"}</strong>
+            <small>{annualPackage.reminders[0] ?? "成果来源、价值影响、个人贡献和汇报表述已填写完整。"}</small>
           </div>
         </div>
-
-        <div className="annual-package-overview">
-          <article className="annual-package-highlight">
-            <span><Sparkles size={17} />可汇报成果</span>
-            <strong>{annualPackage.metrics.reportableOutcomeCount}</strong>
-            <p>统计阶段成果和已完成成果，作为年度总结的优先素材。</p>
-            <div className="annual-evidence-summary">
-              <span><Link2 size={15} /><b>{annualPackage.metrics.linkedRecordCount}</b> 条来源日报</span>
-              <span><Gauge size={15} /><b>{annualPackage.metrics.linkedWorkload}</b> 关联当量</span>
-            </div>
-          </article>
-
-          <div className="annual-package-metrics">
-            <div><BriefcaseBusiness size={17} /><span>年度项目</span><strong>{annualPackage.metrics.projectCount}</strong></div>
-            <div><Gauge size={17} /><span>原始工作当量</span><strong>{annualPackage.metrics.rawWorkload}</strong></div>
-            <div><Clock3 size={17} /><span>投入小时</span><strong>{annualPackage.metrics.timeHours}</strong></div>
-            <div><Link2 size={17} /><span>成果来源记录</span><strong>{annualPackage.metrics.linkedRecordCount}</strong></div>
-          </div>
-        </div>
-
-        <div className="annual-package-content">
-          <section className="annual-project-section">
-            <div className="annual-section-heading">
-              <div><h3>项目贡献材料</h3><p>按工作当量排序，辅助定位年度主要投入。</p></div>
-              <span>Top {Math.min(6, annualPackage.projects.length)}</span>
-            </div>
-            <div className="annual-project-rank">
-              {annualPackage.projects.slice(0, 6).map((project, index) => (
-                <article key={project.name}>
-                  <span className="annual-project-index">{String(index + 1).padStart(2, "0")}</span>
-                  <div className="annual-project-copy">
-                    <strong>{project.name}</strong>
-                    <span>{project.recordCount} 条记录 · {project.outcomeCount} 项成果</span>
-                    <i style={{ "--project-share": `${Math.max(4, project.workload / annualProjectMaxWorkload * 100)}%` } as CSSProperties} />
-                  </div>
-                  <div className="annual-project-values">
-                    <strong>{project.workload}</strong><span>当量</span>
-                    <strong>{project.timeHours}</strong><span>小时</span>
-                  </div>
-                </article>
-              ))}
-              {!annualPackage.projects.length && <p className="field-hint">本年度暂无项目投入记录。</p>}
-            </div>
-          </section>
-
-          <div className="annual-package-side">
-            <section className="annual-outcome-section">
-              <div className="annual-section-heading"><div><h3>成果结构</h3><p>年度成果类型构成</p></div></div>
-            <dl className="annual-outcome-breakdown">
-                {annualOutcomeItems.map((item) => (
-                  <div key={item.label}>
-                    <dt>{item.label}</dt>
-                    <dd>{item.value}</dd>
-                    <i style={{ "--outcome-share": `${item.value / annualOutcomeTotal * 100}%` } as CSSProperties} />
-                  </div>
-                ))}
-            </dl>
-            </section>
-
-            <section className="annual-gap-section">
-              <div className="annual-section-heading">
-                <div><h3>材料完整度</h3><p>只提示事实缺口，不评价成果价值。</p></div>
-              </div>
-              <div className="annual-gap-grid">
-                {annualGapItems.map((item) => (
-                  <div className={`annual-gap-item ${item.value ? "has-gap" : "is-complete"}`} key={item.label}>
-                    {item.value ? <FileWarning size={16} /> : <CheckCircle2 size={16} />}
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                    <small>{item.value ? "项待补" : "完整"}</small>
-                  </div>
-                ))}
-              </div>
-            <div className="annual-package-reminders">
-              {annualPackage.reminders.map((message) => <p key={message}>{message}</p>)}
-              {!annualPackage.reminders.length && <p>成果来源、价值影响、个人贡献和汇报表述已填写完整。</p>}
-            </div>
-            </section>
-          </div>
-        </div>
-        <p className="annual-package-note">成果关联投入仅统计本年度已关联日报并按记录 ID 去重；系统不自动评价成果价值。</p>
+        <p className="field-hint">成果关联投入仅统计本年度已关联日报并按记录 ID 去重；系统不自动评价成果价值。</p>
       </section>
 
       <ReportReviewWorkspace
