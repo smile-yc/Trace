@@ -116,6 +116,12 @@
   min-width: 132px;
 }
 
+.ledger-period-control {
+  align-self: flex-end;
+  height: var(--control-height);
+  min-height: var(--control-height);
+}
+
 .ledger-project-filter {
   min-width: min(260px, 100%);
 }

@@ -12,6 +12,7 @@ const main = readFileSync(resolve(__dirname, "../src/main.tsx"), "utf8");
 const workOutcomesStyles = readFileSync(resolve(__dirname, "../src/styles/work-outcomes.css"), "utf8");
 const reportDashboard = readFileSync(resolve(__dirname, "../src/components/ReportDashboard.tsx"), "utf8");
 const statCards = readFileSync(resolve(__dirname, "../src/components/StatCards.tsx"), "utf8");
+const allRecordsPage = readFileSync(resolve(__dirname, "../src/pages/AllRecordsPage.tsx"), "utf8");
 const yearlyPage = readFileSync(resolve(__dirname, "../src/pages/YearlyPage.tsx"), "utf8");
 const designGuide = readFileSync(resolve(__dirname, "../../DESIGN.md"), "utf8");
 
@@ -305,4 +306,12 @@ test("work ledger keeps stable desktop columns and usable mobile actions", () =>
   assert.match(workOutcomesStyles, /\.ledger-record-quality span \{[\s\S]*var\(--color-warning-soft\);[\s\S]*var\(--color-warning\);/);
   assert.match(workOutcomesStyles, /\.ledger-record-quality \.is-complete \{[\s\S]*var\(--color-success-soft\);[\s\S]*var\(--color-success\);/);
   assert.match(workOutcomesStyles, /@media \(max-width: 720px\) \{[\s\S]*\.ledger-record-summary \{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\);/);
+});
+
+test("work ledger period controls align with the bottom row of labeled filters", () => {
+  assert.equal(allRecordsPage.match(/ledger-period-control/g)?.length, 4);
+  assert.match(
+    workOutcomesStyles,
+    /\.ledger-period-control \{[\s\S]*align-self: flex-end;[\s\S]*height: var\(--control-height\);[\s\S]*min-height: var\(--control-height\);/
+  );
 });
