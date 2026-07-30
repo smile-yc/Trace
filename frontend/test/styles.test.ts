@@ -283,6 +283,27 @@ test("yearly report presents representative outcomes and evidence as aligned tab
   assert.equal(designGuide.includes("### Evidence Table"), true);
 });
 
+test("annual package KPI icons stay centered inside their semantic containers", () => {
+  assert.match(
+    visualRefreshStyles,
+    /\.annual-package-metrics \.annual-metric-icon \{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;/
+  );
+});
+
+test("annual outcome evidence icons stay centered inside table rows", () => {
+  assert.match(
+    visualRefreshStyles,
+    /\.annual-outcome-title \.annual-outcome-icon \{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;/
+  );
+});
+
+test("period outcome status badges size to their content instead of the grid track", () => {
+  assert.match(
+    visualRefreshStyles,
+    /\.period-outcome-list article > \.ui-status \{[\s\S]*width: max-content;[\s\S]*justify-self: start;/
+  );
+});
+
 test("dashboard metrics and chart groups can return to deduplicated source records", () => {
   assert.equal(reportDashboard.includes("function DashboardSourcePanel"), true);
   assert.equal(reportDashboard.includes("filterDashboardSourceRecords(records, sourceView.filter)"), true);
