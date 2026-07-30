@@ -16,9 +16,10 @@ interface DailyPageProps {
   onDelete: (record: WorkRecord) => void | Promise<void>;
   onNotify: (message: string) => void;
   onCreateOutcome: (seed: Omit<OutcomeSeed, "nonce">) => void;
+  onOpenGrowthJournal: () => void;
 }
 
-export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify, onCreateOutcome }: DailyPageProps) {
+export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify, onCreateOutcome, onOpenGrowthJournal }: DailyPageProps) {
   const [date, setDate] = useState(todayKey());
   const [copySource, setCopySource] = useState<{ id: string; template: RecordCopyTemplate } | null>(null);
   const dailyRecords = useMemo(() => filterByDate(records, date), [records, date]);
@@ -82,6 +83,23 @@ export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify, onCreate
       />
 
       <StatCards items={stats} />
+
+      <section className="panel record-mode-switch">
+        <div className="record-mode-card formal-work">
+          <div>
+            <strong>记录正式工作</strong>
+            <p>进入日报、项目、工时、工作量和正式成果统计。</p>
+          </div>
+          <span>当前表单</span>
+        </div>
+        <button className="record-mode-card growth-entry" onClick={onOpenGrowthJournal} type="button">
+          <div>
+            <strong>记录学习成长</strong>
+            <p>学习、业余实践、新技能和光子星候选材料，不默认计入工作量。</p>
+          </div>
+          <span>去记录</span>
+        </button>
+      </section>
 
       <section className="panel">
         <div className="panel-heading">

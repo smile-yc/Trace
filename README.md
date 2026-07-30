@@ -89,6 +89,8 @@ pnpm run start      # 启动已构建的后端服务
 - 项目管理：维护项目状态、简称和别名，查看项目投入、当前重点与工作时间线，支持归档、恢复和合并。
 - 项目关联：日报明确区分项目事项与非项目事项；历史文本保留为名称快照，不会因项目改名或合并被覆盖。
 - 周报、月报、年报：按周期汇总记录、项目、当量和投入时间。
+- 成长日志：轻量记录学习、阅读、工具尝试、业余实践、培训交流和政治学习等细碎成长动作；默认不计入正式日报、工作量、工时和项目排行。
+- 光子星月报：从日报、成长日志、成果和里程碑中选择证据，按“本月工作内容、成长收获、需支持事项”三段式生成可编辑培养汇报草稿。
 - 数据展板：展示业务分类占比、能力维度占比、工作量趋势、项目排行、产品系统分布、工作中心排行等。
 - 配置中心：维护业务分类、工作类型、能力维度、产品系统、子任务、当量标准、分析权重和预警规则。
 - 工作当量：支持数量和折算系数，默认按 `数量 × 折算系数` 计算，也可通过当量标准自动匹配系数。
@@ -165,6 +167,14 @@ PUT    /api/outcomes/:id
 POST   /api/outcomes/:id/archive
 POST   /api/outcomes/:id/reactivate
 
+GET    /api/growth-journal
+POST   /api/growth-journal
+PUT    /api/growth-journal/:id
+DELETE /api/growth-journal/:id
+GET    /api/cultivation-reports/:month
+PUT    /api/cultivation-reports/:month
+POST   /api/cultivation-reports/:month/generate
+
 POST   /api/export/docx
 POST   /api/export/pdf
 POST   /api/export/xlsx
@@ -198,6 +208,8 @@ interface WorkRecord {
 ```
 
 `projectName` 是记录创建时的项目名称快照。项目改名或合并只更新关联 ID，不改写历史快照。新记录必须明确选择项目事项或非项目事项；迁移后仍未建立关系的旧记录标记为 `unassigned`。
+
+成长日志与正式工作记录分开存储。成长日志可以选择进入周报、月报、年报或光子星月报展示，也可以关联项目、日报、成果或里程碑作为证据线索，但不会自动改变正式工作记录、工作当量、投入工时、项目统计或成果统计。
 
 ```ts
 interface Project {

@@ -7,6 +7,7 @@ import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
 import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
+import { GrowthLearningSection } from "../components/GrowthLearningSection";
 import type { AppSettings, Milestone, Outcome, WorkRecord } from "../types";
 import { formatMonthLabel, getMonthRange, shiftMonth, todayKey } from "../lib/date";
 import { buildMonthWeekTrend, sumWorkload } from "../lib/dashboard";
@@ -132,6 +133,14 @@ export function MonthlyPage({ records, onGenerateReport, onNotify }: MonthlyPage
       <ReportDashboard records={monthlyRecords} trend={trend} activeLabel={`${activeDays} 天`} />
 
       <OutcomePeriodSection outcomes={monthlyOutcomes} title="本月成果、问题与进展" />
+
+      <GrowthLearningSection
+        startDate={range.start}
+        endDate={range.end}
+        reportScope="monthly"
+        title="本月成长与学习"
+        onNotify={onNotify}
+      />
 
       <section className="panel review-panel">
         <div className="panel-heading">

@@ -7,6 +7,7 @@ import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
 import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
+import { GrowthLearningSection } from "../components/GrowthLearningSection";
 import type { Outcome, WorkRecord } from "../types";
 import { formatDate, getWeekNumber, getWeekRange, shiftDate, todayKey } from "../lib/date";
 import { buildDailyTrend, sumWorkload } from "../lib/dashboard";
@@ -84,6 +85,14 @@ export function WeeklyPage({ records, onGenerateReport, onNotify }: WeeklyPagePr
       <ReportDashboard records={weeklyRecords} trend={trend} activeLabel={`${activeDays} 天`} />
 
       <OutcomePeriodSection outcomes={weeklyOutcomes} title="本周成果与进展" />
+
+      <GrowthLearningSection
+        startDate={range.start}
+        endDate={range.end}
+        reportScope="weekly"
+        title="本周成长与学习"
+        onNotify={onNotify}
+      />
 
       <ReportReviewWorkspace
         reportType="week"

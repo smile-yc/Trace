@@ -11,5 +11,6 @@ export interface AppPageContext {
   onCreateOutcome: (seed: Omit<OutcomeSeed, "nonce">) => void;
   outcomeSeed: OutcomeSeed | null;
   onOutcomeSeedConsumed: () => void;
+  onNavigatePage: (pageId: string) => void;
   onNotify: (message: string) => void;
 }

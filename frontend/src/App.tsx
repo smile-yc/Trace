@@ -144,6 +144,7 @@ export function App() {
     onCreateOutcome: handleCreateOutcome,
     outcomeSeed,
     onOutcomeSeedConsumed: () => setOutcomeSeed(null),
+    onNavigatePage: handleNavigate,
     onNotify: showToast
   };
 

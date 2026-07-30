@@ -1,6 +1,8 @@
 import { AllRecordsPage } from "../pages/AllRecordsPage";
+import { CultivationReportPage } from "../pages/CultivationReportPage";
 import { DailyPage } from "../pages/DailyPage";
 import { GrowthPage } from "../pages/GrowthPage";
+import { GrowthJournalPage } from "../pages/GrowthJournalPage";
 import { KnowledgePage } from "../pages/KnowledgePage";
 import { MonthlyPage } from "../pages/MonthlyPage";
 import { ProjectsPage } from "../pages/ProjectsPage";
@@ -26,6 +28,7 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
             onDelete={context.onDeleteRecord}
             onNotify={context.onNotify}
             onCreateOutcome={context.onCreateOutcome}
+            onOpenGrowthJournal={() => context.onNavigatePage("growth-journal")}
           />
         )
       },
@@ -85,6 +88,18 @@ export const CORE_PAGE_PACKAGES: ReadonlyArray<DomainPagePackage<AppPageContext>
         label: "成长与目标",
         group: "growth",
         render: (context) => <GrowthPage active={context.activePageId === "growth"} records={context.records} onNotify={context.onNotify} />
+      },
+      {
+        id: "growth-journal",
+        label: "成长日志",
+        group: "growth",
+        render: (context) => <GrowthJournalPage onNotify={context.onNotify} onCreateOutcome={context.onCreateOutcome} onNavigatePage={context.onNavigatePage} />
+      },
+      {
+        id: "cultivation-report",
+        label: "光子星月报",
+        group: "growth",
+        render: (context) => <CultivationReportPage records={context.records} onNotify={context.onNotify} />
       }
     ]
   },
