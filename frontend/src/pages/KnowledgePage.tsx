@@ -94,8 +94,17 @@ export function KnowledgePage({ records, initialSeed, onSeedConsumed, onNotify }
     if (!initialSeed) return;
     const selected = records.filter((record) => initialSeed.recordIds?.includes(record.id));
     const seed = prefillOutcomeFromRecords(selected);
+    const seededDraft = {
+      ...seed,
+      type: initialSeed.type || seed.type,
+      title: initialSeed.title || seed.title,
+      completedWork: initialSeed.completedWork || seed.completedWork,
+      reportSummary: initialSeed.reportSummary || seed.reportSummary,
+      tags: initialSeed.tags || seed.tags,
+      remark: initialSeed.remark || ""
+    };
     setEditingId(null);
-    setDraft((current) => ({ ...emptyDraft(), ...current, ...seed, projectId: initialSeed.projectId || seed.projectId || "" } as OutcomeDraft));
+    setDraft((current) => ({ ...emptyDraft(), ...current, ...seededDraft, projectId: initialSeed.projectId || seed.projectId || "" } as OutcomeDraft));
     onSeedConsumed?.();
   }, [initialSeed?.nonce]);
 

@@ -8,6 +8,7 @@ import "./styles/layout.css";
 import "./styles/components.css";
 import "./styles/work-outcomes.css";
 import "./styles/growth-reports.css";
+import "./styles/growth-journal.css";
 import "./styles/settings-data.css";
 import "./styles/visual-refresh.css";
 

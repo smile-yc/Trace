@@ -7,6 +7,7 @@ import { StatCards } from "../components/StatCards";
 import { SummaryGroups } from "../components/SummaryGroups";
 import { OutcomePeriodSection } from "../components/OutcomePeriodSection";
 import { ReportReviewWorkspace } from "../components/ReportReviewWorkspace";
+import { GrowthLearningSection } from "../components/GrowthLearningSection";
 import { DataTable, StatusBadge, type DataTableColumn, type StatusTone } from "../components/ui";
 import type { Outcome, WorkRecord } from "../types";
 import { getYearRange, shiftYear, todayKey } from "../lib/date";
@@ -205,6 +206,14 @@ export function YearlyPage({ records, onGenerateReport, onNotify }: YearlyPagePr
       <ReportDashboard records={yearlyRecords} trend={trend} activeLabel={`${activeMonths} 月`} />
 
       <OutcomePeriodSection outcomes={yearlyOutcomes} title="年度代表性成果与进展" />
+
+      <GrowthLearningSection
+        startDate={range.start}
+        endDate={range.end}
+        reportScope="yearly"
+        title="年度成长与学习"
+        onNotify={onNotify}
+      />
 
       <section className="panel annual-package-panel">
         <div className="panel-heading">

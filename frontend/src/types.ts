@@ -147,6 +147,105 @@ export interface ReportReviewInput {
   status?: ReportReviewStatus;
 }
 
+export type GrowthJournalActivityType = "learning" | "reading" | "practice" | "tool_trial" | "side_project" | "reflection" | "training" | "political_study";
+export type GrowthJournalSourceContext = "work_related" | "after_hours" | "mixed";
+export type GrowthJournalReportScope = "weekly" | "monthly" | "yearly" | "cultivation";
+export type GrowthJournalOutputType = "none" | "note" | "document" | "template" | "code" | "demo" | "framework" | "other";
+
+export interface GrowthJournalLinks {
+  projects: string[];
+  records: string[];
+  outcomes: string[];
+  milestones: string[];
+}
+
+export interface GrowthJournalLinkInput {
+  sourceType: "project" | "record" | "outcome" | "milestone";
+  sourceId: string;
+}
+
+export interface GrowthJournalEntry {
+  id: string;
+  date: string;
+  title: string;
+  activityType: GrowthJournalActivityType;
+  sourceContext: GrowthJournalSourceContext;
+  abilityDimension: string;
+  reportScopes: GrowthJournalReportScope[];
+  notes: string;
+  outputType: GrowthJournalOutputType;
+  outputTitle: string;
+  tags: string;
+  links: GrowthJournalLinks;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface GrowthJournalInput {
+  date: string;
+  title: string;
+  activityType: GrowthJournalActivityType;
+  sourceContext: GrowthJournalSourceContext;
+  abilityDimension?: string;
+  reportScopes?: GrowthJournalReportScope[];
+  notes?: string;
+  outputType?: GrowthJournalOutputType;
+  outputTitle?: string;
+  tags?: string;
+  links?: GrowthJournalLinkInput[];
+}
+
+export type GrowthJournalUpdateInput = Partial<GrowthJournalInput>;
+
+export type CultivationModule = "key_project_practice" | "solution_support" | "technical_learning" | "independent_practice" | "political_progress";
+
+export interface CultivationReportEvidence {
+  sourceType: "record" | "growth_journal" | "outcome" | "milestone";
+  sourceId: string;
+  module: CultivationModule;
+}
+
+export interface CultivationWorkItem {
+  module: CultivationModule;
+  title: string;
+  summary: string;
+}
+
+export interface CultivationGrowthGain {
+  summary: string;
+  evidenceIds: string[];
+}
+
+export interface CultivationSupportRequest {
+  supportType: "materials" | "opportunity" | "mentor_guidance" | "other";
+  need: string;
+  reason: string;
+  expectedOutput: string;
+  followUpPlan: string;
+}
+
+export interface CultivationReportDraft {
+  id: string;
+  month: string;
+  evidence: CultivationReportEvidence[];
+  workItems: CultivationWorkItem[];
+  growthGains: CultivationGrowthGain[];
+  supportRequests: CultivationSupportRequest[];
+  draftText: string;
+  manualEdited: boolean;
+  createTime: number;
+  updateTime: number;
+}
+
+export interface CultivationReportInput {
+  evidence?: CultivationReportEvidence[];
+  workItems?: CultivationWorkItem[];
+  growthGains?: CultivationGrowthGain[];
+  supportRequests?: CultivationSupportRequest[];
+  draftText?: string;
+  manualEdited?: boolean;
+}
+
 export type GrowthGoalScope = "career" | "cultivation" | "annual" | "learning";
 export type GrowthGoalStatus = "planned" | "active" | "paused" | "completed" | "archived";
 
@@ -421,6 +520,12 @@ export interface OutcomeSeed {
   nonce: number;
   recordIds?: string[];
   projectId?: string;
+  type?: OutcomeType;
+  title?: string;
+  completedWork?: string;
+  reportSummary?: string;
+  tags?: string;
+  remark?: string;
 }
 
 export interface OutcomeSummary {

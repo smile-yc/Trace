@@ -4,11 +4,15 @@ import { z } from "zod";
 import {
   archiveOutcome,
   archiveProject,
+  buildCultivationReportText,
   clearRecords,
   deleteConfigOption,
+  deleteGrowthJournalEntry,
   deleteRecord,
   deleteWorkloadStandard,
   getAppSettings,
+  getCultivationReport,
+  getGrowthJournalEntry,
   getMilestoneProgress,
   getDatabasePath,
   getOutcome,
@@ -17,6 +21,7 @@ import {
   getReportReview,
   getProjectMergePreview,
   getProjectSummary,
+  insertGrowthJournalEntry,
   insertKnowledgeAsset,
   insertGrowthGoal,
   insertOutcome,
@@ -28,6 +33,7 @@ import {
   insertProject,
   insertWorkloadStandard,
   listConfigOptions,
+  listGrowthJournalEntries,
   listKnowledgeAssets,
   listGrowthGoals,
   listOutcomes,
@@ -49,6 +55,7 @@ import {
   toggleMilestoneStage,
   updateAppSettings,
   updateConfigOption,
+  updateGrowthJournalEntry,
   updateKnowledgeAsset,
   updateGrowthGoal,
   updateOutcome,
@@ -56,6 +63,7 @@ import {
   updateProject,
   updateWorkloadStandard,
   updateRecord,
+  upsertCultivationReport,
   upsertReportReview
 } from "./database.js";
 import { buildExcel } from "./exporters/excel.js";
@@ -70,9 +78,12 @@ import type {
   ConfigOptionInput,
   ConfigOptionType,
   ConfigOptionUpdateInput,
+  CultivationReportInput,
   ExportPayload,
   GrowthGoalInput,
   GrowthGoalUpdateInput,
+  GrowthJournalInput,
+  GrowthJournalUpdateInput,
   KnowledgeAssetInput,
   KnowledgeAssetUpdateInput,
   MilestoneInput,
@@ -274,6 +285,69 @@ const reportReviewSchema = z.object({
   growth: z.string().trim().max(5000).optional().default(""),
   nextPlan: z.string().trim().max(5000).optional().default(""),
   status: z.enum(["draft", "final"]).optional().default("draft")
+});
+
+const growthJournalActivityTypes = ["learning", "reading", "practice", "tool_trial", "side_project", "reflection", "training", "political_study"] as const;
+const growthJournalSourceContexts = ["work_related", "after_hours", "mixed"] as const;
+const growthJournalReportScopes = ["weekly", "monthly", "yearly", "cultivation"] as const;
+const growthJournalOutputTypes = ["none", "note", "document", "template", "code", "demo", "framework", "other"] as const;
+const growthJournalLinkTypes = ["project", "record", "outcome", "milestone"] as const;
+const growthJournalLinkSchema = z.object({
+  sourceType: z.enum(growthJournalLinkTypes),
+  sourceId: z.string().trim().min(1).max(120)
+});
+const growthJournalLinksSchema = z.preprocess((value) => {
+  if (!value || Array.isArray(value)) return value;
+  const links = value as { projects?: unknown[]; records?: unknown[]; outcomes?: unknown[]; milestones?: unknown[] };
+  return [
+    ...(Array.isArray(links.projects) ? links.projects.map((sourceId) => ({ sourceType: "project", sourceId })) : []),
+    ...(Array.isArray(links.records) ? links.records.map((sourceId) => ({ sourceType: "record", sourceId })) : []),
+    ...(Array.isArray(links.outcomes) ? links.outcomes.map((sourceId) => ({ sourceType: "outcome", sourceId })) : []),
+    ...(Array.isArray(links.milestones) ? links.milestones.map((sourceId) => ({ sourceType: "milestone", sourceId })) : [])
+  ];
+}, z.array(growthJournalLinkSchema).max(100));
+const growthJournalInputSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  title: z.string().trim().min(1).max(200),
+  activityType: z.enum(growthJournalActivityTypes),
+  sourceContext: z.enum(growthJournalSourceContexts),
+  abilityDimension: z.string().trim().max(160).optional().default(""),
+  reportScopes: z.array(z.enum(growthJournalReportScopes)).max(4).optional().default([]),
+  notes: z.string().trim().max(4000).optional().default(""),
+  outputType: z.enum(growthJournalOutputTypes).optional().default("none"),
+  outputTitle: z.string().trim().max(200).optional().default(""),
+  tags: z.string().trim().max(500).optional().default(""),
+  links: growthJournalLinksSchema.optional().default([])
+});
+const growthJournalUpdateSchema = growthJournalInputSchema.partial();
+
+const cultivationModules = ["key_project_practice", "solution_support", "technical_learning", "independent_practice", "political_progress"] as const;
+const cultivationEvidenceSourceTypes = ["record", "growth_journal", "outcome", "milestone"] as const;
+const cultivationSupportTypes = ["materials", "opportunity", "mentor_guidance", "other"] as const;
+const cultivationReportInputSchema = z.object({
+  evidence: z.array(z.object({
+    sourceType: z.enum(cultivationEvidenceSourceTypes),
+    sourceId: z.string().trim().min(1).max(120),
+    module: z.enum(cultivationModules)
+  })).max(500).optional().default([]),
+  workItems: z.array(z.object({
+    module: z.enum(cultivationModules),
+    title: z.string().trim().min(1).max(200),
+    summary: z.string().trim().max(1200).optional().default("")
+  })).max(20).optional().default([]),
+  growthGains: z.array(z.object({
+    summary: z.string().trim().min(1).max(1200),
+    evidenceIds: z.array(z.string().trim().min(1).max(120)).max(50).optional().default([])
+  })).max(10).optional().default([]),
+  supportRequests: z.array(z.object({
+    supportType: z.enum(cultivationSupportTypes),
+    need: z.string().trim().min(1).max(500),
+    reason: z.string().trim().max(800).optional().default(""),
+    expectedOutput: z.string().trim().max(800).optional().default(""),
+    followUpPlan: z.string().trim().max(800).optional().default("")
+  })).max(10).optional().default([]),
+  draftText: z.string().trim().max(12000).optional().default(""),
+  manualEdited: z.boolean().optional().default(false)
 });
 
 const milestoneInputSchema = z.object({
@@ -714,6 +788,89 @@ app.put("/api/report-reviews", (req, res, next) => {
   try {
     const input: ReportReviewInput = reportReviewSchema.parse(req.body);
     res.json({ review: upsertReportReview(input) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/growth-journal", (req, res, next) => {
+  try {
+    const sourceContext = typeof req.query.sourceContext === "string" ? req.query.sourceContext : undefined;
+    const activityType = typeof req.query.activityType === "string" ? req.query.activityType : undefined;
+    const reportScope = typeof req.query.reportScope === "string" ? req.query.reportScope : undefined;
+    const entries = listGrowthJournalEntries({
+      startDate: typeof req.query.startDate === "string" ? req.query.startDate : undefined,
+      endDate: typeof req.query.endDate === "string" ? req.query.endDate : undefined,
+      sourceContext: sourceContext && growthJournalSourceContexts.includes(sourceContext as any) ? sourceContext as any : undefined,
+      activityType: activityType && growthJournalActivityTypes.includes(activityType as any) ? activityType as any : undefined,
+      abilityDimension: typeof req.query.abilityDimension === "string" ? req.query.abilityDimension : undefined,
+      reportScope: reportScope && growthJournalReportScopes.includes(reportScope as any) ? reportScope as any : undefined,
+      query: typeof req.query.query === "string" ? req.query.query : undefined
+    });
+    res.json({ entries });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/growth-journal", (req, res, next) => {
+  try {
+    const input: GrowthJournalInput = growthJournalInputSchema.parse(req.body);
+    res.status(201).json({ entry: insertGrowthJournalEntry(input) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/growth-journal/:id", (req, res, next) => {
+  try {
+    const input: GrowthJournalUpdateInput = growthJournalUpdateSchema.parse(req.body);
+    const entry = updateGrowthJournalEntry(req.params.id, input);
+    if (!entry) {
+      res.status(404).json({ message: "Growth journal entry not found." });
+      return;
+    }
+    res.json({ entry });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/growth-journal/:id", (req, res) => {
+  if (!deleteGrowthJournalEntry(req.params.id)) {
+    res.status(404).json({ message: "Growth journal entry not found." });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+app.get("/api/cultivation-reports/:month", (req, res, next) => {
+  try {
+    res.json({ report: getCultivationReport(req.params.month) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/cultivation-reports/:month", (req, res, next) => {
+  try {
+    const input: CultivationReportInput = cultivationReportInputSchema.parse(req.body);
+    res.json({ report: upsertCultivationReport(req.params.month, input) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/cultivation-reports/:month/generate", (req, res, next) => {
+  try {
+    const report = getCultivationReport(req.params.month) ?? upsertCultivationReport(req.params.month, {});
+    const draftText = buildCultivationReportText(report);
+    if (report.manualEdited) {
+      res.json({ report, draftText, previewOnly: true });
+      return;
+    }
+    const updated = upsertCultivationReport(req.params.month, { draftText, manualEdited: false });
+    res.json({ report: updated, draftText: updated.draftText, previewOnly: false });
   } catch (error) {
     next(error);
   }

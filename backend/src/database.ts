@@ -9,6 +9,14 @@ import type {
   ConfigOptionInput,
   ConfigOptionType,
   ConfigOptionUpdateInput,
+  CultivationReportDraft,
+  CultivationReportInput,
+  GrowthJournalEntry,
+  GrowthJournalFilter,
+  GrowthJournalInput,
+  GrowthJournalLinkInput,
+  GrowthJournalReportScope,
+  GrowthJournalUpdateInput,
   GrowthGoal,
   GrowthGoalInput,
   GrowthGoalScope,
@@ -552,6 +560,57 @@ const foundationMigrations: Migration[] = [
         );
 
         CREATE INDEX IF NOT EXISTS idx_report_reviews_period ON report_reviews(reportType, periodKey, updateTime);
+      `);
+    }
+  },
+  {
+    version: 2026073001,
+    name: "add growth journal and cultivation reports",
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS growth_journal_entries (
+          id TEXT PRIMARY KEY,
+          date TEXT NOT NULL,
+          title TEXT NOT NULL,
+          activityType TEXT NOT NULL CHECK(activityType IN ('learning', 'reading', 'practice', 'tool_trial', 'side_project', 'reflection', 'training', 'political_study')),
+          sourceContext TEXT NOT NULL CHECK(sourceContext IN ('work_related', 'after_hours', 'mixed')),
+          abilityDimension TEXT NOT NULL DEFAULT '',
+          reportScopes TEXT NOT NULL DEFAULT '[]',
+          notes TEXT NOT NULL DEFAULT '',
+          outputType TEXT NOT NULL DEFAULT 'none' CHECK(outputType IN ('none', 'note', 'document', 'template', 'code', 'demo', 'framework', 'other')),
+          outputTitle TEXT NOT NULL DEFAULT '',
+          tags TEXT NOT NULL DEFAULT '',
+          createTime INTEGER NOT NULL,
+          updateTime INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_growth_journal_date ON growth_journal_entries(date, updateTime);
+        CREATE INDEX IF NOT EXISTS idx_growth_journal_context ON growth_journal_entries(sourceContext, activityType, updateTime);
+
+        CREATE TABLE IF NOT EXISTS growth_journal_links (
+          entryId TEXT NOT NULL,
+          sourceType TEXT NOT NULL CHECK(sourceType IN ('project', 'record', 'outcome', 'milestone')),
+          sourceId TEXT NOT NULL,
+          PRIMARY KEY (entryId, sourceType, sourceId),
+          FOREIGN KEY(entryId) REFERENCES growth_journal_entries(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_growth_journal_links_source ON growth_journal_links(sourceType, sourceId);
+
+        CREATE TABLE IF NOT EXISTS cultivation_reports (
+          id TEXT PRIMARY KEY,
+          month TEXT NOT NULL UNIQUE,
+          evidenceJson TEXT NOT NULL DEFAULT '[]',
+          workItemsJson TEXT NOT NULL DEFAULT '[]',
+          growthGainsJson TEXT NOT NULL DEFAULT '[]',
+          supportRequestsJson TEXT NOT NULL DEFAULT '[]',
+          draftText TEXT NOT NULL DEFAULT '',
+          manualEdited INTEGER NOT NULL DEFAULT 0,
+          createTime INTEGER NOT NULL,
+          updateTime INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_cultivation_reports_month ON cultivation_reports(month, updateTime);
       `);
     }
   }
@@ -1907,6 +1966,260 @@ export function upsertReportReview(input: ReportReviewInput): ReportReview {
       normalizeText(input.improvements), normalizeText(input.growth), normalizeText(input.nextPlan),
       input.status === "final" ? "final" : "draft", existing?.createTime ?? now, now);
   return getReportReview(type, key) as ReportReview;
+}
+
+const growthJournalActivityTypes = new Set(["learning", "reading", "practice", "tool_trial", "side_project", "reflection", "training", "political_study"]);
+const growthJournalSourceContexts = new Set(["work_related", "after_hours", "mixed"]);
+const growthJournalReportScopes = new Set<GrowthJournalReportScope>(["weekly", "monthly", "yearly", "cultivation"]);
+const growthJournalOutputTypes = new Set(["none", "note", "document", "template", "code", "demo", "framework", "other"]);
+const growthJournalLinkTypes = new Set(["project", "record", "outcome", "milestone"]);
+
+function parseJsonArray<T>(value: unknown): T[] {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeReportScopes(value: unknown): GrowthJournalReportScope[] {
+  const values = Array.isArray(value) ? value : [];
+  return Array.from(new Set(values
+    .map((item) => String(item).trim() as GrowthJournalReportScope)
+    .filter((item) => growthJournalReportScopes.has(item))));
+}
+
+function normalizeGrowthJournalLinks(value: unknown): GrowthJournalLinkInput[] {
+  const values = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  return values.flatMap((item) => {
+    const link = item as { sourceType?: unknown; sourceId?: unknown };
+    const sourceType = String(link.sourceType || "").trim();
+    const sourceId = normalizeText(link.sourceId);
+    const key = `${sourceType}:${sourceId}`;
+    if (!growthJournalLinkTypes.has(sourceType) || !sourceId || seen.has(key)) return [];
+    seen.add(key);
+    return [{ sourceType: sourceType as GrowthJournalLinkInput["sourceType"], sourceId }];
+  });
+}
+
+function emptyGrowthJournalLinks(): GrowthJournalEntry["links"] {
+  return { projects: [], records: [], outcomes: [], milestones: [] };
+}
+
+function listGrowthJournalLinks(entryId: string): GrowthJournalEntry["links"] {
+  const links = emptyGrowthJournalLinks();
+  const rows = db.prepare("SELECT sourceType, sourceId FROM growth_journal_links WHERE entryId = ? ORDER BY sourceType, sourceId").all(entryId) as Array<{ sourceType: string; sourceId: string }>;
+  rows.forEach((row) => {
+    if (row.sourceType === "project") links.projects.push(row.sourceId);
+    if (row.sourceType === "record") links.records.push(row.sourceId);
+    if (row.sourceType === "outcome") links.outcomes.push(row.sourceId);
+    if (row.sourceType === "milestone") links.milestones.push(row.sourceId);
+  });
+  return links;
+}
+
+function replaceGrowthJournalLinks(entryId: string, links: GrowthJournalLinkInput[] = []): void {
+  db.prepare("DELETE FROM growth_journal_links WHERE entryId = ?").run(entryId);
+  const statement = db.prepare("INSERT OR IGNORE INTO growth_journal_links (entryId, sourceType, sourceId) VALUES (?, ?, ?)");
+  normalizeGrowthJournalLinks(links).forEach((link) => statement.run(entryId, link.sourceType, link.sourceId));
+}
+
+function toGrowthJournalEntry(row: unknown): GrowthJournalEntry {
+  const entry = row as Record<string, unknown>;
+  const outputType = String(entry.outputType || "none");
+  return {
+    id: String(entry.id),
+    date: String(entry.date),
+    title: String(entry.title),
+    activityType: String(entry.activityType || "learning") as GrowthJournalEntry["activityType"],
+    sourceContext: String(entry.sourceContext || "after_hours") as GrowthJournalEntry["sourceContext"],
+    abilityDimension: String(entry.abilityDimension || ""),
+    reportScopes: normalizeReportScopes(parseJsonArray<GrowthJournalReportScope>(entry.reportScopes)),
+    notes: String(entry.notes || ""),
+    outputType: (growthJournalOutputTypes.has(outputType) ? outputType : "none") as GrowthJournalEntry["outputType"],
+    outputTitle: String(entry.outputTitle || ""),
+    tags: String(entry.tags || ""),
+    links: listGrowthJournalLinks(String(entry.id)),
+    createTime: Number(entry.createTime),
+    updateTime: Number(entry.updateTime)
+  };
+}
+
+function normalizeGrowthJournalInput(input: GrowthJournalInput | GrowthJournalUpdateInput, fallback?: GrowthJournalEntry): Omit<GrowthJournalEntry, "id" | "links" | "createTime" | "updateTime"> & { links: GrowthJournalLinkInput[] } {
+  const date = normalizeText(input.date ?? fallback?.date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("GROWTH_JOURNAL_INVALID");
+  const title = normalizeText(input.title ?? fallback?.title);
+  if (!title) throw new Error("GROWTH_JOURNAL_INVALID");
+  const activityType = String(input.activityType ?? fallback?.activityType ?? "learning");
+  const sourceContext = String(input.sourceContext ?? fallback?.sourceContext ?? "after_hours");
+  const outputType = String(input.outputType ?? fallback?.outputType ?? "none");
+  if (!growthJournalActivityTypes.has(activityType) || !growthJournalSourceContexts.has(sourceContext) || !growthJournalOutputTypes.has(outputType)) {
+    throw new Error("GROWTH_JOURNAL_INVALID");
+  }
+
+  const fallbackLinks = fallback
+    ? [
+      ...fallback.links.projects.map((sourceId) => ({ sourceType: "project" as const, sourceId })),
+      ...fallback.links.records.map((sourceId) => ({ sourceType: "record" as const, sourceId })),
+      ...fallback.links.outcomes.map((sourceId) => ({ sourceType: "outcome" as const, sourceId })),
+      ...fallback.links.milestones.map((sourceId) => ({ sourceType: "milestone" as const, sourceId }))
+    ]
+    : [];
+
+  return {
+    date,
+    title,
+    activityType: activityType as GrowthJournalEntry["activityType"],
+    sourceContext: sourceContext as GrowthJournalEntry["sourceContext"],
+    abilityDimension: normalizeText(input.abilityDimension ?? fallback?.abilityDimension),
+    reportScopes: normalizeReportScopes(input.reportScopes ?? fallback?.reportScopes),
+    notes: normalizeText(input.notes ?? fallback?.notes),
+    outputType: outputType as GrowthJournalEntry["outputType"],
+    outputTitle: normalizeText(input.outputTitle ?? fallback?.outputTitle),
+    tags: normalizeTags(String(input.tags ?? fallback?.tags ?? "")),
+    links: input.links === undefined ? fallbackLinks : normalizeGrowthJournalLinks(input.links)
+  };
+}
+
+export function listGrowthJournalEntries(filter: GrowthJournalFilter = {}): GrowthJournalEntry[] {
+  const rows = db.prepare("SELECT * FROM growth_journal_entries WHERE date >= ? AND date <= ? ORDER BY date DESC, updateTime DESC")
+    .all(filter.startDate || "0000-01-01", filter.endDate || "9999-12-31")
+    .map(toGrowthJournalEntry);
+  const query = normalizeText(filter.query).toLowerCase();
+  return rows.filter((entry) => {
+    if (filter.sourceContext && entry.sourceContext !== filter.sourceContext) return false;
+    if (filter.activityType && entry.activityType !== filter.activityType) return false;
+    if (filter.abilityDimension && entry.abilityDimension !== filter.abilityDimension) return false;
+    if (filter.reportScope && !entry.reportScopes.includes(filter.reportScope)) return false;
+    if (query) {
+      const haystack = [entry.title, entry.notes, entry.abilityDimension, entry.outputTitle, entry.tags].join(" ").toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+}
+
+export function getGrowthJournalEntry(id: string): GrowthJournalEntry | null {
+  const row = db.prepare("SELECT * FROM growth_journal_entries WHERE id = ?").get(id);
+  return row ? toGrowthJournalEntry(row) : null;
+}
+
+export function insertGrowthJournalEntry(input: GrowthJournalInput): GrowthJournalEntry {
+  const next = normalizeGrowthJournalInput(input);
+  const id = createId();
+  const now = Date.now();
+  db.prepare(`INSERT INTO growth_journal_entries
+    (id, date, title, activityType, sourceContext, abilityDimension, reportScopes, notes, outputType, outputTitle, tags, createTime, updateTime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, next.date, next.title, next.activityType, next.sourceContext, next.abilityDimension, JSON.stringify(next.reportScopes), next.notes, next.outputType, next.outputTitle, next.tags, now, now);
+  replaceGrowthJournalLinks(id, next.links);
+  return getGrowthJournalEntry(id) as GrowthJournalEntry;
+}
+
+export function updateGrowthJournalEntry(id: string, input: GrowthJournalUpdateInput): GrowthJournalEntry | null {
+  const existing = getGrowthJournalEntry(id);
+  if (!existing) return null;
+  const next = normalizeGrowthJournalInput(input, existing);
+  db.prepare(`UPDATE growth_journal_entries SET
+    date = ?, title = ?, activityType = ?, sourceContext = ?, abilityDimension = ?, reportScopes = ?,
+    notes = ?, outputType = ?, outputTitle = ?, tags = ?, updateTime = ? WHERE id = ?`)
+    .run(next.date, next.title, next.activityType, next.sourceContext, next.abilityDimension, JSON.stringify(next.reportScopes),
+      next.notes, next.outputType, next.outputTitle, next.tags, Date.now(), id);
+  replaceGrowthJournalLinks(id, next.links);
+  return getGrowthJournalEntry(id);
+}
+
+export function deleteGrowthJournalEntry(id: string): boolean {
+  const result = db.prepare("DELETE FROM growth_journal_entries WHERE id = ?").run(id);
+  return Number(result.changes) > 0;
+}
+
+function normalizeMonth(value: unknown): string {
+  const month = normalizeText(value);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("CULTIVATION_REPORT_INVALID");
+  return month;
+}
+
+function normalizeCultivationReportInput(month: string, input: CultivationReportInput, fallback?: CultivationReportDraft): CultivationReportInput {
+  normalizeMonth(month);
+  return {
+    evidence: Array.isArray(input.evidence) ? input.evidence : fallback?.evidence ?? [],
+    workItems: Array.isArray(input.workItems) ? input.workItems : fallback?.workItems ?? [],
+    growthGains: Array.isArray(input.growthGains) ? input.growthGains : fallback?.growthGains ?? [],
+    supportRequests: Array.isArray(input.supportRequests) ? input.supportRequests : fallback?.supportRequests ?? [],
+    draftText: input.draftText === undefined ? fallback?.draftText ?? "" : normalizeText(input.draftText),
+    manualEdited: input.manualEdited === undefined ? fallback?.manualEdited ?? false : Boolean(input.manualEdited)
+  };
+}
+
+function toCultivationReportDraft(row: unknown): CultivationReportDraft {
+  const report = row as Record<string, unknown>;
+  return {
+    id: String(report.id),
+    month: String(report.month),
+    evidence: parseJsonArray(report.evidenceJson),
+    workItems: parseJsonArray(report.workItemsJson),
+    growthGains: parseJsonArray(report.growthGainsJson),
+    supportRequests: parseJsonArray(report.supportRequestsJson),
+    draftText: String(report.draftText || ""),
+    manualEdited: Number(report.manualEdited) === 1,
+    createTime: Number(report.createTime),
+    updateTime: Number(report.updateTime)
+  };
+}
+
+export function getCultivationReport(monthInput: string): CultivationReportDraft | null {
+  const month = normalizeMonth(monthInput);
+  const row = db.prepare("SELECT * FROM cultivation_reports WHERE month = ?").get(month);
+  return row ? toCultivationReportDraft(row) : null;
+}
+
+export function upsertCultivationReport(monthInput: string, input: CultivationReportInput): CultivationReportDraft {
+  const month = normalizeMonth(monthInput);
+  const existing = getCultivationReport(month);
+  const next = normalizeCultivationReportInput(month, input, existing ?? undefined);
+  const now = Date.now();
+  const id = existing?.id ?? createId();
+  db.prepare(`INSERT INTO cultivation_reports
+    (id, month, evidenceJson, workItemsJson, growthGainsJson, supportRequestsJson, draftText, manualEdited, createTime, updateTime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(month) DO UPDATE SET
+      evidenceJson = excluded.evidenceJson,
+      workItemsJson = excluded.workItemsJson,
+      growthGainsJson = excluded.growthGainsJson,
+      supportRequestsJson = excluded.supportRequestsJson,
+      draftText = excluded.draftText,
+      manualEdited = excluded.manualEdited,
+      updateTime = excluded.updateTime`)
+    .run(id, month, JSON.stringify(next.evidence), JSON.stringify(next.workItems), JSON.stringify(next.growthGains),
+      JSON.stringify(next.supportRequests), next.draftText ?? "", next.manualEdited ? 1 : 0, existing?.createTime ?? now, now);
+  return getCultivationReport(month) as CultivationReportDraft;
+}
+
+function moduleLabel(module: string): string {
+  return ({
+    key_project_practice: "重点项目实战",
+    solution_support: "售前/方案支撑",
+    technical_learning: "技术学习与知识沉淀",
+    independent_practice: "自主实践",
+    political_progress: "政治进步"
+  } as Record<string, string>)[module] || "其他";
+}
+
+export function buildCultivationReportText(report: CultivationReportDraft): string {
+  const workItems = report.workItems.length
+    ? report.workItems.slice(0, 4).map((item) => `（${moduleLabel(item.module)}）${item.title}：${item.summary}`).join("\n")
+    : "本月暂无已选择的重点培养动作。";
+  const gains = report.growthGains.length
+    ? report.growthGains.slice(0, 4).map((item) => item.summary).join("\n")
+    : "本月暂无已提炼的成长收获。";
+  const supports = report.supportRequests.length
+    ? report.supportRequests.slice(0, 2).map((item) => `${item.need}。原因：${item.reason}。预期产出：${item.expectedOutput}。反馈计划：${item.followUpPlan}。`).join("\n")
+    : "本月暂无需额外支持事项。";
+
+  return `一、本月工作内容（做了什么）\n${workItems}\n\n二、本月成长收获（学到了什么）\n${gains}\n\n三、需支持事项（需要什么）\n${supports}`;
 }
 
 const growthGoalScopes = new Set<GrowthGoalScope>(["career", "cultivation", "annual", "learning"]);
