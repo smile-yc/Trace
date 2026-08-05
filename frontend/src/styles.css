@@ -796,6 +796,46 @@ textarea:focus-visible {
   padding: 0 !important;
 }
 
+.tag-suggestion-row {
+  display: grid;
+  gap: 7px;
+  margin-top: -2px;
+}
+
+.tag-suggestion-row > span {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.tag-suggestion-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-suggestion-row button {
+  min-height: 28px;
+  border: 1px solid rgba(93, 186, 192, 0.24);
+  border-radius: 8px;
+  background: var(--cyan-soft);
+  color: var(--blue);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.tag-suggestion-row button:hover {
+  border-color: rgba(93, 186, 192, 0.42);
+  background: #fff;
+}
+
+.tag-suggestion-row .project-tag-suggestion {
+  border-color: rgba(97, 114, 101, 0.26);
+  background: var(--sage-soft);
+  color: var(--sage);
+}
+
 .field-hint {
   color: var(--sage);
   font-size: 12px;

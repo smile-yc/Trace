@@ -25,6 +25,7 @@ import {
   type RecordCopyTemplate
 } from "../lib/recordFormState";
 import { createProject, fetchProjects } from "../lib/projectApi";
+import { appendRecordTag, getRecordTagSuggestions } from "../lib/recordTagSuggestions";
 import { matchWorkloadStandard } from "../lib/workloadApi";
 import { ProjectSelectField } from "./ProjectSelectField";
 import type {
@@ -44,6 +45,7 @@ interface RecordFormProps {
   initialDate?: string;
   record?: WorkRecord;
   template?: RecordCopyTemplate;
+  tagSuggestionRecords?: WorkRecord[];
   compact?: boolean;
   onSubmit: (input: RecordInput) => void | Promise<void>;
   onNotify?: (message: string) => void;
@@ -309,7 +311,7 @@ function AbilityMultiSelectField({
   );
 }
 
-export function RecordForm({ initialDate, record, template, compact = false, onSubmit, onNotify }: RecordFormProps) {
+export function RecordForm({ initialDate, record, template, tagSuggestionRecords = [], compact = false, onSubmit, onNotify }: RecordFormProps) {
   const formSource = record ?? template;
   const savedDraft = !formSource && typeof window !== "undefined" ? loadRecordDraft(window.localStorage) : null;
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>([]);
@@ -455,6 +457,10 @@ export function RecordForm({ initialDate, record, template, compact = false, onS
     if (quantityNumber === null || coefficientNumber === null) return null;
     return quantityNumber * coefficientNumber;
   }, [quantityNumber, coefficientNumber]);
+  const tagSuggestions = useMemo(
+    () => getRecordTagSuggestions(tagSuggestionRecords, selectedProjectId, tags),
+    [tagSuggestionRecords, selectedProjectId, tags]
+  );
 
   useEffect(() => {
     if (calculatedWorkload === null) return;
@@ -848,6 +854,23 @@ export function RecordForm({ initialDate, record, template, compact = false, onS
             onChange={(event) => setTags(event.target.value)}
           />
         </label>
+        {tagSuggestions.length > 0 && (
+          <div className="tag-suggestion-row" aria-label="二级标签候选">
+            <span>常用</span>
+            <div>
+              {tagSuggestions.map((suggestion) => (
+                <button
+                  className={suggestion.projectSpecific ? "project-tag-suggestion" : ""}
+                  key={suggestion.label}
+                  type="button"
+                  onClick={() => setTags((current) => appendRecordTag(current, suggestion.label))}
+                >
+                  {suggestion.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <label>
           <span>详细内容</span>

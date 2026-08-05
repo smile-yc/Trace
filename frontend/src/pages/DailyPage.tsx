@@ -115,6 +115,7 @@ export function DailyPage({ records, onAdd, onEdit, onDelete, onNotify, onCreate
           key={`${date}:${copySource?.id ?? "new"}`}
           initialDate={date}
           template={copySource?.template}
+          tagSuggestionRecords={records}
           onSubmit={handleAdd}
           onNotify={onNotify}
         />
